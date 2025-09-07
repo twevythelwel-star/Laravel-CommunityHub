@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { PlusCircle, AlertTriangle } from "lucide-react";
 import {
@@ -61,7 +62,7 @@ export default function WarningsPage() {
               <DialogTitle>Send New Alert</DialogTitle>
               <DialogDescription>
                 Describe the issue. Your alert will be sent to all residents and the admin.
-              </DailogDescription>
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
