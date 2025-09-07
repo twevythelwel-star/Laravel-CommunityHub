@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/auth-context";
 import { useToast } from "@/hooks/use-toast";
+import { add, format, sub } from "date-fns";
 
 type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
 
@@ -49,9 +50,12 @@ type Visitor = {
   name: string;
   type: "One-time" | "Recurring";
   status: VisitorStatus;
+  expectedAt: Date;
   dateRange: string;
   homeowner: string;
 };
+
+const now = new Date();
 
 const initialVisitors: Visitor[] = [
   {
@@ -59,7 +63,8 @@ const initialVisitors: Visitor[] = [
     name: "Liam Johnson",
     type: "One-time",
     status: "Expected",
-    dateRange: "2023-06-23",
+    expectedAt: now,
+    dateRange: format(now, "yyyy-MM-dd"),
     homeowner: "Olivia Davis (Lot 42)",
   },
   {
@@ -67,7 +72,17 @@ const initialVisitors: Visitor[] = [
     name: "Noah Williams",
     type: "Recurring",
     status: "Checked In",
-    dateRange: "2023-06-20 - 2023-08-20",
+    expectedAt: sub(now, { days: 1 }),
+    dateRange: `${format(sub(now, {days: 1}), "yyyy-MM-dd")} - ${format(add(now, {days: 60}), "yyyy-MM-dd")}`,
+    homeowner: "John Smith (Lot 12)",
+  },
+   {
+    id: "3",
+    name: "Expired Visitor",
+    type: "One-time",
+    status: "Expected",
+    expectedAt: sub(now, { hours: 13 }),
+    dateRange: format(sub(now, { hours: 13 }), "yyyy-MM-dd"),
     homeowner: "John Smith (Lot 12)",
   },
 ];
@@ -76,6 +91,33 @@ export default function VisitorsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [visitors, setVisitors] = useState<Visitor[]>(initialVisitors);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const twelveHoursAgo = sub(now, { hours: 12 });
+      
+      const updatedVisitors = visitors.filter(visitor => {
+        if (visitor.status === 'Expected' && visitor.expectedAt < twelveHoursAgo) {
+          toast({
+            variant: "destructive",
+            title: "Visitor Removed",
+            description: `${visitor.name} was automatically removed for not checking in within 12 hours.`
+          });
+          return false;
+        }
+        return true;
+      });
+
+      if(updatedVisitors.length < visitors.length) {
+        setVisitors(updatedVisitors);
+      }
+
+    }, 60 * 1000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [visitors, toast]);
+
 
   const handleStatusChange = (visitorId: string, newStatus: VisitorStatus) => {
     const visitor = visitors.find(v => v.id === visitorId);
