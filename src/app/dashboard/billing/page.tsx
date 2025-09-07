@@ -70,7 +70,10 @@ export default function BillingPage() {
               <Checkbox id="remember-card" />
               <Label htmlFor="remember-card" className="text-sm font-normal">Remember this card for future payments</Label>
             </div>
-            <Button>Save Payment Method</Button>
+            <div className="flex gap-2">
+              <Button>Pay $30.00</Button>
+              <Button variant="outline">Save Payment Method</Button>
+            </div>
         </CardContent>
       </Card>
        <Card>
