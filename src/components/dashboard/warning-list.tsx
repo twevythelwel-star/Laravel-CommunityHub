@@ -12,7 +12,7 @@ type WarningListProps = {
 };
 
 export function WarningList({ initialWarnings }: WarningListProps) {
-  const [warnings, setWarnings] = useState<Warning[]>(initialWarnings);
+  const [warnings, setWarnings] = useState<Warning[]>(initialWarnings.map(w => ({...w, timestamp: new Date(w.timestamp)})));
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
