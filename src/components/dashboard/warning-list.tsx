@@ -12,7 +12,7 @@ type WarningListProps = {
 };
 
 export function WarningList({ initialWarnings }: WarningListProps) {
-  const [warnings, setWarnings] = useState<Warning[]>(initialWarnings.map(w => ({...w, timestamp: new Date(w.timestamp)})));
+  const [warnings, setWarnings] = useState<Warning[]>(initialWarnings);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export function WarningList({ initialWarnings }: WarningListProps) {
             <CardDescription className="flex items-center gap-2 pt-1 text-xs">
                 <UserCircle className="h-4 w-4" /> 
                 <span>{warning.author}</span> &middot; 
-                <span>{isClient ? formatDistanceToNow(warning.timestamp, { addSuffix: true }) : '...'}</span>
+                <span>{isClient ? formatDistanceToNow(new Date(warning.timestamp), { addSuffix: true }) : '...'}</span>
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -1,12 +1,9 @@
 
 'use client';
 
-import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
-
 import { WarningList } from "@/components/dashboard/warning-list";
-import type { Warning } from "@/types";
 import { WarningForm } from "@/components/dashboard/warning-form";
+import type { Warning } from "@/types";
 
 const mockWarnings: Warning[] = [
     {
