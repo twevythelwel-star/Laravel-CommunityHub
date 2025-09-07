@@ -22,7 +22,7 @@ const mockWarnings: Warning[] = [
         title: 'Suspicious Vehicle Reported',
         description: 'A black sedan with no license plate has been seen circling Lot B. Please be cautious.',
         author: 'Jane Doe',
-        timestamp: new Date(new Date().getTime() - 1000 * 60 * 30), // 30 mins ago
+        timestamp: new Date('2024-07-29T10:00:00Z'),
         confirms: 2,
         denies: 0,
         userStatus: null,
@@ -32,7 +32,7 @@ const mockWarnings: Warning[] = [
         title: 'Lost Golden Retriever',
         description: 'Our dog, "Buddy", went missing near the park. He is very friendly and has a blue collar.',
         author: 'John Smith',
-        timestamp: new Date(new Date().getTime() - 1000 * 60 * 60 * 3), // 3 hours ago
+        timestamp: new Date('2024-07-29T08:30:00Z'),
         confirms: 5,
         denies: 1,
         userStatus: 'confirmed',
@@ -61,7 +61,7 @@ export default function WarningsPage() {
               <DialogTitle>Send New Alert</DialogTitle>
               <DialogDescription>
                 Describe the issue. Your alert will be sent to all residents and the admin.
-              </DialogDescription>
+              </DailogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
