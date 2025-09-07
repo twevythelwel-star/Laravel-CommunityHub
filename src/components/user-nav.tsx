@@ -47,7 +47,7 @@ export function UserNav() {
               <span>Profile</span>
             </DropdownMenuItem>
           </Link>
-          {user.role === 'Homeowner' && (
+          {(user.role === 'Homeowner' || user.role === 'Admin' || user.role === 'System Admin') && (
             <Link href="/dashboard/billing">
               <DropdownMenuItem>
                 <CreditCard className="mr-2 h-4 w-4" />
