@@ -41,7 +41,7 @@ const allMenuItems = [
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/warnings', label: 'Warnings', icon: Siren, roles: ['System Admin', 'Admin', 'Homeowner', 'Security'] },
-  { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Security'], isBeta: true },
+  { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Security'] },
   { href: '/dashboard/users', label: 'User Management', icon: UserCog, roles: ['System Admin', 'Admin'] },
 ];
 
@@ -79,7 +79,7 @@ export default function DashboardLayout({
           <SidebarMenu>
             {menuItems.map(({ href, label, icon: Icon, isBeta }) => (
               <SidebarMenuItem key={href}>
-                <Link href={href}>
+                 <Link href={href} className="w-full">
                   <SidebarMenuButton
                     isActive={pathname === href}
                     tooltip={label}
