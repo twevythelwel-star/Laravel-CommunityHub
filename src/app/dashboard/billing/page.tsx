@@ -12,19 +12,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Info } from "lucide-react";
+import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { BillingSummary } from "@/components/dashboard/billing-summary";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/context/auth-context";
+import { AdminBilling } from "@/components/dashboard/admin-billing";
+import { Calendar } from "@/components/ui/calendar";
 
 
-export default function BillingPage() {
+function HomeownerBilling() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-  
+
   return (
     <div className="grid gap-8">
        <div>
@@ -108,4 +108,19 @@ export default function BillingPage() {
       </Card>
     </div>
   );
+}
+
+
+export default function BillingPage() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <div>Loading...</div>
+  }
+
+  if (user.role === 'Admin' || user.role === 'System Admin') {
+    return <AdminBilling />;
+  }
+
+  return <HomeownerBilling />;
 }
