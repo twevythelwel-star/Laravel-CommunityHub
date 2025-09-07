@@ -19,6 +19,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+
 
 const mockTransactions = [
     { id: '1', homeowner: 'John Smith (Lot 12)', date: '2023-07-20', amount: 30.00, status: 'Paid' },
@@ -26,6 +29,30 @@ const mockTransactions = [
     { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2023-07-01', amount: 30.00, status: 'Overdue' },
     { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2023-07-18', amount: 30.00, status: 'Paid' },
 ];
+
+const monthlyCollectionsData = [
+  { month: "Jan", total: 1860 },
+  { month: "Feb", total: 1900 },
+  { month: "Mar", total: 2000 },
+  { month: "Apr", total: 1780 },
+  { month: "May", total: 1890 },
+  { month: "Jun", total: 2390 },
+  { month: "Jul", total: 2490 },
+  { month: "Aug", total: 2300 },
+  { month: "Sep", total: 2100 },
+  { month: "Oct", total: 2400 },
+  { month: "Nov", total: 2500 },
+  { month: "Dec", total: 2600 },
+];
+
+const currentMonthIndex = new Date().getMonth();
+
+const chartConfig = {
+  total: {
+    label: "Total Collected",
+  },
+}
+
 
 const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
 const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
@@ -69,6 +96,36 @@ export function AdminBilling() {
             </CardContent>
           </Card>
       </div>
+
+       <Card>
+        <CardHeader>
+          <CardTitle>Monthly Collections</CardTitle>
+          <CardDescription>
+            A summary of dues collected over the last 12 months.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
+            <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={monthlyCollectionsData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+                     <ChartTooltip
+                      cursor={false}
+                      content={<ChartTooltipContent indicator="dot" />}
+                    />
+                    <Bar dataKey="total" radius={[4, 4, 0, 0]}>
+                        {monthlyCollectionsData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={index === currentMonthIndex ? "hsl(var(--primary))" : "hsl(var(--primary), 0.3)"} />
+                        ))}
+                    </Bar>
+                </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
 
        <Card>
         <CardHeader>
