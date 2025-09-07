@@ -10,14 +10,14 @@ const mockNotifications: Notification[] = [
         title: 'Community Pool Maintenance',
         content: 'The community pool will be closed for maintenance from July 1st to July 3rd. We apologize for any inconvenience.',
         author: 'Admin',
-        timestamp: new Date(2023, 5, 28)
+        timestamp: new Date('2023-06-28T00:00:00Z')
     },
     {
         id: '2',
         title: 'Annual HOA Meeting',
         content: 'Please join us for the annual Homeowners Association meeting on July 15th at 7 PM in the clubhouse.',
         author: 'Admin',
-        timestamp: new Date(2023, 5, 25)
+        timestamp: new Date('2023-06-25T00:00:00Z')
     }
 ]
 
