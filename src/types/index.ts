@@ -44,3 +44,13 @@ export type CommunityEvent = {
   date: Date;
   description: string;
 };
+
+export type Feedback = {
+  id: string;
+  submittedBy: string;
+  userRole: UserRole;
+  timestamp: Date;
+  type: 'Issue' | 'Suggestion';
+  subject: string;
+  status: 'New' | 'In Progress' | 'Resolved';
+};
