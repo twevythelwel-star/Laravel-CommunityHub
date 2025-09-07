@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -25,15 +26,15 @@ const mockNotifications: Notification[] = [
 ]
 
 function ClientFormattedDate({ date }: { date: Date }) {
-  const [isClient, setIsClient] = useState(false);
+  const [formattedDate, setFormattedDate] = useState('...');
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    setFormattedDate(format(date, 'MMM d, yyyy'));
+  }, [date]);
 
   return (
     <p className="text-sm text-muted-foreground">
-      {isClient ? format(date, 'MMM d, yyyy') : '...'}
+      {formattedDate}
     </p>
   );
 }
