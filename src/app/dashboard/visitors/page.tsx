@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle } from "lucide-react";
+import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -41,9 +41,15 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { add, format, sub } from "date-fns";
+import { add, format, sub, formatISO } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 
 type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
+type EntryType = "onetime" | "recurring";
 
 type Visitor = {
   id: string;
@@ -91,6 +97,10 @@ export default function VisitorsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [visitors, setVisitors] = useState<Visitor[]>(initialVisitors);
+  const [entryType, setEntryType] = useState<EntryType>('onetime');
+  const [expectedDate, setExpectedDate] = useState<Date | undefined>(new Date());
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: add(new Date(), { days: 7 }) });
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -165,7 +175,7 @@ export default function VisitorsPage() {
                 </span>
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[480px]">
                 <DialogHeader>
                 <DialogTitle>Register New Visitor</DialogTitle>
                 <DialogDescription>
@@ -173,40 +183,147 @@ export default function VisitorsPage() {
                 </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="name" className="text-right">
-                    Name
-                    </Label>
-                    <Input id="name" placeholder="John Doe" className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="contact" className="text-right">
-                    Contact
-                    </Label>
-                    <Input id="contact" placeholder="Phone or Email" className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="vehicle" className="text-right">
-                    Vehicle
-                    </Label>
-                    <Input id="vehicle" placeholder="Details (optional)" className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="name" className="text-right">Name</Label>
+                      <Input id="name" placeholder="John Doe" className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="contact" className="text-right">Contact</Label>
+                      <Input id="contact" placeholder="Phone or Email" className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="vehicle" className="text-right">Vehicle</Label>
+                      <Input id="vehicle" placeholder="Details (optional)" className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="id-type" className="text-right">ID Type</Label>
+                    <Select>
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select ID Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="drivers-license">Driver's License</SelectItem>
+                        <SelectItem value="passport">Passport</SelectItem>
+                        <SelectItem value="national-id">National ID</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                   <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="id-number" className="text-right">ID #</Label>
+                      <Input id="id-number" placeholder="Identification Number" className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                      <Label htmlFor="id-picture" className="text-right">ID Picture</Label>
+                      <Input id="id-picture" type="file" className="col-span-3" />
+                  </div>
+
+                  <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right">Entry Type</Label>
-                    <RadioGroup defaultValue="onetime" className="col-span-3 flex gap-4">
-                    <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="onetime" id="r1" />
-                        <Label htmlFor="r1">One-time</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="recurring" id="r2" />
-                        <Label htmlFor="r2">Recurring</Label>
-                    </div>
+                    <RadioGroup value={entryType} onValueChange={(value: string) => setEntryType(value as EntryType)} className="col-span-3 flex gap-4">
+                      <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="onetime" id="r1" />
+                          <Label htmlFor="r1">One-time</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="recurring" id="r2" />
+                          <Label htmlFor="r2">Recurring</Label>
+                      </div>
                     </RadioGroup>
-                </div>
+                  </div>
+
+                  {entryType === 'onetime' && (
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right">Date & Time</Label>
+                      <div className="col-span-3 flex gap-2">
+                         <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant={"outline"}
+                                className={cn(
+                                  "w-[150px] justify-start text-left font-normal",
+                                  !expectedDate && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {expectedDate ? format(expectedDate, "PPP") : <span>Pick a date</span>}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={expectedDate}
+                                onSelect={setExpectedDate}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <Select defaultValue="10">
+                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
+                            <SelectContent>{Array.from({length: 12}, (_,i)=> i+1).map(h => <SelectItem key={h} value={`${h}`}>{h}</SelectItem>)}</SelectContent>
+                          </Select>
+                           <Select defaultValue="00">
+                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
+                            <SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                          </Select>
+                          <Select defaultValue="PM">
+                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="AM">AM</SelectItem>
+                              <SelectItem value="PM">PM</SelectItem>
+                            </SelectContent>
+                          </Select>
+                      </div>
+                    </div>
+                  )}
+
+                  {entryType === 'recurring' && (
+                     <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Date Range</Label>
+                        <div className="col-span-3">
+                           <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                id="date"
+                                variant={"outline"}
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !dateRange && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateRange?.from ? (
+                                  dateRange.to ? (
+                                    <>
+                                      {format(dateRange.from, "LLL dd, y")} -{" "}
+                                      {format(dateRange.to, "LLL dd, y")}
+                                    </>
+                                  ) : (
+                                    format(dateRange.from, "LLL dd, y")
+                                  )
+                                ) : (
+                                  <span>Pick a date range</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                initialFocus
+                                mode="range"
+                                defaultMonth={dateRange?.from}
+                                selected={dateRange}
+                                onSelect={setDateRange}
+                                numberOfMonths={2}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                    </div>
+                  )}
+
+
                 </div>
                 <DialogFooter>
-                <Button type="submit">Save visitor</Button>
+                  <Button type="submit">Save visitor</Button>
                 </DialogFooter>
             </DialogContent>
             </Dialog>
@@ -296,3 +413,5 @@ export default function VisitorsPage() {
     </div>
   );
 }
+
+    
