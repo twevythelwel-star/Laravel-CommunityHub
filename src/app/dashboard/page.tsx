@@ -21,6 +21,23 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
+
+function ClientFormattedDate({ dateString }: { dateString: string }) {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return <>...</>;
+  }
+
+  return <>{format(new Date(dateString), 'yyyy-MM-dd')}</>;
+}
+
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -152,7 +169,7 @@ export default function Dashboard() {
                     <TableCell className="hidden md:table-cell">
                       Olivia Davis (Lot 42)
                     </TableCell>
-                    <TableCell className="text-right">2023-06-23</TableCell>
+                    <TableCell className="text-right"><ClientFormattedDate dateString="2023-06-23" /></TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
@@ -172,7 +189,7 @@ export default function Dashboard() {
                     <TableCell className="hidden md:table-cell">
                       John Smith (Lot 12)
                     </TableCell>
-                    <TableCell className="text-right">2023-06-24</TableCell>
+                    <TableCell className="text-right"><ClientFormattedDate dateString="2023-06-24" /></TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
