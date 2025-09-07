@@ -61,72 +61,80 @@ type Visitor = {
   homeowner: string;
 };
 
-const now = new Date();
+const getInitialVisitors = (): Visitor[] => {
+    const now = new Date();
+    return [
+        {
+            id: "1",
+            name: "Liam Johnson",
+            type: "One-time",
+            status: "Expected",
+            expectedAt: now,
+            dateRange: format(now, "yyyy-MM-dd"),
+            homeowner: "Olivia Davis (Lot 42)",
+        },
+        {
+            id: "2",
+            name: "Noah Williams",
+            type: "Recurring",
+            status: "Checked In",
+            expectedAt: sub(now, { days: 1 }),
+            dateRange: `${format(sub(now, {days: 1}), "yyyy-MM-dd")} - ${format(add(now, {days: 60}), "yyyy-MM-dd")}`,
+            homeowner: "John Smith (Lot 12)",
+        },
+        {
+            id: "3",
+            name: "Expired Visitor",
+            type: "One-time",
+            status: "Expected",
+            expectedAt: sub(now, { hours: 13 }),
+            dateRange: format(sub(now, { hours: 13 }), "yyyy-MM-dd"),
+            homeowner: "John Smith (Lot 12)",
+        },
+    ];
+};
 
-const initialVisitors: Visitor[] = [
-  {
-    id: "1",
-    name: "Liam Johnson",
-    type: "One-time",
-    status: "Expected",
-    expectedAt: now,
-    dateRange: format(now, "yyyy-MM-dd"),
-    homeowner: "Olivia Davis (Lot 42)",
-  },
-  {
-    id: "2",
-    name: "Noah Williams",
-    type: "Recurring",
-    status: "Checked In",
-    expectedAt: sub(now, { days: 1 }),
-    dateRange: `${format(sub(now, {days: 1}), "yyyy-MM-dd")} - ${format(add(now, {days: 60}), "yyyy-MM-dd")}`,
-    homeowner: "John Smith (Lot 12)",
-  },
-   {
-    id: "3",
-    name: "Expired Visitor",
-    type: "One-time",
-    status: "Expected",
-    expectedAt: sub(now, { hours: 13 }),
-    dateRange: format(sub(now, { hours: 13 }), "yyyy-MM-dd"),
-    homeowner: "John Smith (Lot 12)",
-  },
-];
 
 export default function VisitorsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [visitors, setVisitors] = useState<Visitor[]>(initialVisitors);
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [entryType, setEntryType] = useState<EntryType>('onetime');
   const [expectedDate, setExpectedDate] = useState<Date | undefined>(new Date());
   const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: add(new Date(), { days: 7 }) });
-
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setVisitors(getInitialVisitors());
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+
     const interval = setInterval(() => {
       const now = new Date();
       const twelveHoursAgo = sub(now, { hours: 12 });
       
-      const updatedVisitors = visitors.filter(visitor => {
-        if (visitor.status === 'Expected' && visitor.expectedAt < twelveHoursAgo) {
-          toast({
-            variant: "destructive",
-            title: "Visitor Removed",
-            description: `${visitor.name} was automatically removed for not checking in within 12 hours.`
-          });
-          return false;
-        }
-        return true;
+      setVisitors(currentVisitors => {
+        const updatedVisitors = currentVisitors.filter(visitor => {
+            if (visitor.status === 'Expected' && visitor.expectedAt < twelveHoursAgo) {
+            toast({
+                variant: "destructive",
+                title: "Visitor Removed",
+                description: `${visitor.name} was automatically removed for not checking in within 12 hours.`
+            });
+            return false;
+            }
+            return true;
+        });
+        return updatedVisitors;
       });
-
-      if(updatedVisitors.length < visitors.length) {
-        setVisitors(updatedVisitors);
-      }
 
     }, 60 * 1000); // Check every minute
 
     return () => clearInterval(interval);
-  }, [visitors, toast]);
+  }, [isClient, toast]);
 
 
   const handleStatusChange = (visitorId: string, newStatus: VisitorStatus) => {
@@ -151,6 +159,32 @@ export default function VisitorsPage() {
         default:
             return 'outline';
     }
+  }
+
+  if (!isClient) {
+    return (
+        <div className="flex flex-col gap-8">
+            <div className="flex items-center">
+                <div className="flex-1">
+                <h1 className="font-headline text-3xl font-bold">Visitor Management</h1>
+                <p className="text-muted-foreground">
+                    Loading visitor information...
+                </p>
+                </div>
+            </div>
+            <Card>
+                <CardHeader>
+                <CardTitle>Registered Visitors</CardTitle>
+                <CardDescription>
+                    Loading...
+                </CardDescription>
+                </CardHeader>
+                <CardContent>
+                <p>Please wait while we load the visitor data.</p>
+                </CardContent>
+            </Card>
+        </div>
+    );
   }
 
   return (
@@ -415,5 +449,3 @@ export default function VisitorsPage() {
     </div>
   );
 }
-
-    
