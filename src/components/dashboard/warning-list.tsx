@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Warning } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,11 @@ type WarningListProps = {
 
 export function WarningList({ initialWarnings }: WarningListProps) {
   const [warnings, setWarnings] = useState<Warning[]>(initialWarnings);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleVote = (id: string, vote: 'confirm' | 'deny') => {
     setWarnings(warnings.map(w => {
@@ -37,7 +42,7 @@ export function WarningList({ initialWarnings }: WarningListProps) {
             <CardDescription className="flex items-center gap-2 pt-1 text-xs">
                 <UserCircle className="h-4 w-4" /> 
                 <span>{warning.author}</span> &middot; 
-                <span>{formatDistanceToNow(warning.timestamp, { addSuffix: true })}</span>
+                <span>{isClient ? formatDistanceToNow(warning.timestamp, { addSuffix: true }) : '...'}</span>
             </CardDescription>
           </CardHeader>
           <CardContent>
