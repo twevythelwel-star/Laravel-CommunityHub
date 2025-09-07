@@ -1,0 +1,46 @@
+export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
+
+export type Homeowner = {
+  id: string;
+  name: string;
+  lot: string;
+  contact: string;
+  active: boolean;
+};
+
+export type Visitor = {
+  id: string;
+  name: string;
+  contact: string;
+  vehicleDetails?: string;
+  type: "One-time" | "Recurring";
+  startDate: Date;
+  endDate: Date;
+  registeredBy: string;
+};
+
+export type Notification = {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: Date;
+  author: string;
+};
+
+export type Warning = {
+  id: string;
+  title: string;
+  description: string;
+  timestamp: Date;
+  author: string;
+  confirms: number;
+  denies: number;
+  userStatus: 'confirmed' | 'denied' | null;
+};
+
+export type CommunityEvent = {
+  id: string;
+  title: string;
+  date: Date;
+  description: string;
+};
