@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -16,7 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpRight, CalendarCheck, Users, Bell, Siren } from "lucide-react";
+import { ArrowUpRight, CalendarCheck, Users, Bell, Siren, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
@@ -38,6 +39,16 @@ function ClientFormattedDate({ dateString }: { dateString: string }) {
   return <>{format(new Date(dateString), 'yyyy-MM-dd')}</>;
 }
 
+const mockTransactions = [
+    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2023-07-20', amount: 30.00, status: 'Paid' },
+    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2023-07-19', amount: 30.00, status: 'Paid' },
+    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2023-07-01', amount: 30.00, status: 'Overdue' },
+    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2023-07-18', amount: 30.00, status: 'Paid' },
+];
+
+const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
+const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
+
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -47,6 +58,7 @@ export default function Dashboard() {
   const canViewAnnouncements = user && ['System Admin', 'Admin', 'Homeowner'].includes(user.role);
   const canViewWarnings = user && ['System Admin', 'Admin', 'Homeowner', 'Security'].includes(user.role);
   const canViewRecentVisitors = user && ['System Admin', 'Admin', 'Homeowner', 'Security'].includes(user.role);
+  const canViewBilling = user && ['System Admin', 'Admin'].includes(user.role);
   
   if (!user) {
     return null;
@@ -70,6 +82,38 @@ export default function Dashboard() {
               </p>
             </CardContent>
           </Card>
+        )}
+         {canViewBilling && (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Total Collected (July)
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">${totalCollected.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">
+                  from {mockTransactions.filter(t => t.status === 'Paid').length} households
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Outstanding Dues
+                </CardTitle>
+                 <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">${outstandingDues.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">
+                  from {mockTransactions.filter(t => t.status !== 'Paid').length} household
+                </p>
+              </CardContent>
+            </Card>
+          </>
         )}
         {canViewUpcomingVisitors && (
           <Card>
@@ -196,6 +240,55 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+         {canViewBilling && (
+          <Card>
+            <CardHeader className="flex flex-row items-center">
+              <div className="grid gap-2">
+                <CardTitle>Recent Transactions</CardTitle>
+                 <CardDescription>
+                  A log of recent payments and outstanding dues.
+                </CardDescription>
+              </div>
+               <Button asChild size="sm" className="ml-auto gap-1">
+                <Link href="/dashboard/billing">
+                  View All
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Homeowner</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {mockTransactions.slice(0,3).map(transaction => (
+                    <TableRow key={transaction.id}>
+                        <TableCell>
+                            <div className="font-medium">{transaction.homeowner.split('(')[0].trim()}</div>
+                            <div className="hidden text-sm text-muted-foreground md:inline">
+                                {transaction.homeowner.match(/\(([^)]+)\)/)?.[1]}
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <Badge variant={transaction.status === 'Paid' ? 'secondary' : 'destructive'}>
+                                {transaction.status}
+                            </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>Community Promotions</CardTitle>
