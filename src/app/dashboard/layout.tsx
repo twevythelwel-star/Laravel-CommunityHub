@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useMemo } from 'react';
 
 import { cn } from '@/lib/utils';
 import {
@@ -24,19 +25,24 @@ import {
   Users,
   ShieldOff,
   Search,
+  Settings,
+  UserCog,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/context/auth-context';
+import type { UserRole } from '@/types';
 
-const menuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: Home },
-  { href: '/dashboard/directory', label: 'Directory', icon: Users },
-  { href: '/dashboard/visitors', label: 'Visitors', icon: User },
-  { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar },
-  { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
-  { href: '/dashboard/warnings', label: 'Warnings', icon: Siren },
-  { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, isBeta: true },
+const allMenuItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin', 'Homeowner'] },
+  { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
+  { href: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['System Admin', 'Admin', 'Homeowner'] },
+  { href: '/dashboard/warnings', label: 'Warnings', icon: Siren, roles: ['System Admin', 'Admin', 'Homeowner', 'Security'] },
+  { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Security'], isBeta: true },
+  { href: '/dashboard/users', label: 'User Management', icon: UserCog, roles: ['System Admin', 'Admin'] },
 ];
 
 export default function DashboardLayout({
@@ -45,6 +51,23 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/');
+    }
+  }, [user, loading, router]);
+  
+  const menuItems = useMemo(() => {
+    if (!user) return [];
+    return allMenuItems.filter(item => item.roles.includes(user.role));
+  }, [user]);
+
+  if (loading || !user) {
+    return <div className="flex h-screen w-full items-center justify-center">Loading...</div>;
+  }
 
   return (
     <SidebarProvider>
