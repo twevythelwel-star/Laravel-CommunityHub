@@ -205,6 +205,8 @@ export default function VisitorsPage() {
                         <SelectItem value="drivers-license">Driver's License</SelectItem>
                         <SelectItem value="passport">Passport</SelectItem>
                         <SelectItem value="national-id">National ID</SelectItem>
+                        <SelectItem value="school-id">School ID</SelectItem>
+                        <SelectItem value="work-id">Work ID</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
