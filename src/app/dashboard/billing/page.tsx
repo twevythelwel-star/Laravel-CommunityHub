@@ -15,8 +15,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Info } from "lucide-react";
 import { format } from "date-fns";
+import { BillingSummary } from "@/components/dashboard/billing-summary";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 export default function BillingPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
@@ -27,6 +31,9 @@ export default function BillingPage() {
         <h1 className="font-headline text-3xl font-bold">Billing</h1>
         <p className="text-muted-foreground">Manage your payments and subscriptions.</p>
       </div>
+
+      <BillingSummary />
+
       <Card>
         <CardHeader>
           <CardTitle>Payment Method</CardTitle>
@@ -57,6 +64,10 @@ export default function BillingPage() {
                 <img src="https://picsum.photos/40/25?v=visa" alt="Visa" className="rounded-sm" data-ai-hint="credit card" />
                 <img src="https://picsum.photos/40/25?v=mastercard" alt="Mastercard" className="rounded-sm" data-ai-hint="credit card" />
                 <img src="https://picsum.photos/40/25?v=amex" alt="American Express" className="rounded-sm" data-ai-hint="credit card" />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox id="remember-card" />
+              <Label htmlFor="remember-card" className="text-sm font-normal">Remember this card for future payments</Label>
             </div>
             <Button>Save Payment Method</Button>
         </CardContent>
