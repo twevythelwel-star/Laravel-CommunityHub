@@ -64,6 +64,7 @@ export default function BillingPage() {
                 <img src="https://picsum.photos/40/25?v=visa" alt="Visa" className="rounded-sm" data-ai-hint="credit card" />
                 <img src="https://picsum.photos/40/25?v=mastercard" alt="Mastercard" className="rounded-sm" data-ai-hint="credit card" />
                 <img src="https://picsum.photos/40/25?v=amex" alt="American Express" className="rounded-sm" data-ai-hint="credit card" />
+                <img src="https://picsum.photos/40/25?v=discover" alt="Discover" className="rounded-sm" data-ai-hint="credit card" />
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox id="remember-card" />
