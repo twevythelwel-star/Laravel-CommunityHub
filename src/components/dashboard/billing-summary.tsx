@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useState } from "react";
-
-const BASE_FEE_USD = 30;
+import { useBilling } from "@/context/billing-context";
 
 // Mock exchange rates. In a real app, this would come from an API.
 const MOCK_EXCHANGE_RATES = {
@@ -22,20 +21,21 @@ type FormattedRates = {
 }
 
 export function BillingSummary() {
+    const { monthlyFee } = useBilling();
     const [rates, setRates] = useState<FormattedRates | null>(null);
 
     useEffect(() => {
         // This simulates fetching and formatting rates and ensures it only runs on the client.
-        const jmd = (BASE_FEE_USD * MOCK_EXCHANGE_RATES.USD_TO_JMD).toFixed(2);
-        const gbp = (BASE_FEE_USD * MOCK_EXCHANGE_RATES.USD_TO_GBP).toFixed(2);
-        const eur = (BASE_FEE_USD * MOCK_EXCHANGE_RATES.USD_TO_EUR).toFixed(2);
+        const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD).toFixed(2);
+        const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP).toFixed(2);
+        const eur = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_EUR).toFixed(2);
         
         setRates({
             jmd: new Intl.NumberFormat('en-JM', { style: 'currency', currency: 'JMD' }).format(Number(jmd)),
             gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(gbp)),
             eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(eur)),
         });
-    }, []);
+    }, [monthlyFee]);
 
     return (
         <Card>
@@ -48,7 +48,7 @@ export function BillingSummary() {
             <CardContent className="space-y-4">
                 <div className="flex flex-col md:flex-row gap-4 items-baseline">
                     <div className="text-4xl font-bold">
-                        ${BASE_FEE_USD.toFixed(2)}
+                        ${monthlyFee.toFixed(2)}
                         <span className="text-lg font-normal text-muted-foreground ml-1">USD</span>
                     </div>
                     {rates && (

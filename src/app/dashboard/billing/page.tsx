@@ -20,10 +20,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/context/auth-context";
 import { AdminBilling } from "@/components/dashboard/admin-billing";
 import { Calendar } from "@/components/ui/calendar";
+import { useBilling } from "@/context/billing-context";
 
 
 function HomeownerBilling() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const { monthlyFee } = useBilling();
 
   return (
     <div className="grid gap-8">
@@ -71,7 +73,7 @@ function HomeownerBilling() {
               <Label htmlFor="remember-card" className="text-sm font-normal">Remember this card for future payments</Label>
             </div>
             <div className="flex gap-2">
-              <Button>Pay $30.00</Button>
+              <Button>Pay ${monthlyFee.toFixed(2)}</Button>
               <Button variant="outline">Save Payment Method</Button>
             </div>
         </CardContent>

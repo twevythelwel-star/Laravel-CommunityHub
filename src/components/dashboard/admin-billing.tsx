@@ -7,6 +7,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import {
   Table,
@@ -21,6 +22,11 @@ import { DollarSign, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useState } from "react";
+import { useBilling } from "@/context/billing-context";
+import { useToast } from "@/hooks/use-toast";
 
 
 const mockTransactions = [
@@ -59,6 +65,18 @@ const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce
 
 
 export function AdminBilling() {
+  const { monthlyFee, setMonthlyFee } = useBilling();
+  const { toast } = useToast();
+  const [newFee, setNewFee] = useState(monthlyFee);
+
+  const handleFeeChange = () => {
+    setMonthlyFee(newFee);
+    toast({
+        title: "Success",
+        description: `Monthly fee has been updated to $${newFee.toFixed(2)}.`
+    })
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-8">
       <div>
@@ -96,6 +114,24 @@ export function AdminBilling() {
             </CardContent>
           </Card>
       </div>
+
+       <Card>
+            <CardHeader>
+                <CardTitle>Manage Monthly Fee</CardTitle>
+                <CardDescription>
+                    Set the monthly HOA fee for all residents.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="grid gap-2 max-w-sm">
+                    <Label htmlFor="monthly-fee">Monthly Fee (USD)</Label>
+                    <Input id="monthly-fee" type="number" value={newFee} onChange={(e) => setNewFee(Number(e.target.value))} />
+                </div>
+            </CardContent>
+            <CardFooter>
+                 <Button onClick={handleFeeChange}>Update Fee</Button>
+            </CardFooter>
+        </Card>
 
        <Card>
         <CardHeader>
