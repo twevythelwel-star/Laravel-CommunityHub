@@ -1,3 +1,6 @@
+
+'use client';
+
 import {
   Card,
   CardContent,
@@ -8,14 +11,33 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/context/auth-context";
+import { ThemeCustomizer } from "@/components/dashboard/theme-customizer";
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+
   return (
     <div className="grid gap-8">
         <div>
             <h1 className="font-headline text-3xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">Manage your account and notification preferences.</p>
+            <p className="text-muted-foreground">Manage your account and application preferences.</p>
         </div>
+      
+      {user?.role === 'System Admin' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Theme Customization</CardTitle>
+            <CardDescription>
+              As a System Admin, you can customize the application's appearance.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ThemeCustomizer />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Notification Settings</CardTitle>

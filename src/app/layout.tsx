@@ -3,6 +3,7 @@ import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 import { AuthProvider } from '@/context/auth-context';
 import { BillingProvider } from '@/context/billing-context';
+import { ThemeProvider } from '@/context/theme-context';
 
 export const metadata: Metadata = {
   title: 'Community Hub',
@@ -25,12 +26,14 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <AuthProvider>
-          <BillingProvider>
-            {children}
-            <Toaster />
-          </BillingProvider>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <BillingProvider>
+              {children}
+              <Toaster />
+            </BillingProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
