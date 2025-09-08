@@ -25,7 +25,7 @@ if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
     } catch (e) {
         console.error("Error initializing Firebase", e);
     }
-} else {
+} else if (firebaseConfig.apiKey) { // Only log error if key is present but a placeholder
     console.error("Firebase config is missing or not set up. Please update your .env file.");
 }
 
