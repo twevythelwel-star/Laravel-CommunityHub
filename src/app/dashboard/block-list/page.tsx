@@ -1,3 +1,4 @@
+
 import {
   Card,
   CardContent,
@@ -16,7 +17,7 @@ export default function BlockListPage() {
           <CardTitle>Blocked Individuals</CardTitle>
           <CardDescription>
             This feature is under development.
-          </Description>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <p>A section to manage blocked individuals will be available here.</p>
