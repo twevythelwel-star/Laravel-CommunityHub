@@ -16,26 +16,26 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-// Only initialize Firebase if all config values are present and non-empty strings
 if (
     firebaseConfig.apiKey &&
     firebaseConfig.authDomain &&
     firebaseConfig.projectId &&
     firebaseConfig.storageBucket &&
     firebaseConfig.messagingSenderId &&
-    firebaseConfig.appId
+    firebaseConfig.appId &&
+    getApps().length === 0
 ) {
     try {
-        app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+        app = initializeApp(firebaseConfig);
         auth = getAuth(app);
         db = getFirestore(app);
     } catch (e) {
         console.error("Error initializing Firebase", e);
     }
-} else {
-    if (typeof window === 'undefined') {
-      // console.log("Firebase config is missing, so Firebase services are disabled.");
-    }
+} else if (getApps().length > 0) {
+    app = getApp();
+    auth = getAuth(app);
+    db = getFirestore(app);
 }
 
 

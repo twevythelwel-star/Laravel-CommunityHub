@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '@/types';
-import { auth as firebaseAuth } from '@/lib/firebase'; 
+import { auth as firebaseAuth, app as firebaseApp } from '@/lib/firebase'; 
 
 type User = {
   email: string;
@@ -83,8 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-     if (!firebaseAuth) {
-      console.error("Firebase is not configured. Cannot log out.");
+    if (!firebaseAuth) {
       return;
     }
     try {
