@@ -4,6 +4,7 @@
 import { AuthProvider } from '@/context/auth-context';
 import { BillingProvider } from '@/context/billing-context';
 import { ThemeProvider, useTheme } from '@/context/theme-context';
+import { useEffect, useState } from 'react';
 
 function FontLoader() {
     const { theme } = useTheme();
@@ -38,6 +39,16 @@ function AppBody({ children }: { children: React.ReactNode }) {
 
 
 export function Providers({ children }: { children: React.ReactNode }) {
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
+    if (!isMounted) {
+        return null;
+    }
+
     return (
         <ThemeProvider>
             <FontLoader />

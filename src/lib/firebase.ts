@@ -30,7 +30,7 @@ if (firebaseConfig.apiKey) {
     // This will be logged on the server side if keys are missing.
     // It's helpful for debugging during development.
     if (typeof window === 'undefined') {
-      console.log("Firebase config is missing, so Firebase services are disabled.");
+      // console.log("Firebase config is missing, so Firebase services are disabled.");
     }
 }
 

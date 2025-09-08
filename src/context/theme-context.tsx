@@ -106,9 +106,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--sidebar-background', `color-mix(in srgb, ${theme.background} 95%, white)`);
     root.style.setProperty('--sidebar-accent', `color-mix(in srgb, ${theme.primary} 20%, ${theme.background})`);
 
-  }, [theme, resetTheme]);
+  }, [theme]);
 
-  const value = useMemo(() => ({ theme, setTheme, resetTheme, availableFonts }), [theme]);
+  const value = useMemo(() => ({ theme, setTheme, resetTheme, availableFonts }), [theme, resetTheme]);
 
   return (
     <ThemeContext.Provider value={value}>

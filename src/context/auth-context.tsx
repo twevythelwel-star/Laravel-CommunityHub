@@ -4,9 +4,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '@/types';
-import { app, auth as firebaseAuth } from '@/lib/firebase'; 
+import { auth as firebaseAuth } from '@/lib/firebase'; 
 
 type User = {
   email: string;

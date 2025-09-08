@@ -50,6 +50,7 @@ const allMenuItems = [
   { href: '/dashboard/users', label: 'User Management', icon: UserCog, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin'] },
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
 ];
 
 export default function DashboardLayout({
@@ -84,7 +85,7 @@ export default function DashboardLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {menuItems.map(({ href, label, icon: Icon, isBeta }) => (
+            {menuItems.map(({ href, label, icon: Icon }) => (
               <SidebarMenuItem key={href}>
                  <Link href={href} className="w-full">
                   <SidebarMenuButton
