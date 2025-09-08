@@ -7,6 +7,11 @@ import { ThemeProvider, useTheme } from '@/context/theme-context';
 
 function FontLoader() {
     const { theme } = useTheme();
+
+    if (!theme?.font) {
+        return null;
+    }
+
     const fontUrl = `https://fonts.googleapis.com/css2?family=${theme.font.replace(/ /g, '+')}:wght@400;700&display=swap`;
 
     return (
