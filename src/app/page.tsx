@@ -44,7 +44,7 @@ export default function LoginPage() {
         router.push('/dashboard');
       }, 2500); // Wait for animation to complete
     } else {
-      setError('Invalid username or password. Please try again.');
+      setError('Invalid username. Please use one of the test usernames.');
     }
   };
 
@@ -108,7 +108,7 @@ export default function LoginPage() {
                 <AccordionContent>
                   <Alert>
                     <AlertDescription className="space-y-2">
-                       <p>Use password: <code className="bg-muted px-1.5 py-0.5 rounded-sm">password</code> for all users.</p>
+                       <p>You can use any password. Login is not validated.</p>
                        <ul className="list-disc pl-4 text-muted-foreground">
                         {testUsers.map(user => (
                             <li key={user.role}><span className="font-medium text-foreground">{user.role}:</span> {user.username}</li>

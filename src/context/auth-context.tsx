@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '@/types';
-import { auth as firebaseAuth } from '@/lib/firebase'; 
+import { auth, db } from '@/lib/firebase';
 
 type User = {
   email: string;
@@ -40,52 +40,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!firebaseAuth) {
-      setLoading(false);
-      return;
-    }
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser && firebaseUser.email) {
-        const role = mockRoleMapping[firebaseUser.email] || 'Homeowner'; 
-        const userPayload: User = {
-          email: firebaseUser.email,
-          role: role,
-          uid: firebaseUser.uid
-        };
-        setUser(userPayload);
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    // In this simplified setup, we don't need onAuthStateChanged
+    // because we are not using real Firebase auth sessions.
+    // If you were to switch back, you would re-enable this.
+    setLoading(false);
   }, []);
 
   const login = async (username: string, pass: string): Promise<boolean> => {
-    if (!firebaseAuth) {
-      return false;
-    }
-    try {
-      const email = `${username.toLowerCase()}@example.com`;
-      await signInWithEmailAndPassword(firebaseAuth, email, pass);
+    const email = `${username.toLowerCase()}@example.com`;
+    const role = mockRoleMapping[email];
+
+    if (role) {
+      // Create a mock user object without calling Firebase
+      const mockUser: User = {
+        email: email,
+        role: role,
+        uid: `mock-uid-${username}`,
+      };
+      setUser(mockUser);
       return true;
-    } catch (error) {
-      return false;
     }
+
+    return false;
   };
 
   const logout = async () => {
-    if (!firebaseAuth) {
-      return;
-    }
-    try {
-      await signOut(firebaseAuth);
-      setUser(null);
-      router.push('/');
-    } catch (error) {
-      // In a real app, you might want to show a toast notification here
-    }
+    setUser(null);
+    router.push('/');
   };
 
   return (
