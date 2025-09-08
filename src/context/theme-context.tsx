@@ -87,6 +87,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const resetTheme = () => {
+    setTheme(DEFAULT_THEME);
+  };
+
   useEffect(() => {
     localStorage.setItem('app-theme', JSON.stringify(theme));
     
@@ -102,11 +106,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--sidebar-background', `color-mix(in srgb, ${theme.background} 95%, white)`);
     root.style.setProperty('--sidebar-accent', `color-mix(in srgb, ${theme.primary} 20%, ${theme.background})`);
 
-  }, [theme]);
-
-  const resetTheme = () => {
-    setTheme(DEFAULT_THEE);
-  };
+  }, [theme, resetTheme]);
 
   const value = useMemo(() => ({ theme, setTheme, resetTheme, availableFonts }), [theme]);
 
