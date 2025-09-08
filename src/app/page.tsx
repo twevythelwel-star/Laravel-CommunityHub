@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
@@ -12,6 +12,15 @@ import { useAuth } from '@/context/auth-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { WelcomeAnimation } from '@/components/welcome-animation';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
+const testUsers = [
+    { role: 'System Admin', username: 'user-sysadmin' },
+    { role: 'Admin', username: 'user-admin' },
+    { role: 'Homeowner', username: 'user-homeowner' },
+    { role: 'Temporary Homeowner', username: 'user-renter' },
+    { role: 'Security', username: 'user-security' },
+]
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -68,7 +77,7 @@ export default function LoginPage() {
                 <Input
                   id="username"
                   type="text"
-                  placeholder="e.g. User-Sysadmin"
+                  placeholder="e.g., user-sysadmin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
@@ -92,6 +101,25 @@ export default function LoginPage() {
             </div>
           </form>
         </CardContent>
+         <CardFooter className="flex-col items-start text-sm">
+             <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="item-1">
+                <AccordionTrigger className="py-2 text-muted-foreground">View Test Credentials</AccordionTrigger>
+                <AccordionContent>
+                  <Alert>
+                    <AlertDescription className="space-y-2">
+                       <p>Use password: <code className="bg-muted px-1.5 py-0.5 rounded-sm">password</code> for all users.</p>
+                       <ul className="list-disc pl-4 text-muted-foreground">
+                        {testUsers.map(user => (
+                            <li key={user.role}><span className="font-medium text-foreground">{user.role}:</span> {user.username}</li>
+                        ))}
+                       </ul>
+                    </AlertDescription>
+                  </Alert>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+        </CardFooter>
       </Card>
     </div>
   );
