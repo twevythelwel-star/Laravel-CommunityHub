@@ -70,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("Firebase is not configured. Cannot log in.");
       return false;
     }
-    setLoading(true);
     try {
       // Firebase auth expects an email format
       const email = `${username.toLowerCase()}@example.com`;
@@ -79,7 +78,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error("Firebase login error:", error);
-      setLoading(false);
       return false;
     }
   };
