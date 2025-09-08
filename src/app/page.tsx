@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -19,11 +20,11 @@ import { WelcomeAnimation } from '@/components/welcome-animation';
   The password for all users below should be set to "password" in Firebase.
 
   Usernames:
-  - System Admin: User-Sysadmin
-  - Admin: User-Admin
-  - Homeowner: User-Homeowner
-  - Renter/Guest: User-Renter
-  - Security: User-Security
+  - System Admin: Sysadmin
+  - Admin: Admin
+  - Homeowner: Homeowner
+  - Renter/Guest: Renter
+  - Security: Security
 */}
 
 export default function LoginPage() {
