@@ -78,13 +78,14 @@ const availableFonts = [
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('app-theme');
-      return savedTheme ? JSON.parse(savedTheme) : DEFAULT_THEME;
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('app-theme');
+    if (savedTheme) {
+      setTheme(JSON.parse(savedTheme));
     }
-    return DEFAULT_THEME;
-  });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('app-theme', JSON.stringify(theme));
@@ -104,7 +105,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   const resetTheme = () => {
-    setTheme(DEFAULT_THEME);
+    setTheme(DEFAULT_THEE);
   };
 
   const value = useMemo(() => ({ theme, setTheme, resetTheme, availableFonts }), [theme]);
