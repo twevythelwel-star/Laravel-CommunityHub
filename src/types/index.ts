@@ -1,4 +1,5 @@
 
+
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -69,4 +70,13 @@ export type AdminUser = {
     status: 'Active' | 'Inactive';
     createdAt: Date;
     activity: ActivityLogEntry[];
+}
+
+export type ManagedUser = {
+    id: string;
+    name: string;
+    email: string;
+    role: UserRole;
+    status: 'Active' | 'Inactive';
+    createdAt: Date;
 }

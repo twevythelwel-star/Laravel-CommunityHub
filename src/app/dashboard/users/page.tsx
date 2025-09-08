@@ -21,101 +21,132 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, PlusCircle } from "lucide-react";
-import type { AdminUser } from '@/types';
-import { CreateAdminForm } from '@/components/dashboard/create-admin-form';
-import { AdminActivityLog } from '@/components/dashboard/admin-activity-log';
+import type { ManagedUser } from '@/types';
+import { CreateUserForm } from '@/components/dashboard/create-user-form';
 import { ClientFormattedDate } from '@/components/client-formatted-date';
+import { useAuth } from '@/context/auth-context';
 
-const mockAdmins: AdminUser[] = [
+const mockUsers: ManagedUser[] = [
     {
-        id: 'adm_1',
-        name: 'Alice Johnson',
-        email: 'alice.j@example.com',
+        id: 'usr_1',
+        name: 'Olivia Davis',
+        email: 'olivia.d@example.com',
+        role: 'Homeowner',
         status: 'Active',
-        createdAt: new Date('2023-10-15T09:00:00Z'),
-        activity: [
-            { id: 'act_1', timestamp: new Date(), action: 'Created a notification: "Pool Maintenance"' },
-            { id: 'act_2', timestamp: new Date(Date.now() - 86400000), action: 'Sent a warning: "Suspicious Vehicle"' },
-        ]
+        createdAt: new Date('2023-01-15T09:00:00Z'),
     },
     {
-        id: 'adm_2',
-        name: 'Bob Williams',
-        email: 'bob.w@example.com',
+        id: 'usr_2',
+        name: 'John Smith',
+        email: 'john.s@example.com',
+        role: 'Homeowner',
         status: 'Active',
-        createdAt: new Date('2023-09-01T14:20:00Z'),
-        activity: [
-            { id: 'act_3', timestamp: new Date(Date.now() - 172800000), action: 'Updated billing information for Lot 42' },
-        ]
+        createdAt: new Date('2023-02-20T11:00:00Z'),
     },
     {
-        id: 'adm_3',
-        name: 'Charlie Brown',
-        email: 'charlie.b@example.com',
+        id: 'usr_3',
+        name: 'Sam Wilson',
+        email: 'sam.w@example.com',
+        role: 'Temporary Homeowner',
+        status: 'Active',
+        createdAt: new Date('2024-06-01T14:00:00Z'),
+    },
+    {
+        id: 'usr_4',
+        name: 'Guard McSecurity',
+        email: 'guard.m@example.com',
+        role: 'Security',
         status: 'Inactive',
-        createdAt: new Date('2023-05-20T11:00:00Z'),
-        activity: []
-    }
+        createdAt: new Date('2023-03-10T18:00:00Z'),
+    },
+     {
+        id: 'usr_5',
+        name: 'Jane Doe',
+        email: 'jane.d@example.com',
+        role: 'Homeowner',
+        status: 'Active',
+        createdAt: new Date('2022-11-05T14:20:00Z'),
+    },
 ];
 
 
 export default function UsersPage() {
-    const [admins, setAdmins] = useState<AdminUser[]>(mockAdmins);
-    const [selectedAdmin, setSelectedAdmin] = useState<AdminUser | null>(null);
+    const { user } = useAuth();
+    const [users, setUsers] = useState<ManagedUser[]>(mockUsers);
     const [isCreateOpen, setCreateOpen] = useState(false);
-    const [isActivityLogOpen, setActivityLogOpen] = useState(false);
 
-    const handleCreateAdmin = (newAdmin: Omit<AdminUser, 'id' | 'createdAt' | 'activity'>) => {
-        const admin: AdminUser = {
-            ...newAdmin,
-            id: `adm_${Date.now()}`,
+    const handleCreateUser = (newUser: Omit<ManagedUser, 'id' | 'createdAt'>) => {
+        const user: ManagedUser = {
+            ...newUser,
+            id: `usr_${Date.now()}`,
             createdAt: new Date(),
-            activity: [],
         };
-        setAdmins([admin, ...admins]);
+        setUsers([user, ...users]);
     };
 
-    const handleViewActivity = (admin: AdminUser) => {
-        setSelectedAdmin(admin);
-        setActivityLogOpen(true);
-    };
-
-    const toggleAdminStatus = (adminId: string) => {
-        setAdmins(admins.map(admin => 
-            admin.id === adminId 
-            ? { ...admin, status: admin.status === 'Active' ? 'Inactive' : 'Active' }
-            : admin
+    const toggleUserStatus = (userId: string) => {
+        setUsers(users.map(user => 
+            user.id === userId 
+            ? { ...user, status: user.status === 'Active' ? 'Inactive' : 'Active' }
+            : user
         ));
     };
+
+    const getRoleBadgeVariant = (role: ManagedUser['role']) => {
+        switch (role) {
+            case 'Homeowner': return 'default';
+            case 'Temporary Homeowner': return 'secondary';
+            case 'Security': return 'outline';
+            default: return 'secondary';
+        }
+    }
+
+    if (user?.role !== 'Admin' && user?.role !== 'System Admin') {
+        return (
+             <Card>
+                <CardHeader>
+                    <CardTitle>Access Denied</CardTitle>
+                    <CardDescription>
+                        You do not have permission to view this page.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p>Only Administrators can manage users.</p>
+                </CardContent>
+            </Card>
+        )
+    }
+
 
   return (
     <div className="grid gap-8">
         <div>
             <h1 className="font-headline text-3xl font-bold">User Management</h1>
-            <p className="text-muted-foreground">Create and manage Admin accounts for the platform.</p>
+            <p className="text-muted-foreground">Create and manage Homeowner, Renter, and Security accounts.</p>
         </div>
         <Card>
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                    <CardTitle>Administrator Accounts</CardTitle>
+                    <CardTitle>Community Users</CardTitle>
                     <CardDescription>
-                        A list of all Admin users with access to the system.
+                        A list of all Homeowners, Renters, and Security personnel.
                     </CardDescription>
                 </div>
-                <CreateAdminForm onOpenChange={setCreateOpen} open={isCreateOpen} onCreateAdmin={handleCreateAdmin}>
+                <CreateUserForm onOpenChange={setCreateOpen} open={isCreateOpen} onCreateUser={handleCreateUser}>
                     <Button size="sm" className="gap-1">
                         <PlusCircle className="h-3.5 w-3.5" />
                         <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                            Create Admin
+                            Create User
                         </span>
                     </Button>
-                </CreateAdminForm>
+                </CreateUserForm>
             </CardHeader>
             <CardContent>
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Admin</TableHead>
+                            <TableHead>User</TableHead>
+                            <TableHead>Role</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Created At</TableHead>
                             <TableHead>
@@ -124,19 +155,24 @@ export default function UsersPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {admins.map(admin => (
-                            <TableRow key={admin.id}>
+                        {users.map(user => (
+                            <TableRow key={user.id}>
                                 <TableCell>
-                                    <div className="font-medium">{admin.name}</div>
-                                    <div className="text-sm text-muted-foreground">{admin.email}</div>
+                                    <div className="font-medium">{user.name}</div>
+                                    <div className="text-sm text-muted-foreground">{user.email}</div>
                                 </TableCell>
                                 <TableCell>
-                                    <Badge variant={admin.status === 'Active' ? 'secondary' : 'outline'}>
-                                        {admin.status}
+                                    <Badge variant={getRoleBadgeVariant(user.role)}>
+                                        {user.role}
                                     </Badge>
                                 </TableCell>
                                 <TableCell>
-                                    <ClientFormattedDate date={admin.createdAt} formatString="MMM d, yyyy" />
+                                    <Badge variant={user.status === 'Active' ? 'secondary' : 'outline'}>
+                                        {user.status}
+                                    </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    <ClientFormattedDate date={user.createdAt} formatString="MMM d, yyyy" />
                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
@@ -148,9 +184,9 @@ export default function UsersPage() {
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                            <DropdownMenuItem onClick={() => handleViewActivity(admin)}>View Activity</DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => toggleAdminStatus(admin.id)}>
-                                                {admin.status === 'Active' ? 'Deactivate' : 'Activate'}
+                                            <DropdownMenuItem>View Profile</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => toggleUserStatus(user.id)}>
+                                                {user.status === 'Active' ? 'Deactivate' : 'Activate'}
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -161,13 +197,6 @@ export default function UsersPage() {
                 </Table>
             </CardContent>
         </Card>
-        {selectedAdmin && (
-             <AdminActivityLog 
-                open={isActivityLogOpen} 
-                onOpenChange={setActivityLogOpen}
-                admin={selectedAdmin}
-            />
-        )}
     </div>
   );
 }
