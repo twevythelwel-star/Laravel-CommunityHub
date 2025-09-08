@@ -64,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, pass: string): Promise<boolean> => {
     if (!firebaseAuth) {
-      console.error("Firebase is not configured. Cannot log in.");
       return false;
     }
     try {
@@ -72,7 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signInWithEmailAndPassword(firebaseAuth, email, pass);
       return true;
     } catch (error) {
-      console.error("Firebase login error:", error);
       return false;
     }
   };
@@ -86,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       router.push('/');
     } catch (error) {
-      console.error("Firebase logout error:", error);
+      // In a real app, you might want to show a toast notification here
     }
   };
 

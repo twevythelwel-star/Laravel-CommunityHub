@@ -4,9 +4,8 @@
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { NotificationForm } from "@/components/dashboard/notification-form";
 import type { Notification } from "@/types";
-import { format } from "date-fns";
+import { ClientFormattedDate } from "@/components/client-formatted-date";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useEffect, useState } from "react";
 
 const mockNotifications: Notification[] = [
     {
@@ -24,24 +23,6 @@ const mockNotifications: Notification[] = [
         timestamp: new Date('2023-06-25T00:00:00.000Z')
     }
 ]
-
-function ClientFormattedDate({ date }: { date: Date }) {
-  const [formattedDate, setFormattedDate] = useState('');
-
-  useEffect(() => {
-    setFormattedDate(format(date, 'MMM d, yyyy'));
-  }, [date]);
-
-  if (!formattedDate) {
-    return <p className="text-sm text-muted-foreground">...</p>;
-  }
-
-  return (
-    <p className="text-sm text-muted-foreground">
-      {formattedDate}
-    </p>
-  );
-}
 
 export default function NotificationsPage() {
   return (
@@ -76,7 +57,7 @@ export default function NotificationsPage() {
                         <div className="flex-1">
                             <div className="flex justify-between">
                                 <p className="font-semibold">{notification.title}</p>
-                                <ClientFormattedDate date={notification.timestamp} />
+                                <ClientFormattedDate date={notification.timestamp} formatString="MMM d, yyyy" />
                             </div>
                             <p className="text-muted-foreground mt-1">{notification.content}</p>
                         </div>

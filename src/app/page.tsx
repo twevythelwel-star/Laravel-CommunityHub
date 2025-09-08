@@ -13,20 +13,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { WelcomeAnimation } from '@/components/welcome-animation';
 
-{/*
-  Test User Credentials:
-  To use these, you must first create corresponding users in your Firebase Authentication console.
-  The application will append "@example.com" to the username to form the email for login.
-  The password for all users below should be set to "password" in Firebase.
-
-  Usernames:
-  - System Admin: User-Sysadmin
-  - Admin: User-Admin
-  - Homeowner: User-Homeowner
-  - Renter/Guest: User-Renter
-  - Security: User-Security
-*/}
-
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -41,6 +27,8 @@ export default function LoginPage() {
     setError(null);
     setIsLoading(true);
     const success = await login(username, password);
+    setIsLoading(false);
+
     if (success) {
       setIsLoggedIn(true);
       setTimeout(() => {
@@ -48,7 +36,6 @@ export default function LoginPage() {
       }, 2500); // Wait for animation to complete
     } else {
       setError('Invalid username or password. Please try again.');
-      setIsLoading(false);
     }
   };
 

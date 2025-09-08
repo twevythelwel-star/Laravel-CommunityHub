@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -29,7 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal } from "lucide-react";
 import type { Feedback } from "@/types";
-import { format } from "date-fns";
+import { ClientFormattedDate } from "@/components/client-formatted-date";
 
 const mockFeedback: Feedback[] = [
     {
@@ -69,26 +69,6 @@ const mockFeedback: Feedback[] = [
         status: 'New',
     },
 ];
-
-
-function ClientFormattedDate({ date }: { date: Date }) {
-  const [formattedDate, setFormattedDate] = useState('');
-
-  useEffect(() => {
-    setFormattedDate(format(date, 'MMM d, yyyy'));
-  }, [date]);
-
-  if (!formattedDate) {
-    return <>...</>;
-  }
-
-  return (
-    <span>
-      {formattedDate}
-    </span>
-  );
-}
-
 
 export default function ReviewFeedbackPage() {
     const [feedbackList, setFeedbackList] = useState<Feedback[]>(mockFeedback);
@@ -152,7 +132,7 @@ export default function ReviewFeedbackPage() {
                                 <Badge variant={getStatusVariant(item.status)}>{item.status}</Badge>
                             </TableCell>
                             <TableCell>
-                               <ClientFormattedDate date={item.timestamp} />
+                               <ClientFormattedDate date={item.timestamp} formatString="MMM d, yyyy" />
                             </TableCell>
                              <TableCell>
                                 <DropdownMenu>

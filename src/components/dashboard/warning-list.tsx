@@ -5,8 +5,8 @@ import { useState, useEffect } from 'react';
 import type { Warning } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { formatDistanceToNow } from 'date-fns';
 import { ThumbsUp, ThumbsDown, UserCircle } from 'lucide-react';
+import { ClientFormattedDistanceToNow } from '../client-formatted-date';
 
 type WarningListProps = {
   initialWarnings: Warning[];
@@ -14,11 +14,6 @@ type WarningListProps = {
 
 export function WarningList({ initialWarnings }: WarningListProps) {
   const [warnings, setWarnings] = useState<Warning[]>(initialWarnings);
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
 
   const handleVote = (id: string, vote: 'confirm' | 'deny') => {
     setWarnings(warnings.map(w => {
@@ -43,7 +38,7 @@ export function WarningList({ initialWarnings }: WarningListProps) {
             <CardDescription className="flex items-center gap-2 pt-1 text-xs">
                 <UserCircle className="h-4 w-4" /> 
                 <span>{warning.author}</span> &middot; 
-                <span>{isClient ? formatDistanceToNow(new Date(warning.timestamp), { addSuffix: true }) : '...'}</span>
+                <ClientFormattedDistanceToNow date={warning.timestamp} />
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -90,4 +85,3 @@ export function WarningList({ initialWarnings }: WarningListProps) {
     </div>
   );
 }
-

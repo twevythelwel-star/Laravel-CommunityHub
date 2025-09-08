@@ -12,25 +12,21 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-let app: FirebaseApp | null = null;
-let auth: Auth | null = null;
-let db: Firestore | null = null;
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
 
-// Initialize Firebase
-if (firebaseConfig.apiKey) {
-    if (getApps().length === 0) {
-        app = initializeApp(firebaseConfig);
-    } else {
-        app = getApp();
-    }
-
-    if (app) {
-        auth = getAuth(app);
-        db = getFirestore(app);
-    }
+// Initialize Firebase robustly
+if (firebaseConfig.projectId) {
+  if (!getApps().length) {
+    app = initializeApp(firebaseConfig);
+  } else {
+    app = getApp();
+  }
+  auth = getAuth(app);
+  db = getFirestore(app);
 } else {
-    console.error("Firebase configuration is missing. Please check your .env.local file.");
+    console.warn("Firebase configuration is missing. Features depending on Firebase will be disabled.");
 }
-
 
 export { app, auth, db };

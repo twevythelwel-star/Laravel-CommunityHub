@@ -22,22 +22,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
-import { useState, useEffect } from "react";
-import { format } from "date-fns";
-
-function ClientFormattedDate({ dateString }: { dateString: string }) {
-  const [formattedDate, setFormattedDate] = useState('');
-
-  useEffect(() => {
-    setFormattedDate(format(new Date(dateString), 'yyyy-MM-dd'));
-  }, [dateString]);
-
-  if (!formattedDate) {
-    return <>...</>;
-  }
-
-  return <>{formattedDate}</>;
-}
+import { ClientFormattedDate } from "@/components/client-formatted-date";
 
 const mockTransactions = [
     { id: '1', homeowner: 'John Smith (Lot 12)', date: '2023-07-20', amount: 30.00, status: 'Paid' },
@@ -213,7 +198,7 @@ export default function Dashboard() {
                     <TableCell className="hidden md:table-cell">
                       Olivia Davis (Lot 42)
                     </TableCell>
-                    <TableCell className="text-right"><ClientFormattedDate dateString="2023-06-23" /></TableCell>
+                    <TableCell className="text-right"><ClientFormattedDate date={new Date("2023-06-23")} formatString="yyyy-MM-dd" /></TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
@@ -233,7 +218,7 @@ export default function Dashboard() {
                     <TableCell className="hidden md:table-cell">
                       John Smith (Lot 12)
                     </TableCell>
-                    <TableCell className="text-right"><ClientFormattedDate dateString="2023-06-24" /></TableCell>
+                    <TableCell className="text-right"><ClientFormattedDate date={new Date("2023-06-24")} formatString="yyyy-MM-dd" /></TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
