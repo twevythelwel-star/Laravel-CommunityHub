@@ -16,15 +16,7 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-if (
-    firebaseConfig.apiKey &&
-    firebaseConfig.authDomain &&
-    firebaseConfig.projectId &&
-    firebaseConfig.storageBucket &&
-    firebaseConfig.messagingSenderId &&
-    firebaseConfig.appId &&
-    getApps().length === 0
-) {
+if (firebaseConfig.apiKey && getApps().length === 0) {
     try {
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
