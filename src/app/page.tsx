@@ -10,14 +10,16 @@ import { Logo } from '@/components/logo';
 import { useAuth } from '@/context/auth-context';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import { WelcomeAnimation } from '@/components/welcome-animation';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { login, user } = useAuth();
   const router = useRouter();
-  const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,12 +27,19 @@ export default function LoginPage() {
     setIsLoading(true);
     const success = await login(username, password);
     if (success) {
-      router.push('/dashboard');
+      setIsLoggedIn(true);
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 2500); // Wait for animation to complete
     } else {
       setError('Invalid username or password. Please try again.');
       setIsLoading(false);
     }
   };
+
+  if (isLoggedIn && user) {
+    return <WelcomeAnimation username={user.role} />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">

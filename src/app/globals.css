@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -83,5 +84,28 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .welcome-container {
+    @apply flex items-center justify-center h-screen w-screen overflow-hidden bg-background;
+  }
+
+  .gate {
+    @apply h-screen w-1/2 transition-transform duration-1000 ease-in-out;
+  }
+
+  .gate-left {
+    @apply animate-gate-open-left;
+  }
+
+  .gate-right {
+    @apply animate-gate-open-right;
+  }
+
+  .welcome-message {
+    @apply flex flex-col items-center justify-center text-center opacity-0 animate-fade-in;
+    animation-delay: 500ms;
   }
 }
