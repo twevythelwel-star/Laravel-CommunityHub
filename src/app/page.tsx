@@ -12,6 +12,15 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { WelcomeAnimation } from '@/components/welcome-animation';
 
+{/*
+  Test User Credentials (Password for all is "password"):
+  - System Admin: User-Sysadmin
+  - Admin: User-Admin
+  - Homeowner: User-Homeowner
+  - Renter/Guest: User-Renter
+  - Security: User-Security
+*/}
+
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
