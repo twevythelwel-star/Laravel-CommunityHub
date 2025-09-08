@@ -40,9 +40,7 @@ function AppBody({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <ThemeProvider>
-            <head>
-                <FontLoader />
-            </head>
+            <FontLoader />
             <AuthProvider>
                 <BillingProvider>
                     <AppBody>
