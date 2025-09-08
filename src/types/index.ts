@@ -1,3 +1,4 @@
+
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -54,3 +55,18 @@ export type Feedback = {
   subject: string;
   status: 'New' | 'In Progress' | 'Resolved';
 };
+
+export type ActivityLogEntry = {
+    id: string;
+    timestamp: Date;
+    action: string;
+}
+
+export type AdminUser = {
+    id: string;
+    name: string;
+    email: string;
+    status: 'Active' | 'Inactive';
+    createdAt: Date;
+    activity: ActivityLogEntry[];
+}
