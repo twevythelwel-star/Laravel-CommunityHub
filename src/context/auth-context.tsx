@@ -23,6 +23,7 @@ type AuthContextType = {
 
 // This is a mock mapping from email to role.
 // In a real application, this would be stored in a database (e.g., Firestore).
+// The default password for all mock users is "password".
 const mockRoleMapping: Record<string, UserRole> = {
     'user-sysadmin@example.com': 'System Admin',
     'user-admin@example.com': 'Admin',
