@@ -16,18 +16,20 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-if (firebaseConfig.apiKey && getApps().length === 0) {
-    try {
+// Initialize Firebase
+if (firebaseConfig.apiKey) {
+    if (getApps().length === 0) {
         app = initializeApp(firebaseConfig);
+    } else {
+        app = getApp();
+    }
+
+    if (app) {
         auth = getAuth(app);
         db = getFirestore(app);
-    } catch (e) {
-        console.error("Error initializing Firebase", e);
     }
-} else if (getApps().length > 0) {
-    app = getApp();
-    auth = getAuth(app);
-    db = getFirestore(app);
+} else {
+    console.error("Firebase configuration is missing. Please check your .env.local file.");
 }
 
 

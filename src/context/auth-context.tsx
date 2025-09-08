@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '@/types';
-import { auth as firebaseAuth, app as firebaseApp } from '@/lib/firebase'; 
+import { auth as firebaseAuth } from '@/lib/firebase'; 
 
 type User = {
   email: string;
@@ -23,7 +23,6 @@ type AuthContextType = {
 
 // This is a mock mapping from email to role.
 // In a real application, this would be stored in a database (e.g., Firestore).
-// The default password for all mock users is "password".
 const mockRoleMapping: Record<string, UserRole> = {
     'user-sysadmin@example.com': 'System Admin',
     'user-admin@example.com': 'Admin',
@@ -47,8 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser && firebaseUser.email) {
-        // In a real app, you would fetch the user's role from your database (e.g., Firestore) here.
-        // For now, we'll use the mock mapping.
         const role = mockRoleMapping[firebaseUser.email] || 'Homeowner'; 
         const userPayload: User = {
           email: firebaseUser.email,
@@ -71,10 +68,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return false;
     }
     try {
-      // Firebase auth expects an email format
       const email = `${username.toLowerCase()}@example.com`;
       await signInWithEmailAndPassword(firebaseAuth, email, pass);
-      // onAuthStateChanged will handle setting the user state
       return true;
     } catch (error) {
       console.error("Firebase login error:", error);
