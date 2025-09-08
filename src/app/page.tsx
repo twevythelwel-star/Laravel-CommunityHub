@@ -13,7 +13,12 @@ import { AlertTriangle } from 'lucide-react';
 import { WelcomeAnimation } from '@/components/welcome-animation';
 
 {/*
-  Test User Credentials (Password for all is "password"):
+  Test User Credentials:
+  To use these, you must first create corresponding users in your Firebase Authentication console.
+  The application will append "@example.com" to the username to form the email for login.
+  The password for all users below should be set to "password" in Firebase.
+
+  Usernames:
   - System Admin: User-Sysadmin
   - Admin: User-Admin
   - Homeowner: User-Homeowner
