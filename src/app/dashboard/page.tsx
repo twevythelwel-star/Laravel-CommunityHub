@@ -26,17 +26,17 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 
 function ClientFormattedDate({ dateString }: { dateString: string }) {
-  const [isClient, setIsClient] = useState(false);
+  const [formattedDate, setFormattedDate] = useState('');
 
   useEffect(() => {
-    setIsClient(true);
-  }, []);
+    setFormattedDate(format(new Date(dateString), 'yyyy-MM-dd'));
+  }, [dateString]);
 
-  if (!isClient) {
+  if (!formattedDate) {
     return <>...</>;
   }
 
-  return <>{format(new Date(dateString), 'yyyy-MM-dd')}</>;
+  return <>{formattedDate}</>;
 }
 
 const mockTransactions = [

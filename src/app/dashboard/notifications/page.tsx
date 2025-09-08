@@ -26,11 +26,15 @@ const mockNotifications: Notification[] = [
 ]
 
 function ClientFormattedDate({ date }: { date: Date }) {
-  const [formattedDate, setFormattedDate] = useState('...');
+  const [formattedDate, setFormattedDate] = useState('');
 
   useEffect(() => {
     setFormattedDate(format(date, 'MMM d, yyyy'));
   }, [date]);
+
+  if (!formattedDate) {
+    return <p className="text-sm text-muted-foreground">...</p>;
+  }
 
   return (
     <p className="text-sm text-muted-foreground">

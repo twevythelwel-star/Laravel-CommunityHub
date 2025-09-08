@@ -100,12 +100,14 @@ export default function VisitorsPage() {
   const { toast } = useToast();
   const [visitors, setVisitors] = useState<Visitor[]>([]);
   const [entryType, setEntryType] = useState<EntryType>('onetime');
-  const [expectedDate, setExpectedDate] = useState<Date | undefined>(new Date());
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: add(new Date(), { days: 7 }) });
+  const [expectedDate, setExpectedDate] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
     setVisitors(getInitialVisitors());
+    setDateRange({ from: new Date(), to: add(new Date(), { days: 7 }) });
+    setExpectedDate(new Date());
     setIsClient(true);
   }, []);
 

@@ -72,11 +72,15 @@ const mockFeedback: Feedback[] = [
 
 
 function ClientFormattedDate({ date }: { date: Date }) {
-  const [formattedDate, setFormattedDate] = useState('...');
+  const [formattedDate, setFormattedDate] = useState('');
 
   useEffect(() => {
     setFormattedDate(format(date, 'MMM d, yyyy'));
   }, [date]);
+
+  if (!formattedDate) {
+    return <>...</>;
+  }
 
   return (
     <span>
