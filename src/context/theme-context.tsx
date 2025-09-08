@@ -7,6 +7,7 @@ type Theme = {
   primary: string;
   background: string;
   accent: string;
+  font: string;
 };
 
 // Default theme matching globals.css HSL values converted to HEX
@@ -14,18 +15,7 @@ const DEFAULT_THEME: Theme = {
   primary: '#a7d7d0',   // hsl(188, 55%, 72%)
   background: '#f0f9ff', // hsl(208, 100%, 97%)
   accent: '#a5d9af',     // hsl(140, 44%, 73%)
-};
-
-// Function to convert HSL string to HEX
-const hslToHex = (h: number, s: number, l: number): string => {
-  l /= 100;
-  const a = s * Math.min(l, 1 - l) / 100;
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
+  font: 'PT Sans',
 };
 
 // Function to convert HEX to HSL string for CSS variables
@@ -72,7 +62,18 @@ type ThemeContextType = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   resetTheme: () => void;
+  availableFonts: string[];
 };
+
+const availableFonts = [
+    'PT Sans',
+    'Roboto',
+    'Open Sans',
+    'Lato',
+    'Montserrat',
+    'Oswald',
+    'Raleway',
+];
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
@@ -92,6 +93,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--primary', hexToHsl(theme.primary));
     root.style.setProperty('--background', hexToHsl(theme.background));
     root.style.setProperty('--accent', hexToHsl(theme.accent));
+    root.style.setProperty('--font-family', theme.font);
 
     // For simplicity, we'll derive other colors from these base colors.
     // This part can be expanded to allow full control.
@@ -105,7 +107,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setTheme(DEFAULT_THEME);
   };
 
-  const value = useMemo(() => ({ theme, setTheme, resetTheme }), [theme]);
+  const value = useMemo(() => ({ theme, setTheme, resetTheme, availableFonts }), [theme]);
 
   return (
     <ThemeContext.Provider value={value}>
