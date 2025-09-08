@@ -18,7 +18,7 @@ let db: Firestore | null = null;
 
 // A robust check to ensure Firebase config is not only present but also valid before initializing.
 // This prevents crashes and console errors when the .env file is not yet populated.
-if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+if (Object.values(firebaseConfig).every(value => typeof value === 'string' && value)) {
     try {
         app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
         auth = getAuth(app);
