@@ -16,7 +16,15 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-if (firebaseConfig.apiKey) {
+// Only initialize Firebase if all config values are present and non-empty strings
+if (
+    firebaseConfig.apiKey &&
+    firebaseConfig.authDomain &&
+    firebaseConfig.projectId &&
+    firebaseConfig.storageBucket &&
+    firebaseConfig.messagingSenderId &&
+    firebaseConfig.appId
+) {
     try {
         app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
         auth = getAuth(app);
@@ -25,8 +33,6 @@ if (firebaseConfig.apiKey) {
         console.error("Error initializing Firebase", e);
     }
 } else {
-    // This will be logged on the server side if keys are missing.
-    // It's helpful for debugging during development.
     if (typeof window === 'undefined') {
       // console.log("Firebase config is missing, so Firebase services are disabled.");
     }
