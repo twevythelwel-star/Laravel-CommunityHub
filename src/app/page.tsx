@@ -20,11 +20,11 @@ import { WelcomeAnimation } from '@/components/welcome-animation';
   The password for all users below should be set to "password" in Firebase.
 
   Usernames:
-  - System Admin: Sysadmin
-  - Admin: Admin
-  - Homeowner: Homeowner
-  - Renter/Guest: Renter
-  - Security: Security
+  - System Admin: User-Sysadmin
+  - Admin: User-Admin
+  - Homeowner: User-Homeowner
+  - Renter/Guest: User-Renter
+  - Security: User-Security
 */}
 
 export default function LoginPage() {
