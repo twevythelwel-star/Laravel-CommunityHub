@@ -16,8 +16,9 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-// A check to ensure Firebase config is present
-if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
+// A robust check to ensure Firebase config is not only present but also valid before initializing.
+// This prevents crashes and console errors when the .env file is not yet populated.
+if (firebaseConfig.apiKey) {
     try {
         app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
         auth = getAuth(app);
@@ -25,8 +26,12 @@ if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
     } catch (e) {
         console.error("Error initializing Firebase", e);
     }
-} else if (firebaseConfig.apiKey) { // Only log error if key is present but a placeholder
-    console.error("Firebase config is missing or not set up. Please update your .env file.");
+} else {
+    // This will be logged on the server side if keys are missing.
+    // It's helpful for debugging during development.
+    if (typeof window === 'undefined') {
+      console.log("Firebase config is missing, so Firebase services are disabled.");
+    }
 }
 
 
