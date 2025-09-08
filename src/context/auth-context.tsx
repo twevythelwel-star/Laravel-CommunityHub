@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '@/types';
-import { app } from '@/lib/firebase'; // Ensure firebase is initialized
+import { app, auth as firebaseAuth } from '@/lib/firebase'; 
 
 type User = {
   email: string;
@@ -39,10 +39,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const auth = getAuth(app);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+    if (!firebaseAuth) {
+      setLoading(false);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser && firebaseUser.email) {
         // In a real app, you would fetch the user's role from your database (e.g., Firestore) here.
         // For now, we'll use the mock mapping.
@@ -60,14 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, [auth]);
+  }, []);
 
   const login = async (username: string, pass: string): Promise<boolean> => {
+    if (!firebaseAuth) {
+      console.error("Firebase is not configured. Cannot log in.");
+      return false;
+    }
     setLoading(true);
     try {
       // Firebase auth expects an email format
       const email = `${username.toLowerCase()}@example.com`;
-      await signInWithEmailAndPassword(auth, email, pass);
+      await signInWithEmailAndPassword(firebaseAuth, email, pass);
       // onAuthStateChanged will handle setting the user state
       return true;
     } catch (error) {
@@ -78,8 +85,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+     if (!firebaseAuth) {
+      console.error("Firebase is not configured. Cannot log out.");
+      return;
+    }
     try {
-      await signOut(auth);
+      await signOut(firebaseAuth);
       setUser(null);
       router.push('/');
     } catch (error) {
