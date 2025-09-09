@@ -24,16 +24,17 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Responsive
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useBilling } from "@/context/billing-context";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 
 const mockTransactions = [
-    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2023-07-20', amount: 30.00, status: 'Paid' },
-    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2023-07-19', amount: 30.00, status: 'Paid' },
-    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2023-07-01', amount: 30.00, status: 'Overdue' },
-    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2023-07-18', amount: 30.00, status: 'Paid' },
+    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 30.00, status: 'Paid' },
+    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2025-07-19', amount: 30.00, status: 'Paid' },
+    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2025-07-01', amount: 30.00, status: 'Overdue' },
+    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 30.00, status: 'Paid' },
 ];
 
 const monthlyCollectionsData = [
@@ -51,7 +52,6 @@ const monthlyCollectionsData = [
   { month: "Dec", total: 2600 },
 ];
 
-const currentMonthIndex = new Date().getMonth();
 
 const chartConfig = {
   total: {
@@ -60,14 +60,22 @@ const chartConfig = {
 }
 
 
-const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
-const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
-
-
 export function AdminBilling() {
   const { monthlyFee, setMonthlyFee } = useBilling();
   const { toast } = useToast();
   const [newFee, setNewFee] = useState(monthlyFee);
+  const [currentMonthName, setCurrentMonthName] = useState('');
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
+
+  useEffect(() => {
+    const now = new Date();
+    setCurrentMonthName(format(now, 'MMMM'));
+    setCurrentMonthIndex(now.getMonth());
+  }, []);
+
+  const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
+  const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
+
 
   const handleFeeChange = () => {
     setMonthlyFee(newFee);
@@ -88,7 +96,7 @@ export function AdminBilling() {
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Total Collected (July)
+                Total Collected ({currentMonthName})
               </CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
@@ -135,9 +143,9 @@ export function AdminBilling() {
 
        <Card>
         <CardHeader>
-          <CardTitle>Monthly Collections</CardTitle>
+          <CardTitle>YTD Collections (2025)</CardTitle>
           <CardDescription>
-            A summary of dues collected over the last 12 months.
+            A summary of dues collected over the current year.
           </CardDescription>
         </CardHeader>
         <CardContent>

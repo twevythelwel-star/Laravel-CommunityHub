@@ -2,10 +2,11 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Info } from "lucide-react";
+import { Info, Landmark } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useState } from "react";
 import { useBilling } from "@/context/billing-context";
+import { format } from "date-fns";
 
 // Mock exchange rates. In a real app, this would come from an API.
 const MOCK_EXCHANGE_RATES = {
@@ -20,9 +21,17 @@ type FormattedRates = {
     eur: string;
 }
 
+const mockPayments = [
+    { date: new Date('2025-01-15'), amount: 30.00 },
+    { date: new Date('2025-02-15'), amount: 30.00 },
+    { date: new Date('2025-03-15'), amount: 30.00 },
+    { date: new Date('2025-04-15'), amount: 30.00 },
+];
+
 export function BillingSummary() {
     const { monthlyFee } = useBilling();
     const [rates, setRates] = useState<FormattedRates | null>(null);
+    const [totalPaidYTD, setTotalPaidYTD] = useState(0);
 
     useEffect(() => {
         // This simulates fetching and formatting rates and ensures it only runs on the client.
@@ -35,14 +44,18 @@ export function BillingSummary() {
             gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(gbp)),
             eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(eur)),
         });
+
+        const ytd = mockPayments.reduce((acc, p) => acc + p.amount, 0);
+        setTotalPaidYTD(ytd);
     }, [monthlyFee]);
 
     return (
+        <>
         <Card>
             <CardHeader>
                 <CardTitle>Monthly Dues</CardTitle>
                 <CardDescription>
-                    Your upcoming HOA payment is detailed below.
+                    Your upcoming HOA payment for {format(new Date(), 'MMMM yyyy')} is detailed below.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -67,5 +80,21 @@ export function BillingSummary() {
                 </Alert>
             </CardContent>
         </Card>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Year-to-Date Payments (2025)</CardTitle>
+                    <CardDescription>
+                        Summary of your payments since Jan 1, 2025.
+                    </CardDescription>
+                </div>
+                <Landmark className="h-6 w-6 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <p className="text-3xl font-bold">${totalPaidYTD.toFixed(2)}</p>
+                <p className="text-sm text-muted-foreground">Total paid across {mockPayments.length} transactions.</p>
+            </CardContent>
+        </Card>
+        </>
     )
 }

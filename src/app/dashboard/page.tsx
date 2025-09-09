@@ -23,20 +23,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
 import { ClientFormattedDate } from "@/components/client-formatted-date";
+import { useEffect, useState } from "react";
 
 const mockTransactions = [
-    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2023-07-20', amount: 30.00, status: 'Paid' },
-    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2023-07-19', amount: 30.00, status: 'Paid' },
-    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2023-07-01', amount: 30.00, status: 'Overdue' },
-    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2023-07-18', amount: 30.00, status: 'Paid' },
+    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 30.00, status: 'Paid' },
+    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2025-07-19', amount: 30.00, status: 'Paid' },
+    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2025-07-01', amount: 30.00, status: 'Overdue' },
+    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 30.00, status: 'Paid' },
 ];
-
-const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
-const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
-
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [currentMonth, setCurrentMonth] = useState('');
+
+  useEffect(() => {
+    setCurrentMonth(new Date().toLocaleString('default', { month: 'long' }));
+  }, [])
 
   const canViewActiveResidents = user && ['System Admin', 'Admin', 'Security'].includes(user.role);
   const canViewUpcomingVisitors = user && ['System Admin', 'Homeowner', 'Temporary Homeowner', 'Security'].includes(user.role);
@@ -48,6 +50,10 @@ export default function Dashboard() {
   if (!user) {
     return null;
   }
+  
+  const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
+  const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
+
 
   return (
     <div className="flex flex-1 flex-col">
@@ -73,7 +79,7 @@ export default function Dashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Total Collected (July)
+                  Total Collected ({currentMonth})
                 </CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
@@ -198,7 +204,7 @@ export default function Dashboard() {
                     <TableCell className="hidden md:table-cell">
                       Olivia Davis (Lot 42)
                     </TableCell>
-                    <TableCell className="text-right"><ClientFormattedDate date={new Date("2023-06-23")} formatString="yyyy-MM-dd" /></TableCell>
+                    <TableCell className="text-right"><ClientFormattedDate date={new Date("2025-06-23")} formatString="yyyy-MM-dd" /></TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell>
@@ -218,7 +224,7 @@ export default function Dashboard() {
                     <TableCell className="hidden md:table-cell">
                       John Smith (Lot 12)
                     </TableCell>
-                    <TableCell className="text-right"><ClientFormattedDate date={new Date("2023-06-24")} formatString="yyyy-MM-dd" /></TableCell>
+                    <TableCell className="text-right"><ClientFormattedDate date={new Date("2025-06-24")} formatString="yyyy-MM-dd" /></TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
