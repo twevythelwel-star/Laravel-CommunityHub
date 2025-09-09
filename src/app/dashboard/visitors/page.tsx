@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle } from "lucide-react";
+import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -41,12 +41,13 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/context/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { add, format, sub, formatISO } from "date-fns";
+import { add, format, sub } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
+import { VisitorIdModal } from "@/components/dashboard/visitor-id-modal";
 
 type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
 type EntryType = "onetime" | "recurring";
@@ -59,6 +60,7 @@ type Visitor = {
   expectedAt: Date;
   dateRange: string;
   homeowner: string;
+  idImageUrl?: string;
 };
 
 const getInitialVisitors = (): Visitor[] => {
@@ -72,6 +74,7 @@ const getInitialVisitors = (): Visitor[] => {
             expectedAt: now,
             dateRange: format(now, "yyyy-MM-dd"),
             homeowner: "Olivia Davis (Lot 42)",
+            idImageUrl: "https://picsum.photos/300/200?q=id1",
         },
         {
             id: "2",
@@ -103,6 +106,7 @@ export default function VisitorsPage() {
   const [expectedDate, setExpectedDate] = useState<Date | undefined>();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [isClient, setIsClient] = useState(false);
+  const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
 
   useEffect(() => {
     setVisitors(getInitialVisitors());
@@ -190,6 +194,14 @@ export default function VisitorsPage() {
   }
 
   return (
+    <>
+    {selectedVisitor && (
+        <VisitorIdModal 
+            visitor={selectedVisitor}
+            open={!!selectedVisitor}
+            onOpenChange={(isOpen) => !isOpen && setSelectedVisitor(null)}
+        />
+    )}
     <div className="flex flex-col gap-8">
       <div className="flex items-center">
         <div className="flex-1">
@@ -388,10 +400,7 @@ export default function VisitorsPage() {
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="hidden md:table-cell">Date Range</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                  Actions
-                </TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -419,11 +428,15 @@ export default function VisitorsPage() {
                             </Button>
                              <Button 
                                 size="sm" 
-                                variant="destructive"
+                                variant="outline"
                                 onClick={() => handleStatusChange(visitor.id, 'Checked Out')}
                                 disabled={visitor.status === 'Expected' || visitor.status === 'Checked Out'}
                             >
                                 Check Out
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => setSelectedVisitor(visitor)}>
+                                <Camera className="h-4 w-4" />
+                                <span className="sr-only">View ID</span>
                             </Button>
                         </div>
                     ) : (
@@ -449,5 +462,6 @@ export default function VisitorsPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }

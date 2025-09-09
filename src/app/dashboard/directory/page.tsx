@@ -77,6 +77,7 @@ const mockAllUsers: ManagedUser[] = [
 
 const roleOrder: UserRole[] = ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'];
 const adminVisibleRoles: UserRole[] = ['Homeowner', 'Temporary Homeowner', 'Security'];
+const ROOT_SYS_ADMIN_EMAIL = 'user-sysadmin@example.com';
 
 
 export default function DirectoryPage() {
@@ -144,7 +145,12 @@ export default function DirectoryPage() {
                                 {role}s ({groupedUsers[role].length})
                             </AccordionTrigger>
                             <AccordionContent className="pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                {groupedUsers[role].map(person => (
+                                {groupedUsers[role].map(person => {
+                                    const isRootSysAdmin = person.email === ROOT_SYS_ADMIN_EMAIL;
+                                    const isSelf = person.email === user?.email;
+                                    const canToggle = !isRootSysAdmin && !isSelf && (user?.role === 'System Admin' || (user?.role === 'Admin' && person.role !== 'Admin' && person.role !== 'System Admin'));
+
+                                    return (
                                     <Card key={person.id}>
                                         <CardContent className="pt-6 flex flex-col items-center text-center gap-4">
                                             <Avatar className="h-20 w-20">
@@ -163,13 +169,18 @@ export default function DirectoryPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => toggleStatus(person.id)}
-                                                disabled={user?.role === 'Admin' && (person.role === 'Admin' || person.role === 'System Admin')}
+                                                disabled={!canToggle}
+                                                title={
+                                                    isRootSysAdmin ? "The root System Admin cannot be disabled." :
+                                                    isSelf ? "You cannot change your own status." :
+                                                    !canToggle ? "You do not have permission to change this user's status." : ""
+                                                }
                                             >
                                                 {person.status === 'Active' ? 'Set as Inactive' : 'Set as Active'}
                                             </Button>
                                         </CardContent>
                                     </Card>
-                                ))}
+                                )})}
                             </AccordionContent>
                         </AccordionItem>
                     )
