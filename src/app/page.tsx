@@ -13,6 +13,18 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertTriangle } from 'lucide-react';
 import { WelcomeAnimation } from '@/components/welcome-animation';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { useToast } from '@/hooks/use-toast';
+
 
 const testUsers = [
     { role: 'System Admin', username: 'user-sysadmin' },
@@ -28,8 +40,10 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [resetContact, setResetContact] = useState('');
   const { login, user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +60,16 @@ export default function LoginPage() {
     } else {
       setError('Invalid username. Please use one of the test usernames.');
     }
+  };
+
+  const handlePasswordReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    // In a real app, this would call a backend service.
+    // For this mock, we just show a confirmation.
+    toast({
+      title: 'Password Reset Requested',
+      description: 'If an account exists for that email or phone, a reset link has been sent.',
+    });
   };
 
   if (isLoggedIn && user) {
@@ -85,7 +109,45 @@ export default function LoginPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center">
+                    <Label htmlFor="password">Password</Label>
+                     <Dialog>
+                        <DialogTrigger asChild>
+                            <Button variant="link" className="ml-auto inline-block px-1 py-0 h-auto text-xs">
+                                Forgot password?
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <form onSubmit={handlePasswordReset}>
+                                <DialogHeader>
+                                <DialogTitle>Reset Password</DialogTitle>
+                                <DialogDescription>
+                                    Enter your email address or phone number to receive a password reset link.
+                                </DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="reset-contact" className="text-right">
+                                        Email/Phone
+                                    </Label>
+                                    <Input
+                                        id="reset-contact"
+                                        className="col-span-3"
+                                        value={resetContact}
+                                        onChange={(e) => setResetContact(e.target.value)}
+                                        placeholder="user@example.com"
+                                    />
+                                </div>
+                                </div>
+                                <DialogFooter>
+                                <DialogClose asChild>
+                                    <Button type="submit">Send Reset Link</Button>
+                                </DialogClose>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
                 <Input
                   id="password"
                   type="password"
