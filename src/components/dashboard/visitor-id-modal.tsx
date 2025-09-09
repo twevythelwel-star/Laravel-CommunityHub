@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,8 +11,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, FileQuestion } from 'lucide-react';
+import { Camera, FileQuestion, Video, VideoOff } from 'lucide-react';
 import Image from 'next/image';
+import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 type Visitor = {
   id: string;
@@ -26,17 +29,101 @@ type VisitorIdModalProps = {
 };
 
 export function VisitorIdModal({ open, onOpenChange, visitor }: VisitorIdModalProps) {
+  const { toast } = useToast();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const getCameraPermission = async () => {
+      if (open && isCapturing) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            toast({
+              variant: 'destructive',
+              title: 'Camera Not Supported',
+              description: 'Your browser does not support camera access.',
+            });
+            setHasCameraPermission(false);
+            return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          setHasCameraPermission(true);
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        } catch (error) {
+          console.error('Error accessing camera:', error);
+          setHasCameraPermission(false);
+          toast({
+            variant: 'destructive',
+            title: 'Camera Access Denied',
+            description: 'Please enable camera permissions in your browser settings to use this feature.',
+          });
+        }
+      } else {
+        // Stop camera stream when modal is closed or capture is cancelled
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+            videoRef.current.srcObject = null;
+        }
+      }
+    };
+
+    getCameraPermission();
+
+    // Cleanup function to stop tracks when component unmounts or dependencies change
+    return () => {
+        if (videoRef.current && videoRef.current.srcObject) {
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
+        }
+    }
+
+  }, [open, isCapturing, toast]);
+  
+  const handleCaptureClick = () => {
+    setIsCapturing(prev => !prev);
+    if (isCapturing) {
+        setHasCameraPermission(null); // Reset permission state
+    }
+  };
+  
+  const handleOpenChange = (isOpen: boolean) => {
+    if (!isOpen) {
+        setIsCapturing(false);
+        setHasCameraPermission(null);
+    }
+    onOpenChange(isOpen);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Verify Visitor ID: {visitor.name}</DialogTitle>
           <DialogDescription>
-            Confirm the visitor's identity using their provided ID.
+             {isCapturing ? 'Position the ID card within the frame.' : "Confirm the visitor's identity using their provided ID."}
           </DialogDescription>
         </DialogHeader>
+
         <div className="flex justify-center items-center p-4 my-4 rounded-lg bg-muted min-h-[200px]">
-          {visitor.idImageUrl ? (
+          {isCapturing ? (
+            <div className="w-full space-y-2">
+                <video ref={videoRef} className="w-full aspect-video rounded-md" autoPlay muted playsInline />
+                {hasCameraPermission === false && (
+                    <Alert variant="destructive">
+                        <VideoOff className="h-4 w-4" />
+                        <AlertTitle>Camera Access Required</AlertTitle>
+                        <AlertDescription>
+                            Please allow camera access in your browser to use this feature.
+                        </AlertDescription>
+                    </Alert>
+                )}
+            </div>
+          ) : visitor.idImageUrl ? (
             <Image
               src={visitor.idImageUrl}
               alt={`ID for ${visitor.name}`}
@@ -47,15 +134,22 @@ export function VisitorIdModal({ open, onOpenChange, visitor }: VisitorIdModalPr
             />
           ) : (
             <div className="text-center text-muted-foreground">
-                <FileQuestion className="mx-auto h-12 w-12" />
-                <p className="mt-2">No ID was uploaded by the homeowner.</p>
+              <FileQuestion className="mx-auto h-12 w-12" />
+              <p className="mt-2">No ID was uploaded by the homeowner.</p>
             </div>
           )}
         </div>
-        <DialogFooter className="sm:justify-center">
-            <Button type="button">
+
+        <DialogFooter className="sm:justify-center flex-col sm:flex-col sm:space-x-0 gap-2">
+           {isCapturing && hasCameraPermission && (
+             <Button type="button">
                 <Camera className="mr-2 h-4 w-4" />
-                Capture New ID
+                Take Snapshot
+            </Button>
+           )}
+            <Button type="button" variant="outline" onClick={handleCaptureClick}>
+              {isCapturing ? <VideoOff className="mr-2 h-4 w-4" /> : <Video className="mr-2 h-4 w-4" />}
+              {isCapturing ? 'Cancel Capture' : 'Capture New ID'}
             </Button>
         </DialogFooter>
       </DialogContent>
