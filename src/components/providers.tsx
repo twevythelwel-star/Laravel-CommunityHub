@@ -11,34 +11,30 @@ import { useEffect, useState } from 'react';
 function FontLoader() {
     const { theme } = useTheme();
 
-    if (!theme?.font) {
-        return null;
-    }
-
-    const fontUrl = `https://fonts.googleapis.com/css2?family=${theme.font.replace(/ /g, '+')}:wght@400;700&display=swap`;
+    useEffect(() => {
+        if (theme?.font) {
+            const fontUrl = `https://fonts.googleapis.com/css2?family=${theme.font.replace(/ /g, '+')}:wght@400;700&display=swap`;
+            
+            let link = document.getElementById('app-font') as HTMLLinkElement;
+            if (link) {
+                link.href = fontUrl;
+            } else {
+                link = document.createElement('link');
+                link.id = 'app-font';
+                link.rel = 'stylesheet';
+                link.href = fontUrl;
+                document.head.appendChild(link);
+            }
+        }
+    }, [theme?.font]);
 
     return (
-        <>
+         <>
             <link rel="preconnect" href="https://fonts.googleapis.com" />
             <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-            <link
-              id="app-font"
-              href={fontUrl}
-              rel="stylesheet"
-            />
         </>
     )
 }
-
-function AppBody({ children }: { children: React.ReactNode }) {
-    const { theme } = useTheme();
-    return (
-        <div className="font-body antialiased" style={{ fontFamily: `'${theme.font}', sans-serif` }}>
-           {children}
-        </div>
-    )
-}
-
 
 export function Providers({ children }: { children: React.ReactNode }) {
     const [isMounted, setIsMounted] = useState(false);
@@ -47,19 +43,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         setIsMounted(true);
     }, []);
 
-    if (!isMounted) {
-        return null;
-    }
-
     return (
         <ThemeProvider>
             <FontLoader />
             <AuthProvider>
                 <BrandingProvider>
                     <BillingProvider>
-                        <AppBody>
-                            {children}
-                        </AppBody>
+                        {isMounted ? children : null}
                     </BillingProvider>
                 </BrandingProvider>
             </AuthProvider>
