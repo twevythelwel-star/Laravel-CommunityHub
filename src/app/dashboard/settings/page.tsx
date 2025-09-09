@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -14,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/auth-context";
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer";
 import { Textarea } from "@/components/ui/textarea";
+import { BrandingSettings } from "@/components/dashboard/branding-settings";
 
 const defaultCoords = JSON.stringify([
   { "longitude": -77.9278, "latitude": 18.4781 },
@@ -36,17 +38,30 @@ export default function SettingsPage() {
         </div>
       
       {user?.role === 'System Admin' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Theme Customization</CardTitle>
-            <CardDescription>
-              As a System Admin, you can customize the application's appearance.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ThemeCustomizer />
-          </CardContent>
-        </Card>
+        <>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Branding</CardTitle>
+                    <CardDescription>
+                    Customize the name and logo of your community application.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <BrandingSettings />
+                </CardContent>
+            </Card>
+            <Card>
+            <CardHeader>
+                <CardTitle>Theme Customization</CardTitle>
+                <CardDescription>
+                As a System Admin, you can customize the application's appearance.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ThemeCustomizer />
+            </CardContent>
+            </Card>
+        </>
       )}
 
       {isAdmin && (

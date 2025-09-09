@@ -1,8 +1,10 @@
 
+
 'use client';
 
 import { AuthProvider } from '@/context/auth-context';
 import { BillingProvider } from '@/context/billing-context';
+import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider, useTheme } from '@/context/theme-context';
 import { useEffect, useState } from 'react';
 
@@ -53,11 +55,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <ThemeProvider>
             <FontLoader />
             <AuthProvider>
-                <BillingProvider>
-                    <AppBody>
-                        {children}
-                    </AppBody>
-                </BillingProvider>
+                <BrandingProvider>
+                    <BillingProvider>
+                        <AppBody>
+                            {children}
+                        </AppBody>
+                    </BillingProvider>
+                </BrandingProvider>
             </AuthProvider>
         </ThemeProvider>
     )
