@@ -31,6 +31,7 @@ import {
   Camera,
   MessageSquarePlus,
   ClipboardCheck,
+  Map,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
@@ -40,6 +41,7 @@ import type { UserRole } from '@/types';
 
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },

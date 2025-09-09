@@ -13,9 +13,20 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/auth-context";
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer";
+import { Textarea } from "@/components/ui/textarea";
+
+const defaultCoords = JSON.stringify([
+  { "longitude": -77.9278, "latitude": 18.4781 },
+  { "longitude": -77.9239, "latitude": 18.4783 },
+  { "longitude": -77.9236, "latitude": 18.4752 },
+  { "longitude": -77.9276, "latitude": 18.4750 },
+], null, 2);
+
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'System Admin' || user?.role === 'Admin';
+
 
   return (
     <div className="grid gap-8">
@@ -37,6 +48,25 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {isAdmin && (
+         <Card>
+          <CardHeader>
+            <CardTitle>Map Configuration</CardTitle>
+            <CardDescription>
+              Define the community boundaries by providing polygon coordinates.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+                <Label htmlFor="map-coords">Polygon Coordinates (JSON format)</Label>
+                <Textarea id="map-coords" className="font-code h-48" defaultValue={defaultCoords} />
+            </div>
+            <Button>Save Map Coordinates</Button>
+          </CardContent>
+        </Card>
+      )}
+
 
       <Card>
         <CardHeader>
