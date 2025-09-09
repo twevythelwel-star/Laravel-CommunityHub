@@ -17,62 +17,54 @@ import type { ManagedUser, UserRole } from "@/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const mockAllUsers: ManagedUser[] = [
+    // System Admins
     {
         id: 'usr_sys_1',
-        name: 'Sys Admin User',
+        name: 'Root Sysadmin',
         email: 'user-sysadmin@example.com',
         role: 'System Admin',
         status: 'Active',
         createdAt: new Date('2023-01-10T09:00:00Z'),
     },
+     {
+        id: 'usr_sys_2',
+        name: 'Secondary Sysadmin',
+        email: 'user-sysadmin2@example.com',
+        role: 'System Admin',
+        status: 'Active',
+        createdAt: new Date('2023-01-11T09:00:00Z'),
+    },
+    // Admins
     {
         id: 'usr_adm_1',
-        name: 'Admin User',
+        name: 'Lead Admin',
         email: 'user-admin@example.com',
         role: 'Admin',
         status: 'Active',
         createdAt: new Date('2023-01-12T10:00:00Z'),
     },
-    {
-        id: 'usr_1',
-        name: 'Olivia Davis',
-        email: 'olivia.d@example.com',
-        role: 'Homeowner',
-        status: 'Active',
-        createdAt: new Date('2023-01-15T09:00:00Z'),
-    },
-    {
-        id: 'usr_2',
-        name: 'John Smith',
-        email: 'john.s@example.com',
-        role: 'Homeowner',
-        status: 'Inactive',
-        createdAt: new Date('2023-02-20T11:00:00Z'),
-    },
-    {
-        id: 'usr_3',
-        name: 'Sam Wilson',
-        email: 'sam.w@example.com',
-        role: 'Temporary Homeowner',
-        status: 'Active',
-        createdAt: new Date('2024-06-01T14:00:00Z'),
-    },
-    {
-        id: 'usr_4',
-        name: 'Guard McSecurity',
-        email: 'guard.m@example.com',
-        role: 'Security',
-        status: 'Inactive',
-        createdAt: new Date('2023-03-10T18:00:00Z'),
-    },
-     {
-        id: 'usr_5',
-        name: 'Jane Doe',
-        email: 'jane.d@example.com',
-        role: 'Homeowner',
-        status: 'Active',
-        createdAt: new Date('2022-11-05T14:20:00Z'),
-    },
+    { id: 'usr_adm_2', name: 'Operations Admin', email: 'user-admin2@example.com', role: 'Admin', status: 'Active', createdAt: new Date() },
+    { id: 'usr_adm_3', name: 'Community Admin', email: 'user-admin3@example.com', role: 'Admin', status: 'Inactive', createdAt: new Date() },
+    { id: 'usr_adm_4', name: 'Finance Admin', email: 'user-admin4@example.com', role: 'Admin', status: 'Active', createdAt: new Date() },
+
+    // Homeowners
+    { id: 'usr_ho_1', name: 'Olivia Davis', email: 'olivia.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2023-01-15T09:00:00Z') },
+    { id: 'usr_ho_2', name: 'John Smith', email: 'john.s@example.com', role: 'Homeowner', status: 'Inactive', createdAt: new Date('2023-02-20T11:00:00Z') },
+    { id: 'usr_ho_3', name: 'Jane Doe', email: 'jane.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2022-11-05T14:20:00Z') },
+    { id: 'usr_ho_4', name: 'Carlos Gomez', email: 'carlos.g@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date() },
+    { id: 'usr_ho_5', name: 'Aisha Khan', email: 'aisha.k@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date() },
+    { id: 'usr_ho_6', name: 'Ben Carter', email: 'ben.c@example.com', role: 'Homeowner', status: 'Inactive', createdAt: new Date() },
+
+
+    // Renters (Temporary Homeowners)
+    { id: 'usr_th_1', name: 'Sam Wilson', email: 'sam.w@example.com', role: 'Temporary Homeowner', status: 'Active', createdAt: new Date('2024-06-01T14:00:00Z') },
+    { id: 'usr_th_2', name: 'Mia Wong', email: 'mia.w@example.com', role: 'Temporary Homeowner', status: 'Active', createdAt: new Date() },
+    { id: 'usr_th_3', name: 'Leo Martinez', email: 'leo.m@example.com', role: 'Temporary Homeowner', status: 'Inactive', createdAt: new Date() },
+
+    // Security
+    { id: 'usr_sec_1', name: 'Guard McSecurity', email: 'guard.m@example.com', role: 'Security', status: 'Active', createdAt: new Date('2023-03-10T18:00:00Z') },
+    { id: 'usr_sec_2', name: 'Officer Barbrady', email: 'officer.b@example.com', role: 'Security', status: 'Active', createdAt: new Date() },
+    { id: 'usr_sec_3', name: 'Patrol Person', email: 'patrol.p@example.com', role: 'Security', status: 'Inactive', createdAt: new Date() },
 ];
 
 const roleOrder: UserRole[] = ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'];

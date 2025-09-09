@@ -1,5 +1,6 @@
 
 
+
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -9,6 +10,15 @@ export type Homeowner = {
   contact: string;
   active: boolean;
 };
+
+export type Renter = {
+  id: string;
+  name: string;
+  status: 'Active' | 'Inactive';
+  leaseStart: Date;
+  leaseEnd: Date;
+};
+
 
 export type Visitor = {
   id: string;
