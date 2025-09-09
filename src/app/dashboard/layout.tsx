@@ -33,6 +33,8 @@ import {
   MessageSquarePlus,
   ClipboardCheck,
   Map,
+  History,
+  UserX,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
@@ -51,8 +53,10 @@ const allMenuItems = [
   { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Security'] },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/users', label: 'User Management', icon: UserCog, roles: ['System Admin', 'Admin'] },
+  { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
   { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin'] },
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner'] },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
 ];
 
