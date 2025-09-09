@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -111,7 +112,7 @@ export default function DeactivationPage() {
     setTimeString('');
     toast({
       title: 'Deactivation Canceled',
-      description: 'Your account deactivation request has been canceled.',
+      description: "Your account's deactivation request has been canceled.",
     });
   }
   
@@ -164,7 +165,7 @@ export default function DeactivationPage() {
                     <AlertTitle>Reminders</AlertTitle>
                     <AlertDescription>
                         You will receive an email and text message reminder 1 hour and 15 minutes before your account is deactivated.
-                    </AlerthDescription>
+                    </AlertDescription>
                 </Alert>
             </CardContent>
             <CardFooter>
