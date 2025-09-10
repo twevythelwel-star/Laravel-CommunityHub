@@ -35,10 +35,16 @@ const mockTransactions = [
 export default function Dashboard() {
   const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState('');
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     setCurrentMonth(new Date().toLocaleString('default', { month: 'long' }));
   }, [])
+  
+  if (!isClient || !user) {
+    return null;
+  }
 
   const canViewActiveResidents = user && ['System Admin', 'Admin', 'Security'].includes(user.role);
   const canViewUpcomingVisitors = user && ['System Admin', 'Homeowner', 'Temporary Homeowner', 'Security'].includes(user.role);
@@ -46,10 +52,6 @@ export default function Dashboard() {
   const canViewWarnings = user && ['System Admin', 'Admin', 'Homeowner', 'Security'].includes(user.role);
   const canViewRecentVisitors = user && ['System Admin', 'Admin', 'Homeowner', 'Security'].includes(user.role);
   const canViewBilling = user && ['System Admin', 'Admin'].includes(user.role);
-  
-  if (!user) {
-    return null;
-  }
   
   const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
   const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
@@ -316,3 +318,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+    

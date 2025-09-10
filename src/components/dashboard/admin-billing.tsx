@@ -66,8 +66,10 @@ export function AdminBilling() {
   const [newFee, setNewFee] = useState(monthlyFee);
   const [currentMonthName, setCurrentMonthName] = useState('');
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    setIsClient(true);
     const now = new Date();
     setCurrentMonthName(format(now, 'MMMM'));
     setCurrentMonthIndex(now.getMonth());
@@ -83,6 +85,10 @@ export function AdminBilling() {
         title: "Success",
         description: `Monthly fee has been updated to $${newFee.toFixed(2)}.`
     })
+  }
+  
+  if (!isClient) {
+    return null;
   }
 
   return (
@@ -215,3 +221,5 @@ export function AdminBilling() {
     </div>
   );
 }
+
+    

@@ -32,8 +32,12 @@ export function BillingSummary() {
     const { monthlyFee } = useBilling();
     const [rates, setRates] = useState<FormattedRates | null>(null);
     const [totalPaidYTD, setTotalPaidYTD] = useState(0);
+    const [isClient, setIsClient] = useState(false);
+    const [currentMonthYear, setCurrentMonthYear] = useState('');
 
     useEffect(() => {
+        setIsClient(true);
+        setCurrentMonthYear(format(new Date(), 'MMMM yyyy'));
         // This simulates fetching and formatting rates and ensures it only runs on the client.
         const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD).toFixed(2);
         const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP).toFixed(2);
@@ -48,6 +52,10 @@ export function BillingSummary() {
         const ytd = mockPayments.reduce((acc, p) => acc + p.amount, 0);
         setTotalPaidYTD(ytd);
     }, [monthlyFee]);
+    
+    if (!isClient) {
+        return null;
+    }
 
     return (
         <>
@@ -55,7 +63,7 @@ export function BillingSummary() {
             <CardHeader>
                 <CardTitle>Monthly Dues</CardTitle>
                 <CardDescription>
-                    Your upcoming HOA payment for {format(new Date(), 'MMMM yyyy')} is detailed below.
+                    Your upcoming HOA payment for {currentMonthYear} is detailed below.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -98,3 +106,5 @@ export function BillingSummary() {
         </>
     )
 }
+
+    
