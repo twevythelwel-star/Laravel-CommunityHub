@@ -92,6 +92,8 @@ export type ManagedUser = {
     role: UserRole;
     status: 'Active' | 'Inactive';
     createdAt: Date;
+    lotNumber?: string;
+    streetName?: string;
 }
 
 export type BlocklistEntry = {

@@ -34,7 +34,18 @@ const formSchema = z.object({
   email: z.string().email('Please enter a valid email address.'),
   password: z.string().min(8, 'Password must be at least 8 characters.'),
   role: z.enum(creatableRoles),
+  lotNumber: z.string().optional(),
+  streetName: z.string().optional(),
+}).refine(data => {
+    if ((data.role === 'Homeowner' || data.role === 'Temporary Homeowner') && (!data.lotNumber || !data.streetName)) {
+        return false;
+    }
+    return true;
+}, {
+    message: 'Lot number and street name are required for Homeowners and Renters.',
+    path: ['lotNumber'], // Show error on the first of the two fields
 });
+
 
 type CreateUserFormProps = {
   children: React.ReactNode;
@@ -52,8 +63,14 @@ export function CreateUserForm({ children, open, onOpenChange, onCreateUser }: C
       email: '',
       password: '',
       role: 'Homeowner',
+      lotNumber: '',
+      streetName: '',
     },
   });
+
+  const selectedRole = form.watch('role');
+  const showAddressFields = selectedRole === 'Homeowner' || selectedRole === 'Temporary Homeowner';
+
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     onCreateUser({ ...values, status: 'Active' });
@@ -133,6 +150,37 @@ export function CreateUserForm({ children, open, onOpenChange, onCreateUser }: C
                 </FormItem>
               )}
             />
+
+            {showAddressFields && (
+                <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="lotNumber"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Lot Number</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="e.g., 42" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="streetName"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Street Name</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="e.g., Main St" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            )}
 
             <FormField
               control={form.control}
