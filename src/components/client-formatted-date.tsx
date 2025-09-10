@@ -10,17 +10,17 @@ type ClientFormattedDateProps = {
 };
 
 export function ClientFormattedDate({ date, formatString }: ClientFormattedDateProps) {
-  const [formattedDate, setFormattedDate] = useState('');
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    setFormattedDate(format(date, formatString));
-  }, [date, formatString]);
+    setIsClient(true);
+  }, []);
 
-  if (!formattedDate) {
+  if (!isClient) {
     return null; 
   }
 
-  return <span>{formattedDate}</span>;
+  return <span>{format(new Date(date), formatString)}</span>;
 }
 
 
@@ -29,15 +29,15 @@ type ClientFormattedDistanceToNowProps = {
 };
 
 export function ClientFormattedDistanceToNow({ date }: ClientFormattedDistanceToNowProps) {
-    const [formattedDate, setFormattedDate] = useState('');
+    const [isClient, setIsClient] = useState(false);
   
     useEffect(() => {
-      setFormattedDate(formatDistanceToNow(new Date(date), { addSuffix: true }));
-    }, [date]);
+      setIsClient(true);
+    }, []);
   
-    if (!formattedDate) {
+    if (!isClient) {
       return null;
     }
   
-    return <span>{formattedDate}</span>;
+    return <span>{formatDistanceToNow(new Date(date), { addSuffix: true })}</span>;
   }
