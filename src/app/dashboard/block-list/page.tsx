@@ -27,32 +27,12 @@ import { useAuth } from '@/context/auth-context';
 import { BlocklistForm } from '@/components/dashboard/blocklist-form';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
+import { getBlocklist } from '@/lib/data';
 
-
-const mockBlocklist: BlocklistEntry[] = [
-    { 
-        id: 'bl_1', 
-        name: 'Known Troublemaker', 
-        photoUrl: 'https://picsum.photos/100?q=trouble',
-        reason: 'Repeatedly causing disturbances at community events. Multiple complaints filed.',
-        dateAdded: new Date('2024-03-15T00:00:00Z'),
-        addedBy: 'Admin',
-        expiryDate: null,
-    },
-     { 
-        id: 'bl_2', 
-        name: 'Suspicious Vehicle Owner', 
-        photoUrl: null,
-        reason: 'Vehicle seen loitering at odd hours. License plate reported.',
-        dateAdded: new Date('2024-07-10T00:00:00Z'),
-        addedBy: 'Guard McSecurity',
-        expiryDate: new Date('2025-01-10T00:00:00Z'),
-    },
-];
 
 export default function BlockListPage() {
     const { user } = useAuth();
-    const [entries, setEntries] = useState<BlocklistEntry[]>(mockBlocklist);
+    const [entries, setEntries] = useState<BlocklistEntry[]>(getBlocklist());
     const [isFormOpen, setFormOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<BlocklistEntry | undefined>(undefined);
 
@@ -152,7 +132,7 @@ export default function BlockListPage() {
                                 </TableCell>
                                  <TableCell>
                                     {entry.addedBy}
-                                </TableCell>
+                                 </TableCell>
                                 <TableCell>
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
