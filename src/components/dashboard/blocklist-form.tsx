@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,27 +23,40 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import type { BlocklistEntry } from '@/types';
+import type { BlocklistEntry, Visitor } from '@/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Check, ChevronsUpDown } from 'lucide-react';
 import { Calendar } from '../ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Textarea } from '../ui/textarea';
 import { Switch } from '../ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 
+
+const predefinedReasons = [
+    'Security Threat',
+    'Prior Misconduct',
+    'Restraining Order',
+    'Policy Violation',
+    'Other',
+];
 
 const formSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters.'),
-  reason: z.string().min(10, 'Reason must be at least 10 characters.'),
+  name: z.string({ required_error: "Please select a visitor."}),
+  reason: z.string().min(1, 'A reason is required.'),
+  customReason: z.string().optional(),
   photoUrl: z.string().url().nullable().optional(),
   isPermanent: z.boolean().default(true),
   expiryDate: z.date().optional().nullable(),
 }).refine(data => data.isPermanent || !!data.expiryDate, {
     message: "An expiry date is required for temporary blocks.",
     path: ["expiryDate"],
+}).refine(data => data.reason !== 'Other' || (data.reason === 'Other' && data.customReason && data.customReason.length >= 10), {
+    message: 'A custom reason must be at least 10 characters long.',
+    path: ['customReason'],
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -54,16 +67,19 @@ type BlocklistFormProps = {
   onOpenChange: (open: boolean) => void;
   onSave: (entry: Omit<BlocklistEntry, 'id' | 'dateAdded' | 'addedBy'>, id?: string) => void;
   entry?: BlocklistEntry;
+  visitors: Visitor[];
 };
 
-export function BlocklistForm({ children, open, onOpenChange, onSave, entry }: BlocklistFormProps) {
+export function BlocklistForm({ children, open, onOpenChange, onSave, entry, visitors }: BlocklistFormProps) {
   const { toast } = useToast();
+  const [isVisitorPopoverOpen, setVisitorPopoverOpen] = useState(false);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
       reason: '',
+      customReason: '',
       photoUrl: null,
       isPermanent: true,
       expiryDate: null,
@@ -72,9 +88,11 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry }: B
 
   useEffect(() => {
     if (entry) {
+        const isPredefined = predefinedReasons.includes(entry.reason);
         form.reset({
             name: entry.name,
-            reason: entry.reason,
+            reason: isPredefined ? entry.reason : 'Other',
+            customReason: isPredefined ? '' : entry.reason,
             photoUrl: entry.photoUrl,
             isPermanent: !entry.expiryDate,
             expiryDate: entry.expiryDate
@@ -83,6 +101,7 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry }: B
         form.reset({
             name: '',
             reason: '',
+            customReason: '',
             photoUrl: null,
             isPermanent: true,
             expiryDate: null,
@@ -92,10 +111,13 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry }: B
 
 
   function onSubmit(values: FormValues) {
+    const finalReason = values.reason === 'Other' ? values.customReason! : values.reason;
+    const visitor = visitors.find(v => v.name === values.name);
+
     const entryToSave = {
         name: values.name,
-        reason: values.reason,
-        photoUrl: values.photoUrl,
+        reason: finalReason,
+        photoUrl: visitor?.idImageUrl || null,
         expiryDate: values.isPermanent ? null : values.expiryDate!,
     }
     onSave(entryToSave, entry?.id);
@@ -120,7 +142,7 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry }: B
             <DialogHeader>
               <DialogTitle>{entry ? 'Edit Blocklist Entry' : 'Add to Blocklist'}</DialogTitle>
               <DialogDescription>
-                Fill out the form to add an individual to the blocklist. This will prevent them from being checked in.
+                Select a visitor and provide a reason to add them to the blocklist.
               </DialogDescription>
             </DialogHeader>
             
@@ -128,29 +150,102 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry }: B
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., John Doe" {...field} />
-                  </FormControl>
+                <FormItem className="flex flex-col">
+                  <FormLabel>Visitor Name</FormLabel>
+                   <Popover open={isVisitorPopoverOpen} onOpenChange={setVisitorPopoverOpen}>
+                        <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                    "w-full justify-between",
+                                    !field.value && "text-muted-foreground"
+                                )}
+                                >
+                                {field.value
+                                    ? visitors.find(
+                                        (visitor) => visitor.name === field.value
+                                    )?.name
+                                    : "Select visitor"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                            <Command>
+                                <CommandInput placeholder="Search visitors..." />
+                                <CommandList>
+                                <CommandEmpty>No visitors found.</CommandEmpty>
+                                <CommandGroup>
+                                    {visitors.map((visitor) => (
+                                    <CommandItem
+                                        value={visitor.name}
+                                        key={visitor.id}
+                                        onSelect={() => {
+                                        form.setValue("name", visitor.name);
+                                        setVisitorPopoverOpen(false);
+                                        }}
+                                    >
+                                        <Check
+                                        className={cn(
+                                            "mr-2 h-4 w-4",
+                                            visitor.name === field.value
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        )}
+                                        />
+                                        {visitor.name}
+                                    </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
                   <FormMessage />
                 </FormItem>
               )}
             />
             
              <FormField
-              control={form.control}
-              name="reason"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Reason for Block</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Explain why this person is being blocked..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+                control={form.control}
+                name="reason"
+                render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Reason for Block</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a reason" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {predefinedReasons.map(reason => (
+                                    <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                )}
             />
+
+            {form.watch('reason') === 'Other' && (
+                 <FormField
+                    control={form.control}
+                    name="customReason"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Custom Reason</FormLabel>
+                        <FormControl>
+                            <Textarea placeholder="Explain the specific reason..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            )}
 
             <FormField
               control={form.control}

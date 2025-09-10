@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, PlusCircle } from "lucide-react";
-import type { BlocklistEntry } from "@/types";
+import type { BlocklistEntry, Visitor } from "@/types";
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/context/auth-context';
@@ -29,11 +29,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 import { getBlocklist } from '@/lib/data';
 import { RequestRemovalForm } from '@/components/dashboard/request-removal-form';
+import { getInitialVisitors } from '@/lib/visitors-data';
 
 
 export default function BlockListPage() {
     const { user } = useAuth();
     const [entries, setEntries] = useState<BlocklistEntry[]>(getBlocklist());
+    const [visitors] = useState<Visitor[]>(getInitialVisitors());
     const [isFormOpen, setFormOpen] = useState(false);
     const [isRemovalFormOpen, setRemovalFormOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<BlocklistEntry | undefined>(undefined);
@@ -103,6 +105,7 @@ export default function BlockListPage() {
                         onOpenChange={handleCloseForm}
                         onSave={handleSave}
                         entry={selectedEntry}
+                        visitors={visitors}
                     >
                         <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
                             <PlusCircle className="h-3.5 w-3.5" />

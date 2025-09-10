@@ -49,69 +49,8 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { VisitorIdModal } from "@/components/dashboard/visitor-id-modal";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-
-type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
-type EntryType = "onetime" | "recurring";
-
-type Visitor = {
-  id: string;
-  name: string;
-  type: "One-time" | "Recurring";
-  status: VisitorStatus;
-  expectedAt: Date;
-  dateRange: string;
-  homeowner: string;
-  idImageUrl?: string;
-  isBlocked: boolean;
-};
-
-const getInitialVisitors = (): Visitor[] => {
-    const now = new Date();
-    return [
-        {
-            id: "1",
-            name: "Liam Johnson",
-            type: "One-time",
-            status: "Expected",
-            expectedAt: now,
-            dateRange: format(now, "yyyy-MM-dd"),
-            homeowner: "Olivia Davis (Lot 42)",
-            idImageUrl: "https://picsum.photos/300/200?q=id1",
-            isBlocked: false,
-        },
-        {
-            id: "2",
-            name: "Noah Williams",
-            type: "Recurring",
-            status: "Checked In",
-            expectedAt: sub(now, { days: 1 }),
-            dateRange: `${format(sub(now, {days: 1}), "yyyy-MM-dd")} - ${format(add(now, {days: 60}), "yyyy-MM-dd")}`,
-            homeowner: "John Smith (Lot 12)",
-            isBlocked: false,
-        },
-        {
-            id: "3",
-            name: "Expired Visitor",
-            type: "One-time",
-            status: "Expected",
-            expectedAt: sub(now, { hours: 13 }),
-            dateRange: format(sub(now, { hours: 13 }), "yyyy-MM-dd"),
-            homeowner: "John Smith (Lot 12)",
-            isBlocked: false,
-        },
-         {
-            id: "4",
-            name: "Known Troublemaker",
-            type: "One-time",
-            status: "Expected",
-            expectedAt: now,
-            dateRange: format(now, "yyyy-MM-dd"),
-            homeowner: "Jane Doe (Lot 03)",
-            idImageUrl: "https://picsum.photos/300/200?q=trouble",
-            isBlocked: true,
-        },
-    ];
-};
+import type { Visitor, VisitorStatus, EntryType } from "@/types";
+import { getInitialVisitors } from "@/lib/visitors-data";
 
 
 export default function VisitorsPage() {

@@ -1,5 +1,6 @@
 
 
+
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -18,16 +19,19 @@ export type Renter = {
   leaseEnd: Date;
 };
 
+export type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
+export type EntryType = "onetime" | "recurring";
 
 export type Visitor = {
   id: string;
   name: string;
-  contact: string;
-  vehicleDetails?: string;
   type: "One-time" | "Recurring";
-  startDate: Date;
-  endDate: Date;
-  registeredBy: string;
+  status: VisitorStatus;
+  expectedAt: Date;
+  dateRange: string;
+  homeowner: string;
+  idImageUrl?: string;
+  isBlocked: boolean;
 };
 
 export type Notification = {
