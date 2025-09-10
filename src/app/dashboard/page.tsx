@@ -32,6 +32,30 @@ const mockTransactions = [
     { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 30.00, status: 'Paid' },
 ];
 
+const mockPromotions = [
+    {
+        id: 'promo_1',
+        title: 'Free Delivery Friday!',
+        description: "From 'Local Eats' tonight only.",
+        imageUrl: 'https://picsum.photos/64/64?p=1',
+        aiHint: 'food delivery',
+    },
+    {
+        id: 'promo_2',
+        title: '50% off Gym Membership',
+        description: "Join 'Community Fit' this month.",
+        imageUrl: 'https://picsum.photos/64/64?p=2',
+        aiHint: 'fitness gym',
+    },
+    {
+        id: 'promo_3',
+        title: 'Weekend Car Wash Special',
+        description: "Get a full-service wash for $15.",
+        imageUrl: 'https://picsum.photos/64/64?p=3',
+        aiHint: 'car wash',
+    },
+];
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState('');
@@ -286,37 +310,33 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle>Community Promotions</CardTitle>
             <CardDescription>
-              Special offers and ads for our residents.
+              Special offers from local businesses for our residents.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="flex items-center gap-4">
-              <Image alt="Promotion" className="aspect-square rounded-lg object-cover" height="64" src="https://picsum.photos/64/64?p=1" width="64" data-ai-hint="food delivery" />
-              <div className="grid gap-1">
-                <p className="text-sm font-medium leading-none">
-                  Free Delivery Friday!
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  From 'Local Eats' tonight only.
-                </p>
-              </div>
-            </div>
-             <div className="flex items-center gap-4">
-              <Image alt="Promotion" className="aspect-square rounded-lg object-cover" height="64" src="https://picsum.photos/64/64?p=2" width="64" data-ai-hint="fitness gym" />
-              <div className="grid gap-1">
-                <p className="text-sm font-medium leading-none">
-                  50% off Gym Membership
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Join 'Community Fit' this month.
-                </p>
-              </div>
-            </div>
+             {mockPromotions.map((promo) => (
+                <div key={promo.id} className="flex items-center gap-4">
+                    <Image 
+                        alt={promo.title} 
+                        className="aspect-square rounded-lg object-cover" 
+                        height="64" 
+                        src={promo.imageUrl} 
+                        width="64" 
+                        data-ai-hint={promo.aiHint}
+                    />
+                    <div className="grid gap-1">
+                        <p className="text-sm font-medium leading-none">
+                            {promo.title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                            {promo.description}
+                        </p>
+                    </div>
+                </div>
+            ))}
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-
-    
