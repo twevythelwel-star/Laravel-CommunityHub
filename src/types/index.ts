@@ -1,6 +1,5 @@
 
 
-
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -89,4 +88,14 @@ export type ManagedUser = {
     role: UserRole;
     status: 'Active' | 'Inactive';
     createdAt: Date;
+}
+
+export type BlocklistEntry = {
+    id: string;
+    name: string;
+    photoUrl: string | null;
+    reason: string;
+    dateAdded: Date;
+    expiryDate: Date | null; // null for permanent
+    addedBy: string;
 }

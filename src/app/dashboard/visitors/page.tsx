@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera } from "lucide-react";
+import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera, ShieldOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -48,6 +48,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 import { VisitorIdModal } from "@/components/dashboard/visitor-id-modal";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
 type EntryType = "onetime" | "recurring";
@@ -61,6 +62,7 @@ type Visitor = {
   dateRange: string;
   homeowner: string;
   idImageUrl?: string;
+  isBlocked: boolean;
 };
 
 const getInitialVisitors = (): Visitor[] => {
@@ -75,6 +77,7 @@ const getInitialVisitors = (): Visitor[] => {
             dateRange: format(now, "yyyy-MM-dd"),
             homeowner: "Olivia Davis (Lot 42)",
             idImageUrl: "https://picsum.photos/300/200?q=id1",
+            isBlocked: false,
         },
         {
             id: "2",
@@ -84,6 +87,7 @@ const getInitialVisitors = (): Visitor[] => {
             expectedAt: sub(now, { days: 1 }),
             dateRange: `${format(sub(now, {days: 1}), "yyyy-MM-dd")} - ${format(add(now, {days: 60}), "yyyy-MM-dd")}`,
             homeowner: "John Smith (Lot 12)",
+            isBlocked: false,
         },
         {
             id: "3",
@@ -93,6 +97,18 @@ const getInitialVisitors = (): Visitor[] => {
             expectedAt: sub(now, { hours: 13 }),
             dateRange: format(sub(now, { hours: 13 }), "yyyy-MM-dd"),
             homeowner: "John Smith (Lot 12)",
+            isBlocked: false,
+        },
+         {
+            id: "4",
+            name: "Known Troublemaker",
+            type: "One-time",
+            status: "Expected",
+            expectedAt: now,
+            dateRange: format(now, "yyyy-MM-dd"),
+            homeowner: "Jane Doe (Lot 03)",
+            idImageUrl: "https://picsum.photos/300/200?q=trouble",
+            isBlocked: true,
         },
     ];
 };
@@ -146,6 +162,15 @@ export default function VisitorsPage() {
   const handleStatusChange = (visitorId: string, newStatus: VisitorStatus) => {
     const visitor = visitors.find(v => v.id === visitorId);
     if (!visitor) return;
+
+    if (visitor.isBlocked && newStatus === 'Checked In') {
+        toast({
+            variant: "destructive",
+            title: "Check-In Denied",
+            description: `${visitor.name} is on the block list and cannot be checked in.`
+        });
+        return;
+    }
 
     setVisitors(visitors.map(v => v.id === visitorId ? { ...v, status: newStatus } : v));
     
@@ -405,8 +430,22 @@ export default function VisitorsPage() {
             </TableHeader>
             <TableBody>
               {visitors.map((visitor) => (
-                <TableRow key={visitor.id}>
-                  <TableCell className="font-medium">{visitor.name}</TableCell>
+                <TableRow key={visitor.id} className={cn(visitor.isBlocked && "bg-destructive/10 hover:bg-destructive/20")}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                        {visitor.name}
+                        {visitor.isBlocked && (
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <ShieldOff className="h-4 w-4 text-destructive" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>This individual is on the block list.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        )}
+                    </div>
+                  </TableCell>
                    {user?.role === 'Security' && <TableCell>{visitor.homeowner}</TableCell>}
                   <TableCell>{visitor.type}</TableCell>
                   <TableCell>
@@ -422,7 +461,7 @@ export default function VisitorsPage() {
                                 size="sm" 
                                 variant="outline"
                                 onClick={() => handleStatusChange(visitor.id, 'Checked In')}
-                                disabled={visitor.status === 'Checked In' || visitor.status === 'Checked Out'}
+                                disabled={visitor.isBlocked || visitor.status === 'Checked In' || visitor.status === 'Checked Out'}
                             >
                                 Check In
                             </Button>
