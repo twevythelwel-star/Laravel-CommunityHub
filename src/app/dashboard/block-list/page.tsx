@@ -28,12 +28,14 @@ import { BlocklistForm } from '@/components/dashboard/blocklist-form';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 import { getBlocklist } from '@/lib/data';
+import { RequestRemovalForm } from '@/components/dashboard/request-removal-form';
 
 
 export default function BlockListPage() {
     const { user } = useAuth();
     const [entries, setEntries] = useState<BlocklistEntry[]>(getBlocklist());
     const [isFormOpen, setFormOpen] = useState(false);
+    const [isRemovalFormOpen, setRemovalFormOpen] = useState(false);
     const [selectedEntry, setSelectedEntry] = useState<BlocklistEntry | undefined>(undefined);
 
     const handleOpenForm = (entry?: BlocklistEntry) => {
@@ -44,6 +46,16 @@ export default function BlockListPage() {
     const handleCloseForm = () => {
         setSelectedEntry(undefined);
         setFormOpen(false);
+    }
+
+    const handleOpenRemovalForm = (entry: BlocklistEntry) => {
+        setSelectedEntry(entry);
+        setRemovalFormOpen(true);
+    };
+
+    const handleCloseRemovalForm = () => {
+        setSelectedEntry(undefined);
+        setRemovalFormOpen(false);
     }
 
     const handleSave = (entry: Omit<BlocklistEntry, 'id' | 'dateAdded' | 'addedBy'>, id?: string) => {
@@ -66,6 +78,10 @@ export default function BlockListPage() {
         setEntries(entries.filter(e => e.id !== id));
     }
 
+    const canAdd = user?.role === 'Admin' || user?.role === 'System Admin' || user?.role === 'Security';
+    const canEdit = user?.role === 'Admin' || user?.role === 'System Admin';
+    const canRequestRemoval = user?.role === 'Homeowner';
+
 
   return (
     <div className="grid gap-8">
@@ -81,19 +97,21 @@ export default function BlockListPage() {
                         Individuals on this list will be flagged upon entry attempt.
                     </CardDescription>
                 </div>
-                 <BlocklistForm
-                    open={isFormOpen}
-                    onOpenChange={handleCloseForm}
-                    onSave={handleSave}
-                    entry={selectedEntry}
-                  >
-                    <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
-                        <PlusCircle className="h-3.5 w-3.5" />
-                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                            Add Individual
-                        </span>
-                    </Button>
-                </BlocklistForm>
+                 {canAdd && (
+                    <BlocklistForm
+                        open={isFormOpen}
+                        onOpenChange={handleCloseForm}
+                        onSave={handleSave}
+                        entry={selectedEntry}
+                    >
+                        <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
+                            <PlusCircle className="h-3.5 w-3.5" />
+                            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                                Add Individual
+                            </span>
+                        </Button>
+                    </BlocklistForm>
+                 )}
             </CardHeader>
             <CardContent>
                 <Table>
@@ -134,20 +152,29 @@ export default function BlockListPage() {
                                     {entry.addedBy}
                                  </TableCell>
                                 <TableCell>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                        <Button aria-haspopup="true" size="icon" variant="ghost">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                            <span className="sr-only">Toggle menu</span>
-                                        </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                            <DropdownMenuItem onClick={() => handleOpenForm(entry)}>Edit</DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(entry.id)}>Remove from list</DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    {(canEdit || canRequestRemoval) && (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                <MoreHorizontal className="h-4 w-4" />
+                                                <span className="sr-only">Toggle menu</span>
+                                            </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                {canEdit && (
+                                                    <>
+                                                        <DropdownMenuItem onClick={() => handleOpenForm(entry)}>Edit</DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(entry.id)}>Remove from list</DropdownMenuItem>
+                                                    </>
+                                                )}
+                                                {canRequestRemoval && (
+                                                    <DropdownMenuItem onClick={() => handleOpenRemovalForm(entry)}>Request Removal</DropdownMenuItem>
+                                                )}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -155,6 +182,14 @@ export default function BlockListPage() {
                 </Table>
             </CardContent>
         </Card>
+
+        {selectedEntry && (
+             <RequestRemovalForm 
+                open={isRemovalFormOpen} 
+                onOpenChange={handleCloseRemovalForm} 
+                entry={selectedEntry} 
+            />
+        )}
     </div>
   );
 }
