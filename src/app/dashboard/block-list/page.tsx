@@ -102,7 +102,7 @@ export default function BlockListPage() {
                  {canAdd && (
                     <BlocklistForm
                         open={isFormOpen}
-                        onOpenChange={handleCloseForm}
+                        onOpenChange={setFormOpen}
                         onSave={handleSave}
                         entry={selectedEntry}
                         visitors={visitors}
