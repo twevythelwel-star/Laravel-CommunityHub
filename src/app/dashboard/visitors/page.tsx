@@ -64,10 +64,10 @@ export default function VisitorsPage() {
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
 
   useEffect(() => {
+    setIsClient(true);
     setVisitors(getInitialVisitors());
     setDateRange({ from: new Date(), to: add(new Date(), { days: 7 }) });
     setExpectedDate(new Date());
-    setIsClient(true);
   }, []);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function VisitorsPage() {
       
       setVisitors(currentVisitors => {
         const updatedVisitors = currentVisitors.filter(visitor => {
-            if (visitor.status === 'Expected' && visitor.expectedAt < twelveHoursAgo) {
+            if (visitor.status === 'Expected' && new Date(visitor.expectedAt) < twelveHoursAgo) {
             toast({
                 variant: "destructive",
                 title: "Visitor Removed",
@@ -132,29 +132,7 @@ export default function VisitorsPage() {
   }
 
   if (!isClient) {
-    return (
-        <div className="flex flex-col gap-8">
-            <div className="flex items-center">
-                <div className="flex-1">
-                <h1 className="font-headline text-3xl font-bold">Visitor Management</h1>
-                <p className="text-muted-foreground">
-                    Loading visitor information...
-                </p>
-                </div>
-            </div>
-            <Card>
-                <CardHeader>
-                <CardTitle>Registered Visitors</CardTitle>
-                <CardDescription>
-                    Loading...
-                </CardDescription>
-                </CardHeader>
-                <CardContent>
-                <p>Please wait while we load the visitor data.</p>
-                </CardContent>
-            </Card>
-        </div>
-    );
+    return null;
   }
 
   return (
@@ -443,3 +421,5 @@ export default function VisitorsPage() {
     </>
   );
 }
+
+    

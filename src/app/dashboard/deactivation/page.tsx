@@ -21,11 +21,14 @@ import { useAuth } from '@/context/auth-context';
 
 
 function Countdown({ targetDate }: { targetDate: Date }) {
-  const [timeLeft, setTimeLeft] = useState(differenceInSeconds(targetDate, new Date()));
+  const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
+    const calculateTimeLeft = () => differenceInSeconds(targetDate, new Date());
+    setTimeLeft(calculateTimeLeft());
+
     const interval = setInterval(() => {
-      const seconds = differenceInSeconds(targetDate, new Date());
+      const seconds = calculateTimeLeft();
       if (seconds > 0) {
         setTimeLeft(seconds);
       } else {
@@ -55,19 +58,21 @@ export default function DeactivationPage() {
   const [dateString, setDateString] = useState('');
   const [timeString, setTimeString] = useState('');
   const [showCountdown, setShowCountdown] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    if (deactivationDate) {
-      const interval = setInterval(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isClient || !deactivationDate) return;
+
+    const interval = setInterval(() => {
         const now = new Date();
         const fifteenMinutes = 15 * 60;
         const diff = differenceInSeconds(deactivationDate, now);
         
-        if (diff <= fifteenMinutes && diff > 0) {
-          setShowCountdown(true);
-        } else {
-          setShowCountdown(false);
-        }
+        setShowCountdown(diff <= fifteenMinutes && diff > 0);
 
         if (diff <= 0) {
             // In a real app, this would trigger the actual deactivation
@@ -76,12 +81,11 @@ export default function DeactivationPage() {
             setShowCountdown(false);
             clearInterval(interval);
         }
+    }, 1000);
 
-      }, 1000);
-
-      return () => clearInterval(interval);
-    }
-  }, [deactivationDate, toast]);
+    return () => clearInterval(interval);
+    
+  }, [isClient, deactivationDate, toast]);
 
 
   const handleSchedule = () => {
@@ -116,6 +120,10 @@ export default function DeactivationPage() {
     });
   }
   
+  if (!isClient) {
+    return null;
+  }
+
   if (user?.role !== 'Homeowner') {
      return (
         <Card>
@@ -209,3 +217,5 @@ export default function DeactivationPage() {
     </div>
   );
 }
+
+    

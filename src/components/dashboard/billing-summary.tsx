@@ -37,21 +37,26 @@ export function BillingSummary() {
 
     useEffect(() => {
         setIsClient(true);
-        setCurrentMonthYear(format(new Date(), 'MMMM yyyy'));
-        // This simulates fetching and formatting rates and ensures it only runs on the client.
-        const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD).toFixed(2);
-        const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP).toFixed(2);
-        const eur = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_EUR).toFixed(2);
-        
-        setRates({
-            jmd: new Intl.NumberFormat('en-JM', { style: 'currency', currency: 'JMD' }).format(Number(jmd)),
-            gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(gbp)),
-            eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(eur)),
-        });
+    }, []);
 
-        const ytd = mockPayments.reduce((acc, p) => acc + p.amount, 0);
-        setTotalPaidYTD(ytd);
-    }, [monthlyFee]);
+    useEffect(() => {
+        if (isClient) {
+            setCurrentMonthYear(format(new Date(), 'MMMM yyyy'));
+            
+            const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD).toFixed(2);
+            const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP).toFixed(2);
+            const eur = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_EUR).toFixed(2);
+            
+            setRates({
+                jmd: new Intl.NumberFormat('en-JM', { style: 'currency', currency: 'JMD' }).format(Number(jmd)),
+                gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(gbp)),
+                eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(eur)),
+            });
+    
+            const ytd = mockPayments.reduce((acc, p) => acc + p.amount, 0);
+            setTotalPaidYTD(ytd);
+        }
+    }, [isClient, monthlyFee]);
     
     if (!isClient) {
         return null;
