@@ -26,6 +26,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { useAuth } from '@/context/auth-context';
 import { BlocklistForm } from '@/components/dashboard/blocklist-form';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { format } from 'date-fns';
 
 
 const mockBlocklist: BlocklistEntry[] = [
