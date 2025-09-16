@@ -124,4 +124,5 @@ export type FoodApp = {
   logoUrl: string;
   websiteUrl: string;
   aiHint: string;
+  couponPercentage?: number;
 }

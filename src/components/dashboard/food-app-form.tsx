@@ -30,7 +30,8 @@ const formSchema = z.object({
   name: z.string().min(2, 'Service name must be at least 2 characters.'),
   websiteUrl: z.string().url('Please enter a valid URL.'),
   logoUrl: z.string().url('Please enter a valid logo URL.'),
-  aiHint: z.string().min(1, 'AI hint is required.').max(20, 'AI hint is too long.'),
+  aiHint: z.string().min(1, 'AI hint is required.').max(40, 'AI hint is too long.'),
+  couponPercentage: z.coerce.number().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -62,7 +63,8 @@ export function FoodAppForm({ children, open, onOpenChange, onSave, app }: FoodA
         name: '',
         websiteUrl: '',
         logoUrl: 'https://picsum.photos/seed/newapp/100/100',
-        aiHint: 'food delivery logo'
+        aiHint: 'food delivery logo',
+        couponPercentage: undefined,
        });
     }
   }, [app, form, open]);
@@ -142,6 +144,20 @@ export function FoodAppForm({ children, open, onOpenChange, onSave, app }: FoodA
                 </FormItem>
               )}
             />
+
+            <FormField
+              control={form.control}
+              name="couponPercentage"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Coupon Percentage (Optional)</FormLabel>
+                  <FormControl>
+                    <Input type="number" placeholder="e.g., 15" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -153,5 +169,3 @@ export function FoodAppForm({ children, open, onOpenChange, onSave, app }: FoodA
     </Dialog>
   );
 }
-
-    

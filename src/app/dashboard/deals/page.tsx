@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 
 
 const { businesses, vouchers } = placeholderData;
@@ -81,6 +82,11 @@ function FoodAppCard({ app, onRemove, canManage }: { app: FoodApp, onRemove: (id
           />
           <div>
             <p className="font-semibold">{app.name}</p>
+             {app.couponPercentage && (
+              <Badge variant="destructive" className="mt-1">
+                {app.couponPercentage}% OFF
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -198,5 +204,3 @@ export default function DealsPage() {
     </div>
   );
 }
-
-    
