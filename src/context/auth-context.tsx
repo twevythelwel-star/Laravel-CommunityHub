@@ -3,10 +3,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import type { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import type { UserRole } from '@/types';
-import { auth, db } from '@/lib/firebase';
 
 type User = {
   email: string;
@@ -42,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // In this simplified setup, we don't need onAuthStateChanged
     // because we are not using real Firebase auth sessions.
-    // If you were to switch back, you would re-enable this.
+    // We just set loading to false.
     setLoading(false);
   }, []);
 
