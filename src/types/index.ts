@@ -1,6 +1,5 @@
 
 
-
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -104,4 +103,26 @@ export type BlocklistEntry = {
     dateAdded: Date;
     expiryDate: Date | null; // null for permanent
     addedBy: string;
+}
+
+export type Business = {
+  id: string;
+  name: string;
+  logoUrl: string;
+  aiHint: string;
+}
+
+export type Voucher = {
+  id: string;
+  businessId: string;
+  title: string;
+  description: string;
+}
+
+export type FoodApp = {
+  id: string;
+  name: string;
+  logoUrl: string;
+  websiteUrl: string;
+  aiHint: string;
 }
