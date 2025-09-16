@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from "react";
@@ -60,19 +61,15 @@ export default function VisitorsPage() {
   const [entryType, setEntryType] = useState<EntryType>('onetime');
   const [expectedDate, setExpectedDate] = useState<Date | undefined>();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [isClient, setIsClient] = useState(false);
   const [selectedVisitor, setSelectedVisitor] = useState<Visitor | null>(null);
 
   useEffect(() => {
-    setIsClient(true);
     setVisitors(getInitialVisitors());
     setDateRange({ from: new Date(), to: add(new Date(), { days: 7 }) });
     setExpectedDate(new Date());
   }, []);
 
   useEffect(() => {
-    if (!isClient) return;
-
     const interval = setInterval(() => {
       const now = new Date();
       const twelveHoursAgo = sub(now, { hours: 12 });
@@ -95,7 +92,7 @@ export default function VisitorsPage() {
     }, 60 * 1000); // Check every minute
 
     return () => clearInterval(interval);
-  }, [isClient, toast]);
+  }, [toast]);
 
 
   const handleStatusChange = (visitorId: string, newStatus: VisitorStatus) => {
@@ -129,10 +126,6 @@ export default function VisitorsPage() {
         default:
             return 'outline';
     }
-  }
-
-  if (!isClient) {
-    return null;
   }
 
   return (
