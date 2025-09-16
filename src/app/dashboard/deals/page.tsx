@@ -1,14 +1,30 @@
 
 'use client';
 
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import type { Business, FoodApp, Voucher } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { placeholderData } from "@/lib/placeholder-images.json";
+import { useAuth } from "@/context/auth-context";
+import { PlusCircle, Trash2 } from "lucide-react";
+import { FoodAppForm } from "@/components/dashboard/food-app-form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-const { businesses, vouchers, foodApps } = placeholderData;
+
+const { businesses, vouchers } = placeholderData;
 
 function VoucherCard({ voucher, business }: { voucher: Voucher, business?: Business }) {
   const { toast } = useToast();
@@ -50,7 +66,7 @@ function VoucherCard({ voucher, business }: { voucher: Voucher, business?: Busin
   );
 }
 
-function FoodAppCard({ app }: { app: FoodApp }) {
+function FoodAppCard({ app, onRemove, canManage }: { app: FoodApp, onRemove: (id: string) => void, canManage: boolean }) {
   return (
     <Card>
       <CardContent className="pt-6 flex items-center justify-between">
@@ -67,15 +83,69 @@ function FoodAppCard({ app }: { app: FoodApp }) {
             <p className="font-semibold">{app.name}</p>
           </div>
         </div>
-        <a href={app.websiteUrl} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline">Order Now</Button>
-        </a>
+        <div className="flex items-center gap-2">
+            <a href={app.websiteUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline">Order Now</Button>
+            </a>
+             {canManage && (
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="icon">
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently remove the "{app.name}" delivery option.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => onRemove(app.id)}>
+                            Yes, remove
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+             )}
+        </div>
       </CardContent>
     </Card>
   );
 }
 
 export default function DealsPage() {
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const [foodApps, setFoodApps] = useState<FoodApp[]>(placeholderData.foodApps);
+  const [isAddAppOpen, setIsAddAppOpen] = useState(false);
+
+  const canManage = user?.role === 'System Admin';
+
+  const handleAddFoodApp = (newApp: Omit<FoodApp, 'id'>) => {
+    const appToAdd: FoodApp = {
+        ...newApp,
+        id: `fa_${Date.now()}`
+    };
+    setFoodApps(prev => [appToAdd, ...prev]);
+    toast({
+        title: 'Service Added',
+        description: `${appToAdd.name} has been added to the food delivery options.`,
+    });
+  }
+
+  const handleRemoveFoodApp = (id: string) => {
+    const appToRemove = foodApps.find(app => app.id === id);
+    setFoodApps(prev => prev.filter(app => app.id !== id));
+     toast({
+        title: 'Service Removed',
+        description: `${appToRemove?.name} has been removed.`,
+    });
+  }
+
+
   return (
     <div className="grid gap-8">
       <div>
@@ -101,18 +171,32 @@ export default function DealsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Food Delivery</CardTitle>
-          <CardDescription>
-            Order from your favorite local restaurants through these popular services.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+                <CardTitle>Food Delivery</CardTitle>
+                <CardDescription>
+                    Order from your favorite local restaurants through these popular services.
+                </CardDescription>
+            </div>
+             {canManage && (
+                <FoodAppForm onOpenChange={setIsAddAppOpen} open={isAddAppOpen} onSave={handleAddFoodApp}>
+                    <Button size="sm" className="gap-1">
+                        <PlusCircle className="h-3.5 w-3.5" />
+                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                            Add Service
+                        </span>
+                    </Button>
+                </FoodAppForm>
+            )}
         </CardHeader>
         <CardContent className="grid gap-4">
           {foodApps.map((app) => (
-            <FoodAppCard key={app.id} app={app} />
+            <FoodAppCard key={app.id} app={app} onRemove={handleRemoveFoodApp} canManage={canManage} />
           ))}
         </CardContent>
       </Card>
     </div>
   );
 }
+
+    
