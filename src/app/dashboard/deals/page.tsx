@@ -122,7 +122,7 @@ export default function DealsPage() {
   const [foodApps, setFoodApps] = useState<FoodApp[]>(placeholderData.foodApps);
   const [isAddAppOpen, setIsAddAppOpen] = useState(false);
 
-  const canManage = user?.role === 'System Admin';
+  const canManage = user?.role === 'System Admin' || user?.role === 'Admin';
 
   const handleAddFoodApp = (newApp: Omit<FoodApp, 'id'>) => {
     const appToAdd: FoodApp = {
