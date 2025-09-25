@@ -148,3 +148,10 @@ export type Donation = {
   isAnonymous: boolean;
   timestamp: Date;
 }
+
+export type Guideline = {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+};
