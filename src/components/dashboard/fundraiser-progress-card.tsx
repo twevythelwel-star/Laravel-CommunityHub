@@ -14,9 +14,21 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { ClientFormattedDate } from "@/components/client-formatted-date";
 import type { Fundraiser, Donation } from "@/types";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DonateForm } from "./donate-form";
 import { HeartHandshake } from "lucide-react";
+
+// Mock exchange rates. In a real app, this would come from an API.
+const MOCK_EXCHANGE_RATES = {
+    JMD_TO_USD: 0.0064,
+    JMD_TO_GBP: 0.0051,
+    JMD_TO_EUR: 0.0060,
+    JMD_TO_CAD: 0.0088,
+    USD_TO_JMD: 155.50,
+    GBP_TO_JMD: 196.80,
+    EUR_TO_JMD: 167.90,
+    CAD_TO_JMD: 114.10,
+};
 
 
 type FundraiserProgressCardProps = {
@@ -28,11 +40,17 @@ type FundraiserProgressCardProps = {
 
 export function FundraiserProgressCard({ fundraiser, donations, onDonate, canManage }: FundraiserProgressCardProps) {
     const [isDonateOpen, setDonateOpen] = useState(false);
-    const totalDonated = donations.reduce((acc, d) => acc + d.amount, 0);
-    const progress = Math.min((totalDonated / fundraiser.goal) * 100, 100);
+
+    const totalDonatedInJMD = useMemo(() => {
+        return donations.reduce((acc, d) => {
+            const amountInJMD = d.amount * (MOCK_EXCHANGE_RATES[`${d.currency}_TO_JMD` as keyof typeof MOCK_EXCHANGE_RATES] || 1);
+            return acc + amountInJMD;
+        }, 0);
+    }, [donations]);
+
+    const progress = Math.min((totalDonatedInJMD / fundraiser.goal) * 100, 100);
     const isCompleted = fundraiser.status === 'Completed' || progress >= 100;
     const isUpcoming = fundraiser.status === 'Upcoming';
-
 
     const getStatusVariant = (status: Fundraiser['status']) => {
         switch (status) {
@@ -48,6 +66,13 @@ export function FundraiserProgressCard({ fundraiser, donations, onDonate, canMan
                 return 'default';
         }
     }
+    
+    const equivalentGoals = {
+        USD: (fundraiser.goal * MOCK_EXCHANGE_RATES.JMD_TO_USD).toLocaleString('en-US', { style: 'currency', currency: 'USD' }),
+        GBP: (fundraiser.goal * MOCK_EXCHANGE_RATES.JMD_TO_GBP).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' }),
+        EUR: (fundraiser.goal * MOCK_EXCHANGE_RATES.JMD_TO_EUR).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' }),
+        CAD: (fundraiser.goal * MOCK_EXCHANGE_RATES.JMD_TO_CAD).toLocaleString('en-CA', { style: 'currency', currency: 'CAD' }),
+    };
 
 
   return (
@@ -62,10 +87,17 @@ export function FundraiserProgressCard({ fundraiser, donations, onDonate, canMan
         <CardContent className="flex-grow space-y-4">
             <div>
                 <div className="flex justify-between items-end mb-1">
-                    <span className="text-lg font-bold text-primary">${totalDonated.toLocaleString()}</span>
-                    <span className="text-sm text-muted-foreground">raised of ${fundraiser.goal.toLocaleString()}</span>
+                    <p className="text-sm text-muted-foreground">
+                        <span className="text-lg font-bold text-primary">{totalDonatedInJMD.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}</span> raised
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                        Goal: {fundraiser.goal.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}
+                    </p>
                 </div>
                 <Progress value={progress} />
+                 <p className="text-xs text-muted-foreground mt-2">
+                    Approx. {equivalentGoals.USD} / {equivalentGoals.GBP} / {equivalentGoals.EUR} / {equivalentGoals.CAD}
+                 </p>
                  <p className="text-xs text-muted-foreground mt-1 text-right">{donations.length} donations</p>
             </div>
             

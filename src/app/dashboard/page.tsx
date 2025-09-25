@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -62,18 +63,19 @@ const mockActiveFundraiser: Fundraiser = {
   id: 'fr_1',
   title: 'New Playground Equipment',
   description: 'Help us build a new, modern playground for the community children with the latest safety features.',
-  goal: 10000,
+  goal: 1500000,
+  goalCurrency: 'JMD',
   startDate: new Date('2024-07-01T00:00:00Z'),
   endDate: new Date('2024-09-30T23:59:59Z'),
   status: 'Active',
 };
 
 const mockDonations: Donation[] = [
-    { id: 'd_1', fundraiserId: 'fr_1', amount: 50, donorName: 'John S.', isAnonymous: false, timestamp: new Date() },
-    { id: 'd_2', fundraiserId: 'fr_1', amount: 100, donorName: 'Olivia D.', isAnonymous: false, timestamp: new Date() },
-    { id: 'd_3', fundraiserId: 'fr_1', amount: 25, isAnonymous: true, timestamp: new Date() },
-    { id: 'd_4', fundraiserId: 'fr_1', amount: 250, donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
-     { id: 'd_5', fundraiserId: 'fr_1', amount: 75, isAnonymous: true, timestamp: new Date() },
+    { id: 'd_1', fundraiserId: 'fr_1', amount: 50, currency: 'USD', donorName: 'John S.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_2', fundraiserId: 'fr_1', amount: 100, currency: 'USD', donorName: 'Olivia D.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_3', fundraiserId: 'fr_1', amount: 5000, currency: 'JMD', isAnonymous: true, timestamp: new Date() },
+    { id: 'd_4', fundraiserId: 'fr_1', amount: 250, currency: 'USD', donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
+     { id: 'd_5', fundraiserId: 'fr_1', amount: 75, currency: 'EUR', isAnonymous: true, timestamp: new Date() },
 ];
 
 

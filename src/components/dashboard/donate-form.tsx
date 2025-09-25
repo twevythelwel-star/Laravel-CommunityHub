@@ -26,10 +26,13 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { Donation, Fundraiser } from '@/types';
 import { Switch } from '../ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
+const currencies = ["JMD", "USD", "GBP", "EUR", "CAD"] as const;
 
 const formSchema = z.object({
-  amount: z.coerce.number().min(1, 'Donation must be at least $1.'),
+  amount: z.coerce.number().min(1, 'Donation must be at least 1 unit of the selected currency.'),
+  currency: z.enum(currencies),
   donorName: z.string().optional(),
   isAnonymous: z.boolean().default(false),
 }).refine(data => !data.isAnonymous ? data.donorName && data.donorName.length > 0 : true, {
@@ -52,6 +55,7 @@ export function DonateForm({ children, open, onOpenChange, fundraiser, onDonate 
     defaultValues: {
       amount: 25,
       isAnonymous: false,
+      currency: 'USD',
     },
   });
 
@@ -65,7 +69,7 @@ export function DonateForm({ children, open, onOpenChange, fundraiser, onDonate 
     });
     toast({
       title: 'Donation Successful!',
-      description: `Thank you for your donation of $${values.amount.toFixed(2)} to the "${fundraiser.title}" fundraiser.`,
+      description: `Thank you for your donation of ${values.amount} ${values.currency} to the "${fundraiser.title}" fundraiser.`,
     });
     form.reset();
     onOpenChange(false);
@@ -89,19 +93,41 @@ export function DonateForm({ children, open, onOpenChange, fundraiser, onDonate 
               </DialogDescription>
             </DialogHeader>
             
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Donation Amount (USD)</FormLabel>
-                  <FormControl>
-                    <Input type="number" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="flex gap-2">
+                <FormField
+                control={form.control}
+                name="amount"
+                render={({ field }) => (
+                    <FormItem className="flex-grow">
+                    <FormLabel>Donation Amount</FormLabel>
+                    <FormControl>
+                        <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                 <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }) => (
+                        <FormItem className="w-1/3">
+                        <FormLabel>Currency</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {currencies.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+            </div>
 
             {!isAnonymous && (
                 <FormField

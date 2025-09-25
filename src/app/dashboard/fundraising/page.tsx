@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -22,7 +23,8 @@ const mockFundraisers: Fundraiser[] = [
         id: 'fr_1',
         title: 'New Playground Equipment',
         description: 'Help us build a new, modern playground for the community children with the latest safety features.',
-        goal: 10000,
+        goal: 1500000,
+        goalCurrency: 'JMD',
         startDate: new Date('2024-07-01T00:00:00Z'),
         endDate: new Date('2024-09-30T23:59:59Z'),
         status: 'Active',
@@ -31,7 +33,8 @@ const mockFundraisers: Fundraiser[] = [
         id: 'fr_2',
         title: 'Community Garden Expansion',
         description: 'We want to add 10 new plots to the community garden and install a new irrigation system.',
-        goal: 2500,
+        goal: 400000,
+        goalCurrency: 'JMD',
         startDate: new Date('2024-10-01T00:00:00Z'),
         endDate: new Date('2024-11-30T23:59:59Z'),
         status: 'Upcoming',
@@ -40,7 +43,8 @@ const mockFundraisers: Fundraiser[] = [
         id: 'fr_3',
         title: 'Clubhouse Renovation',
         description: 'Updated the clubhouse with new furniture and a fresh coat of paint.',
-        goal: 5000,
+        goal: 750000,
+        goalCurrency: 'JMD',
         startDate: new Date('2024-03-01T00:00:00Z'),
         endDate: new Date('2024-05-31T23:59:59Z'),
         status: 'Completed',
@@ -48,12 +52,12 @@ const mockFundraisers: Fundraiser[] = [
 ];
 
 const mockDonations: Donation[] = [
-    { id: 'd_1', fundraiserId: 'fr_1', amount: 50, donorName: 'John S.', isAnonymous: false, timestamp: new Date() },
-    { id: 'd_2', fundraiserId: 'fr_1', amount: 100, donorName: 'Olivia D.', isAnonymous: false, timestamp: new Date() },
-    { id: 'd_3', fundraiserId: 'fr_1', amount: 25, isAnonymous: true, timestamp: new Date() },
-    { id: 'd_4', fundraiserId: 'fr_1', amount: 250, donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
-    { id: 'd_5', fundraiserId: 'fr_1', amount: 75, isAnonymous: true, timestamp: new Date() },
-     { id: 'd_6', fundraiserId: 'fr_3', amount: 5500, donorName: 'Community Corp.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_1', fundraiserId: 'fr_1', amount: 50, currency: 'USD', donorName: 'John S.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_2', fundraiserId: 'fr_1', amount: 100, currency: 'USD', donorName: 'Olivia D.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_3', fundraiserId: 'fr_1', amount: 5000, currency: 'JMD', isAnonymous: true, timestamp: new Date() },
+    { id: 'd_4', fundraiserId: 'fr_1', amount: 250, currency: 'USD', donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_5', fundraiserId: 'fr_1', amount: 75, currency: 'EUR', isAnonymous: true, timestamp: new Date() },
+    { id: 'd_6', fundraiserId: 'fr_3', amount: 850000, currency: 'JMD', donorName: 'Community Corp.', isAnonymous: false, timestamp: new Date() },
 ];
 
 export default function FundraisingPage() {

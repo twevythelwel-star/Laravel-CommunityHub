@@ -58,12 +58,12 @@ export function CreateFundraiserForm({ children, open, onOpenChange, onCreateFun
     defaultValues: {
       title: '',
       description: '',
-      goal: 1000,
+      goal: 150000,
     },
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    onCreateFundraiser({ ...values, status: 'Upcoming' });
+    onCreateFundraiser({ ...values, status: 'Upcoming', goalCurrency: 'JMD' });
     toast({
       title: 'Fundraiser Created',
       description: `The fundraiser "${values.title}" has been scheduled.`,
@@ -123,9 +123,9 @@ export function CreateFundraiserForm({ children, open, onOpenChange, onCreateFun
               name="goal"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Donation Goal (USD)</FormLabel>
+                  <FormLabel>Donation Goal (JMD)</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="1000" {...field} />
+                    <Input type="number" placeholder="150000" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

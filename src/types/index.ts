@@ -1,4 +1,5 @@
 
+
 export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
@@ -41,7 +42,7 @@ export type Notification = {
 };
 
 export type Warning = {
-  id: string;
+  id:string;
   title: string;
   description: string;
   timestamp: Date;
@@ -132,6 +133,7 @@ export type Fundraiser = {
   title: string;
   description: string;
   goal: number;
+  goalCurrency: 'JMD';
   startDate: Date;
   endDate: Date;
   status: 'Active' | 'Completed' | 'Upcoming' | 'Canceled';
@@ -141,6 +143,7 @@ export type Donation = {
   id: string;
   fundraiserId: string;
   amount: number;
+  currency: 'JMD' | 'USD' | 'GBP' | 'EUR' | 'CAD';
   donorName?: string;
   isAnonymous: boolean;
   timestamp: Date;
