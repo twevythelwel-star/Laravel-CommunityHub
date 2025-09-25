@@ -44,14 +44,14 @@ export function BillingSummary() {
         if (isClient) {
             setCurrentMonthYear(format(new Date(), 'MMMM yyyy'));
             
-            const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD).toFixed(2);
-            const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP).toFixed(2);
-            const eur = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_EUR).toFixed(2);
+            const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD);
+            const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP);
+            const eur = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_EUR);
             
             setRates({
-                jmd: new Intl.NumberFormat('en-JM', { style: 'currency', currency: 'JMD' }).format(Number(jmd)),
-                gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(Number(gbp)),
-                eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(eur)),
+                jmd: new Intl.NumberFormat('en-JM', { style: 'currency', currency: 'JMD' }).format(jmd),
+                gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(gbp),
+                eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(eur),
             });
     
             const ytd = mockPayments.reduce((acc, p) => acc + p.amount, 0);
