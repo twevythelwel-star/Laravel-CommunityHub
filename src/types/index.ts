@@ -126,3 +126,22 @@ export type FoodApp = {
   aiHint: string;
   couponPercentage?: number;
 }
+
+export type Fundraiser = {
+  id: string;
+  title: string;
+  description: string;
+  goal: number;
+  startDate: Date;
+  endDate: Date;
+  status: 'Active' | 'Completed' | 'Upcoming' | 'Canceled';
+}
+
+export type Donation = {
+  id: string;
+  fundraiserId: string;
+  amount: number;
+  donorName?: string;
+  isAnonymous: boolean;
+  timestamp: Date;
+}

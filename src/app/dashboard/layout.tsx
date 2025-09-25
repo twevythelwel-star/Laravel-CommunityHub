@@ -37,6 +37,7 @@ import {
   UserX,
   KeyRound,
   Gift,
+  PiggyBank,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
@@ -48,6 +49,7 @@ const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/deals', label: 'Deals', icon: Gift, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/renters', label: 'My Renters', icon: KeyRound, roles: ['Homeowner'] },
   { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },

@@ -24,6 +24,8 @@ import Image from "next/image";
 import { useAuth } from "@/context/auth-context";
 import { ClientFormattedDate } from "@/components/client-formatted-date";
 import { useEffect, useState } from "react";
+import type { Fundraiser, Donation } from "@/types";
+import { FundraiserProgressCard } from "@/components/dashboard/fundraiser-progress-card";
 
 const mockTransactions = [
     { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 30.00, status: 'Paid' },
@@ -56,6 +58,25 @@ const mockPromotions = [
     },
 ];
 
+const mockActiveFundraiser: Fundraiser = {
+  id: 'fr_1',
+  title: 'New Playground Equipment',
+  description: 'Help us build a new, modern playground for the community children with the latest safety features.',
+  goal: 10000,
+  startDate: new Date('2024-07-01T00:00:00Z'),
+  endDate: new Date('2024-09-30T23:59:59Z'),
+  status: 'Active',
+};
+
+const mockDonations: Donation[] = [
+    { id: 'd_1', fundraiserId: 'fr_1', amount: 50, donorName: 'John S.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_2', fundraiserId: 'fr_1', amount: 100, donorName: 'Olivia D.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_3', fundraiserId: 'fr_1', amount: 25, isAnonymous: true, timestamp: new Date() },
+    { id: 'd_4', fundraiserId: 'fr_1', amount: 250, donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
+     { id: 'd_5', fundraiserId: 'fr_1', amount: 75, isAnonymous: true, timestamp: new Date() },
+];
+
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [currentMonth, setCurrentMonth] = useState('');
@@ -76,6 +97,8 @@ export default function Dashboard() {
   const canViewWarnings = user && ['System Admin', 'Admin', 'Homeowner', 'Security'].includes(user.role);
   const canViewRecentVisitors = user && ['System Admin', 'Admin', 'Homeowner', 'Security'].includes(user.role);
   const canViewBilling = user && ['System Admin', 'Admin'].includes(user.role);
+  const canViewFundraiser = user && ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'].includes(user.role);
+
   
   const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
   const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
@@ -177,6 +200,13 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
+
+       <div className="grid gap-4 mt-8">
+        {canViewFundraiser && mockActiveFundraiser.status === 'Active' && (
+            <FundraiserProgressCard fundraiser={mockActiveFundraiser} donations={mockDonations} />
+        )}
+      </div>
+
       <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3 mt-8">
         {canViewRecentVisitors && (
           <Card className="xl:col-span-2">
