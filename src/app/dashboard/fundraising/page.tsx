@@ -30,6 +30,16 @@ const mockFundraisers: Fundraiser[] = [
         status: 'Active',
     },
     {
+        id: 'fr_4',
+        title: 'Annual Community BBQ',
+        description: 'Support our annual community get-together! Funds will go towards food, drinks, and entertainment for all residents.',
+        goal: 250000,
+        goalCurrency: 'JMD',
+        startDate: new Date('2024-08-01T00:00:00Z'),
+        endDate: new Date('2024-08-31T23:59:59Z'),
+        status: 'Active',
+    },
+    {
         id: 'fr_2',
         title: 'Community Garden Expansion',
         description: 'We want to add 10 new plots to the community garden and install a new irrigation system.',
@@ -58,6 +68,8 @@ const mockDonations: Donation[] = [
     { id: 'd_4', fundraiserId: 'fr_1', amount: 250, currency: 'USD', donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
     { id: 'd_5', fundraiserId: 'fr_1', amount: 75, currency: 'EUR', isAnonymous: true, timestamp: new Date() },
     { id: 'd_6', fundraiserId: 'fr_3', amount: 850000, currency: 'JMD', donorName: 'Community Corp.', isAnonymous: false, timestamp: new Date() },
+    { id: 'd_7', fundraiserId: 'fr_4', amount: 10000, currency: 'JMD', isAnonymous: true, timestamp: new Date() },
+    { id: 'd_8', fundraiserId: 'fr_4', amount: 20, currency: 'USD', donorName: 'Aisha K.', isAnonymous: false, timestamp: new Date() },
 ];
 
 export default function FundraisingPage() {

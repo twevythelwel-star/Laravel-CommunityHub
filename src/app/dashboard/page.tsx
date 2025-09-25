@@ -59,16 +59,38 @@ const mockPromotions = [
     },
 ];
 
-const mockActiveFundraiser: Fundraiser = {
-  id: 'fr_1',
-  title: 'New Playground Equipment',
-  description: 'Help us build a new, modern playground for the community children with the latest safety features.',
-  goal: 1500000,
-  goalCurrency: 'JMD',
-  startDate: new Date('2024-07-01T00:00:00Z'),
-  endDate: new Date('2024-09-30T23:59:59Z'),
-  status: 'Active',
-};
+const mockFundraisers: Fundraiser[] = [
+    {
+        id: 'fr_1',
+        title: 'New Playground Equipment',
+        description: 'Help us build a new, modern playground for the community children with the latest safety features.',
+        goal: 1500000,
+        goalCurrency: 'JMD',
+        startDate: new Date('2024-07-01T00:00:00Z'),
+        endDate: new Date('2024-09-30T23:59:59Z'),
+        status: 'Active',
+    },
+    {
+        id: 'fr_4',
+        title: 'Annual Community BBQ',
+        description: 'Support our annual community get-together! Funds will go towards food, drinks, and entertainment for all residents.',
+        goal: 250000,
+        goalCurrency: 'JMD',
+        startDate: new Date('2024-08-01T00:00:00Z'),
+        endDate: new Date('2024-08-31T23:59:59Z'),
+        status: 'Active',
+    },
+    {
+        id: 'fr_2',
+        title: 'Community Garden Expansion',
+        description: 'We want to add 10 new plots to the community garden and install a new irrigation system.',
+        goal: 400000,
+        goalCurrency: 'JMD',
+        startDate: new Date('2024-10-01T00:00:00Z'),
+        endDate: new Date('2024-11-30T23:59:59Z'),
+        status: 'Upcoming',
+    },
+];
 
 const mockDonations: Donation[] = [
     { id: 'd_1', fundraiserId: 'fr_1', amount: 50, currency: 'USD', donorName: 'John S.', isAnonymous: false, timestamp: new Date() },
@@ -76,6 +98,8 @@ const mockDonations: Donation[] = [
     { id: 'd_3', fundraiserId: 'fr_1', amount: 5000, currency: 'JMD', isAnonymous: true, timestamp: new Date() },
     { id: 'd_4', fundraiserId: 'fr_1', amount: 250, currency: 'USD', donorName: 'Michael B.', isAnonymous: false, timestamp: new Date() },
      { id: 'd_5', fundraiserId: 'fr_1', amount: 75, currency: 'EUR', isAnonymous: true, timestamp: new Date() },
+     { id: 'd_7', fundraiserId: 'fr_4', amount: 10000, currency: 'JMD', isAnonymous: true, timestamp: new Date() },
+    { id: 'd_8', fundraiserId: 'fr_4', amount: 20, currency: 'USD', donorName: 'Aisha K.', isAnonymous: false, timestamp: new Date() },
 ];
 
 
@@ -104,6 +128,8 @@ export default function Dashboard() {
   
   const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
   const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
+
+  const activeFundraisers = mockFundraisers.filter(f => f.status === 'Active');
 
 
   return (
@@ -203,10 +229,14 @@ export default function Dashboard() {
         )}
       </div>
 
-       <div className="grid gap-4 mt-8">
-        {canViewFundraiser && mockActiveFundraiser.status === 'Active' && (
-            <FundraiserProgressCard fundraiser={mockActiveFundraiser} donations={mockDonations} />
-        )}
+       <div className="grid gap-4 md:grid-cols-2 mt-8">
+        {canViewFundraiser && activeFundraisers.map((fundraiser) => (
+            <FundraiserProgressCard 
+                key={fundraiser.id}
+                fundraiser={fundraiser} 
+                donations={mockDonations.filter(d => d.fundraiserId === fundraiser.id)} 
+            />
+        ))}
       </div>
 
       <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3 mt-8">
