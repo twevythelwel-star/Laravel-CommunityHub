@@ -59,6 +59,13 @@ export type CommunityEvent = {
   description: string;
 };
 
+export type CommunityUpdate = {
+  id: string;
+  title: string;
+  date: Date;
+  summary: string;
+};
+
 export type Feedback = {
   id: string;
   submittedBy: string;
