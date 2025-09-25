@@ -43,13 +43,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
         setIsMounted(true);
     }, []);
 
+    if (!isMounted) {
+        return null;
+    }
+
     return (
         <ThemeProvider>
             <FontLoader />
             <AuthProvider>
                 <BrandingProvider>
                     <BillingProvider>
-                        {isMounted ? children : null}
+                        {children}
                     </BillingProvider>
                 </BrandingProvider>
             </AuthProvider>
