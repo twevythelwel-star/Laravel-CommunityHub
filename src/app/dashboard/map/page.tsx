@@ -9,13 +9,64 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import dynamic from 'next/dynamic';
+import { useMemo } from 'react';
+import type { LatLngBounds, LatLngExpression } from 'leaflet';
 
-const CommunityMap = dynamic(() => import('@/components/dashboard/community-map'), {
-  ssr: false,
-  loading: () => <p>Loading map...</p>,
-});
+
+// Default coordinates provided by the user
+const defaultCoords: LatLngExpression[] = [
+  [18.4781, -77.9278],
+  [18.4783, -77.9239],
+  [18.4752, -77.9236],
+  [18.4750, -77.9276],
+];
+
+const primaryColor = '#7EC4CF';
+const primaryColorFill = 'rgba(126, 196, 207, 0.2)';
+
 
 export default function MapPage() {
+
+    const Map = useMemo(() => dynamic(() => import('react-leaflet').then(leaflet => {
+        const { MapContainer, TileLayer, Polygon, useMap } = leaflet;
+        
+        function MapBoundsUpdater({bounds}: {bounds: LatLngBounds}) {
+            const map = useMap();
+            map.fitBounds(bounds);
+            map.setMaxBounds(bounds.pad(0.1)); // Add some padding
+            return null;
+        }
+
+        return function CommunityMap() {
+            const { LatLngBounds } = leaflet;
+            const bounds = new LatLngBounds(defaultCoords);
+
+            return (
+                 <MapContainer
+                    center={bounds.getCenter()}
+                    zoom={16}
+                    style={{ height: '100%', width: '100%', borderRadius: 'var(--radius)' }}
+                    scrollWheelZoom={true}
+                    minZoom={15}
+                >
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <Polygon
+                        pathOptions={{ color: primaryColor, fillColor: primaryColorFill, weight: 2 }}
+                        positions={defaultCoords}
+                    />
+                    <MapBoundsUpdater bounds={bounds} />
+                </MapContainer>
+            );
+        }
+    }), {
+        ssr: false,
+        loading: () => <p>Loading map...</p>,
+    }), []);
+
+
   return (
     <div className="flex flex-col gap-8">
         <div>
@@ -31,7 +82,7 @@ export default function MapPage() {
             </CardHeader>
             <CardContent>
                 <div className="h-[60vh] w-full">
-                    <CommunityMap />
+                    <Map />
                 </div>
             </CardContent>
         </Card>
