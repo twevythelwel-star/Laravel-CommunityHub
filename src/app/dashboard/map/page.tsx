@@ -9,9 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import dynamic from 'next/dynamic';
-import { useMemo } from 'react';
 
-
+// Dynamically import the map component with SSR turned off
 const CommunityMap = dynamic(() => import('@/components/dashboard/community-map'), { 
     ssr: false,
     loading: () => <p>Loading map...</p>,
@@ -41,4 +40,3 @@ export default function MapPage() {
         </div>
     );
 }
-
