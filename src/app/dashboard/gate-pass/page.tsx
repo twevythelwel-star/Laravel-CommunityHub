@@ -94,11 +94,6 @@ export default function GatePassPage() {
         setFormOpen(true);
     };
 
-    const handleCloseForm = () => {
-        setStaffToEdit(undefined);
-        setFormOpen(false);
-    };
-
     const handleSaveStaff = (data: Omit<Staff, 'id' | 'addedBy'>, id?: string) => {
         if (id) {
             setStaffList(staffList.map(s => s.id === id ? { ...s, ...data } : s));
@@ -147,7 +142,7 @@ export default function GatePassPage() {
                 </div>
                 <StaffForm
                     open={isFormOpen}
-                    onOpenChange={handleCloseForm}
+                    onOpenChange={setFormOpen}
                     onSave={handleSaveStaff}
                     staff={staffToEdit}
                 >
