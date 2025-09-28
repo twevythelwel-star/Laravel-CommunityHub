@@ -31,6 +31,7 @@ import {
   Map,
   MessageSquarePlus,
   PiggyBank,
+  QrCode,
   Search,
   Settings,
   ShieldOff,
@@ -47,6 +48,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
 import type { UserRole } from '@/types';
 import { useIsClient } from '@/hooks/use-is-client';
+import { Button } from '@/components/ui/button';
 
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
@@ -153,7 +155,11 @@ export default function DashboardLayout({
               className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
             />
           </div>
-          <div className="hidden sm:block">
+          <div className="hidden items-center gap-2 sm:flex">
+             <Button variant="ghost" size="icon">
+                <QrCode className="h-5 w-5" />
+                <span className="sr-only">View Gate Pass</span>
+            </Button>
             <UserNav />
           </div>
         </header>
