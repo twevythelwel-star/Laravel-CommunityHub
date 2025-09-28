@@ -16,18 +16,52 @@ import { useAuth } from "@/context/auth-context";
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer";
 import { Textarea } from "@/components/ui/textarea";
 import { BrandingSettings } from "@/components/dashboard/branding-settings";
-
-const defaultCoords = JSON.stringify([
-  { "longitude": -77.9278, "latitude": 18.4781 },
-  { "longitude": -77.9239, "latitude": 18.4783 },
-  { "longitude": -77.9236, "latitude": 18.4752 },
-  { "longitude": -77.9276, "latitude": 18.4750 },
-], null, 2);
+import { useMap } from "@/context/map-context";
+import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { coordinates, setCoordinates } = useMap();
+  const { toast } = useToast();
+  const [coordsString, setCoordsString] = useState('');
+
+  useEffect(() => {
+    // Format the coordinates from the context into a pretty-printed JSON string for the textarea
+    const formattedCoords = coordinates.map(c => ({ latitude: c[0], longitude: c[1] }));
+    setCoordsString(JSON.stringify(formattedCoords, null, 2));
+  }, [coordinates]);
+
   const isAdmin = user?.role === 'System Admin' || user?.role === 'Admin';
+  
+  const handleSaveMapCoords = () => {
+    try {
+        const parsed = JSON.parse(coordsString);
+        if (!Array.isArray(parsed)) throw new Error("Input must be an array.");
+
+        const newCoords = parsed.map(item => {
+            if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') {
+                throw new Error("Each coordinate object must have 'latitude' and 'longitude' as numbers.");
+            }
+            return [item.latitude, item.longitude] as [number, number];
+        });
+
+        setCoordinates(newCoords);
+        toast({
+            title: "Success",
+            description: "Map coordinates have been updated successfully.",
+        });
+    } catch (e) {
+        const error = e as Error;
+        console.error("Failed to parse map coordinates:", error);
+        toast({
+            variant: "destructive",
+            title: "Invalid JSON",
+            description: `Could not save coordinates. ${error.message}`,
+        });
+    }
+  }
 
 
   return (
@@ -75,9 +109,9 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-2">
                 <Label htmlFor="map-coords">Polygon Coordinates (JSON format)</Label>
-                <Textarea id="map-coords" className="font-code h-48" defaultValue={defaultCoords} />
+                <Textarea id="map-coords" className="font-code h-48" value={coordsString} onChange={e => setCoordsString(e.target.value)} />
             </div>
-            <Button>Save Map Coordinates</Button>
+            <Button onClick={handleSaveMapCoords}>Save Map Coordinates</Button>
           </CardContent>
         </Card>
       )}
@@ -118,4 +152,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-

@@ -9,6 +9,7 @@ import { ThemeProvider, useTheme } from '@/context/theme-context';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useEffect, useState } from 'react';
 import { Toaster } from './ui/toaster';
+import { MapProvider } from '@/context/map-context';
 
 function FontLoader() {
     const { theme } = useTheme();
@@ -56,8 +57,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 <AuthProvider>
                     <BrandingProvider>
                         <BillingProvider>
-                            {children}
-                            <Toaster />
+                            <MapProvider>
+                                {children}
+                                <Toaster />
+                            </MapProvider>
                         </BillingProvider>
                     </BrandingProvider>
                 </AuthProvider>
