@@ -10,7 +10,8 @@ import {
 } from "@/components/ui/card";
 import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
-import type { LatLngBounds, LatLngExpression } from 'leaflet';
+import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
+import { latLngBounds } from 'leaflet';
 
 
 // Default coordinates provided by the user
@@ -30,16 +31,15 @@ export default function MapPage() {
     const Map = useMemo(() => dynamic(() => import('react-leaflet').then(leaflet => {
         const { MapContainer, TileLayer, Polygon, useMap } = leaflet;
         
-        function MapBoundsUpdater({bounds}: {bounds: LatLngBounds}) {
+        function MapBoundsUpdater({bounds}: {bounds: LatLngBoundsExpression}) {
             const map = useMap();
             map.fitBounds(bounds);
-            map.setMaxBounds(bounds.pad(0.1)); // Add some padding
+            map.setMaxBounds(map.getBounds().pad(0.1)); // Add some padding
             return null;
         }
 
         return function CommunityMap() {
-            const { LatLngBounds } = leaflet;
-            const bounds = new LatLngBounds(defaultCoords);
+            const bounds = latLngBounds(defaultCoords);
 
             return (
                  <MapContainer
