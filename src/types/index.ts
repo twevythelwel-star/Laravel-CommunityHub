@@ -1,6 +1,6 @@
 
 
-export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
+export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security" | "Staff";
 
 export type Homeowner = {
   id: string;
@@ -32,6 +32,19 @@ export type Visitor = {
   idImageUrl?: string;
   isBlocked: boolean;
 };
+
+export type Staff = {
+  id: string;
+  name: string;
+  job: string;
+  idType: string;
+  idNumber: string;
+  idExpiry: Date;
+  idImageUrl?: string;
+  property: string; // e.g. "Lot 42, Main St"
+  addedBy: string; // UID of homeowner/renter/admin
+  status: 'Active' | 'Inactive' | 'Expired ID';
+}
 
 export type Notification = {
   id: string;

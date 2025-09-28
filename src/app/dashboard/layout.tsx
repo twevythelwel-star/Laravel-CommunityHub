@@ -39,6 +39,7 @@ import {
   UserCog,
   UserX,
   Users,
+  BadgeCheck,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
@@ -56,6 +57,7 @@ const allMenuItems = [
   { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/renters', label: 'My Renters', icon: KeyRound, roles: ['Homeowner'] },
   { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/gate-pass', label: 'Gate Pass', icon: BadgeCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/updates', label: 'Updates', icon: ClipboardList, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
