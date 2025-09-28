@@ -44,6 +44,7 @@ export type Staff = {
   property: string; // e.g. "Lot 42, Main St"
   addedBy: string; // UID of homeowner/renter/admin
   status: 'Active' | 'Inactive' | 'Expired ID';
+  photoUrl?: string;
 }
 
 export type Notification = {

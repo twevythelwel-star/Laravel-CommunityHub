@@ -24,7 +24,7 @@ import type { Staff } from "@/types";
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import { useAuth } from '@/context/auth-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-
+import { StaffGatePassDialog } from '@/components/dashboard/staff-gate-pass-dialog';
 
 const mockStaff: Staff[] = [
     { 
@@ -36,7 +36,8 @@ const mockStaff: Staff[] = [
         idExpiry: new Date('2028-12-31'), 
         property: 'Lot 12, Main St', 
         addedBy: 'user-homeowner', 
-        status: 'Active' 
+        status: 'Active',
+        photoUrl: 'https://picsum.photos/seed/maria/200'
     },
     { 
         id: 'staff_2', 
@@ -47,7 +48,8 @@ const mockStaff: Staff[] = [
         idExpiry: new Date('2024-05-31'), 
         property: 'Lot 25, Oak Ave', 
         addedBy: 'user-homeowner-2', 
-        status: 'Expired ID' 
+        status: 'Expired ID',
+        photoUrl: 'https://picsum.photos/seed/david/200'
     },
     { 
         id: 'staff_3', 
@@ -58,16 +60,18 @@ const mockStaff: Staff[] = [
         idExpiry: new Date('2026-08-15'), 
         property: 'Lot 12, Main St', 
         addedBy: 'user-homeowner', 
-        status: 'Inactive' 
+        status: 'Inactive',
+        photoUrl: 'https://picsum.photos/seed/chen/200'
     },
 ];
 
 export default function GatePassPage() {
     const { user } = useAuth();
     const [staffList, setStaffList] = useState<Staff[]>(mockStaff);
+    const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
     
     // In a real app, filtering would be based on the logged-in user's properties or all properties for admins.
-    const visibleStaff = user?.role === 'System Admin' || user?.role === 'Admin'
+    const visibleStaff = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security'
         ? staffList
         : staffList.filter(s => s.addedBy === user?.uid);
 
@@ -81,6 +85,14 @@ export default function GatePassPage() {
     }
 
   return (
+    <>
+    {selectedStaff && (
+        <StaffGatePassDialog
+            staff={selectedStaff}
+            open={!!selectedStaff}
+            onOpenChange={() => setSelectedStaff(null)}
+        />
+    )}
     <div className="grid gap-8">
         <div>
             <h1 className="font-headline text-3xl font-bold">Gate Pass Management</h1>
@@ -139,6 +151,9 @@ export default function GatePassPage() {
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                            <DropdownMenuItem onClick={() => setSelectedStaff(staff)}>
+                                                View Pass
+                                            </DropdownMenuItem>
                                             <DropdownMenuItem>Edit Details</DropdownMenuItem>
                                             <DropdownMenuItem>Update ID</DropdownMenuItem>
                                              <DropdownMenuItem className="text-destructive">Revoke Access</DropdownMenuItem>
@@ -152,5 +167,6 @@ export default function GatePassPage() {
             </CardContent>
         </Card>
     </div>
+    </>
   );
 }
