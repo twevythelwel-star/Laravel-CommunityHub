@@ -73,7 +73,7 @@ function HomeownerBilling() {
               <Label htmlFor="remember-card" className="text-sm font-normal">Remember this card for future payments</Label>
             </div>
             <div className="flex gap-2">
-              <Button>Pay ${monthlyFee.toFixed(2)}</Button>
+              <Button>Pay JMD {monthlyFee.toLocaleString('en-JM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Button>
               <Button variant="outline">Save Payment Method</Button>
             </div>
         </CardContent>

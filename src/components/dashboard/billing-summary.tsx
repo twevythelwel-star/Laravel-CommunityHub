@@ -6,27 +6,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Info, Landmark } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useState } from "react";
-import { useBilling } from "@/context/billing-context";
+import { useBilling, MOCK_EXCHANGE_RATES } from "@/context/billing-context";
 import { format } from "date-fns";
 
-// Mock exchange rates. In a real app, this would come from an API.
-const MOCK_EXCHANGE_RATES = {
-    USD_TO_JMD: 155.50,
-    USD_TO_GBP: 0.79,
-    USD_TO_EUR: 0.92,
-};
 
 type FormattedRates = {
-    jmd: string;
+    usd: string;
+    cad: string;
     gbp: string;
     eur: string;
 }
 
 const mockPayments = [
-    { date: new Date('2025-01-15'), amount: 30.00 },
-    { date: new Date('2025-02-15'), amount: 30.00 },
-    { date: new Date('2025-03-15'), amount: 30.00 },
-    { date: new Date('2025-04-15'), amount: 30.00 },
+    { date: new Date('2025-01-15'), amount: 5000.00 },
+    { date: new Date('2025-02-15'), amount: 5000.00 },
+    { date: new Date('2025-03-15'), amount: 5000.00 },
+    { date: new Date('2025-04-15'), amount: 5000.00 },
 ];
 
 export function BillingSummary() {
@@ -44,12 +39,14 @@ export function BillingSummary() {
         if (isClient) {
             setCurrentMonthYear(format(new Date(), 'MMMM yyyy'));
             
-            const jmd = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_JMD);
-            const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_GBP);
-            const eur = (monthlyFee * MOCK_EXCHANGE_RATES.USD_TO_EUR);
+            const usd = (monthlyFee * MOCK_EXCHANGE_RATES.JMD_TO_USD);
+            const cad = (monthlyFee * MOCK_EXCHANGE_RATES.JMD_TO_CAD);
+            const gbp = (monthlyFee * MOCK_EXCHANGE_RATES.JMD_TO_GBP);
+            const eur = (monthlyFee * MOCK_EXCHANGE_RATES.JMD_TO_EUR);
             
             setRates({
-                jmd: new Intl.NumberFormat('en-JM', { style: 'currency', currency: 'JMD' }).format(jmd),
+                usd: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd),
+                cad: new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(cad),
                 gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(gbp),
                 eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(eur),
             });
@@ -75,12 +72,12 @@ export function BillingSummary() {
             <CardContent className="space-y-4">
                 <div className="flex flex-col md:flex-row gap-4 items-baseline">
                     <div className="text-4xl font-bold">
-                        ${monthlyFee.toFixed(2)}
-                        <span className="text-lg font-normal text-muted-foreground ml-1">USD</span>
+                        {monthlyFee.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}
                     </div>
                     {rates && (
-                        <div className="flex gap-4 text-muted-foreground">
-                            <span>≈ {rates.jmd}</span>
+                        <div className="flex gap-4 text-muted-foreground flex-wrap">
+                            <span>≈ {rates.usd}</span>
+                            <span>≈ {rates.cad}</span>
                             <span>≈ {rates.gbp}</span>
                             <span>≈ {rates.eur}</span>
                         </div>
@@ -89,7 +86,7 @@ export function BillingSummary() {
                  <Alert className="bg-blue-50 border-blue-200 text-blue-800">
                     <Info className="h-4 w-4 !text-blue-800" />
                     <AlertDescription>
-                        Exchange rates are for estimation purposes only. All transactions will be processed in USD.
+                        Exchange rates are for estimation purposes only. All transactions will be processed in JMD.
                     </AlertDescription>
                 </Alert>
             </CardContent>
@@ -99,13 +96,13 @@ export function BillingSummary() {
                 <div>
                     <CardTitle>Year-to-Date Payments (2025)</CardTitle>
                     <CardDescription>
-                        Summary of your payments since Jan 1, 2025.
+                        Summary of your payments since Jan 1, 2025, shown in JMD.
                     </CardDescription>
                 </div>
                 <Landmark className="h-6 w-6 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-                <p className="text-3xl font-bold">${totalPaidYTD.toFixed(2)}</p>
+                <p className="text-3xl font-bold">{totalPaidYTD.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}</p>
                 <p className="text-sm text-muted-foreground">Total paid across {mockPayments.length} transactions.</p>
             </CardContent>
         </Card>

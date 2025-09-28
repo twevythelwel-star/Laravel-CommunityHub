@@ -24,32 +24,32 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Responsive
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState, useEffect } from "react";
-import { useBilling } from "@/context/billing-context";
+import { useState, useEffect, useMemo } from "react";
+import { useBilling, MOCK_EXCHANGE_RATES } from "@/context/billing-context";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 
 const mockTransactions = [
-    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 30.00, status: 'Paid' },
-    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2025-07-19', amount: 30.00, status: 'Paid' },
-    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2025-07-01', amount: 30.00, status: 'Overdue' },
-    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 30.00, status: 'Paid' },
+    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 5000.00, status: 'Paid' },
+    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2025-07-19', amount: 5000.00, status: 'Paid' },
+    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2025-07-01', amount: 5000.00, status: 'Overdue' },
+    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 5000.00, status: 'Paid' },
 ];
 
 const monthlyCollectionsData = [
-  { month: "Jan", total: 1860 },
-  { month: "Feb", total: 1900 },
-  { month: "Mar", total: 2000 },
-  { month: "Apr", total: 1780 },
-  { month: "May", total: 1890 },
-  { month: "Jun", total: 2390 },
-  { month: "Jul", total: 2490 },
-  { month: "Aug", total: 2300 },
-  { month: "Sep", total: 2100 },
-  { month: "Oct", total: 2400 },
-  { month: "Nov", total: 2500 },
-  { month: "Dec", total: 2600 },
+  { month: "Jan", total: 310000 },
+  { month: "Feb", total: 320000 },
+  { month: "Mar", total: 335000 },
+  { month: "Apr", total: 290000 },
+  { month: "May", total: 315000 },
+  { month: "Jun", total: 380000 },
+  { month: "Jul", total: 400000 },
+  { month: "Aug", total: 385000 },
+  { month: "Sep", total: 350000 },
+  { month: "Oct", total: 410000 },
+  { month: "Nov", total: 420000 },
+  { month: "Dec", total: 435000 },
 ];
 
 
@@ -78,12 +78,26 @@ export function AdminBilling() {
   const totalCollected = mockTransactions.filter(t => t.status === 'Paid').reduce((acc, t) => acc + t.amount, 0);
   const outstandingDues = mockTransactions.filter(t => t.status !== 'Paid').reduce((acc, t) => acc + t.amount, 0);
 
+  const convertedAmounts = useMemo(() => {
+    if (!newFee) return null;
+    const usd = (newFee * MOCK_EXCHANGE_RATES.JMD_TO_USD);
+    const gbp = (newFee * MOCK_EXCHANGE_RATES.JMD_TO_GBP);
+    const eur = (newFee * MOCK_EXCHANGE_RATES.JMD_TO_EUR);
+    const cad = (newFee * MOCK_EXCHANGE_RATES.JMD_TO_CAD);
+
+    return {
+        usd: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd),
+        gbp: new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(gbp),
+        eur: new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(eur),
+        cad: new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD' }).format(cad),
+    }
+  }, [newFee]);
 
   const handleFeeChange = () => {
     setMonthlyFee(newFee);
     toast({
         title: "Success",
-        description: `Monthly fee has been updated to $${newFee.toFixed(2)}.`
+        description: `Monthly fee has been updated to JMD ${newFee.toFixed(2)}.`
     })
   }
   
@@ -107,7 +121,7 @@ export function AdminBilling() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${totalCollected.toFixed(2)}</div>
+              <div className="text-2xl font-bold">JMD {totalCollected.toLocaleString('en-JM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <p className="text-xs text-muted-foreground">
                 from {mockTransactions.filter(t => t.status === 'Paid').length} households
               </p>
@@ -121,7 +135,7 @@ export function AdminBilling() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${outstandingDues.toFixed(2)}</div>
+              <div className="text-2xl font-bold">JMD {outstandingDues.toLocaleString('en-JM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <p className="text-xs text-muted-foreground">
                 from {mockTransactions.filter(t => t.status !== 'Paid').length} household
               </p>
@@ -133,14 +147,25 @@ export function AdminBilling() {
             <CardHeader>
                 <CardTitle>Manage Monthly Fee</CardTitle>
                 <CardDescription>
-                    Set the monthly HOA fee for all residents.
+                    Set the monthly HOA fee for all residents in Jamaican Dollars (JMD).
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
                 <div className="grid gap-2 max-w-sm">
-                    <Label htmlFor="monthly-fee">Monthly Fee (USD)</Label>
+                    <Label htmlFor="monthly-fee">Monthly Fee (JMD)</Label>
                     <Input id="monthly-fee" type="number" value={newFee} onChange={(e) => setNewFee(Number(e.target.value))} />
                 </div>
+                 {convertedAmounts && (
+                    <div className="text-sm text-muted-foreground space-y-1">
+                        <p>Equivalent to:</p>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
+                            <span>🇺🇸 {convertedAmounts.usd}</span>
+                            <span>🇨🇦 {convertedAmounts.cad}</span>
+                            <span>🇬🇧 {convertedAmounts.gbp}</span>
+                            <span>🇪🇺 {convertedAmounts.eur}</span>
+                        </div>
+                    </div>
+                )}
             </CardContent>
             <CardFooter>
                  <Button onClick={handleFeeChange}>Update Fee</Button>
@@ -151,7 +176,7 @@ export function AdminBilling() {
         <CardHeader>
           <CardTitle>YTD Collections (2025)</CardTitle>
           <CardDescription>
-            A summary of dues collected over the current year.
+            A summary of dues collected over the current year, shown in JMD.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -160,10 +185,10 @@ export function AdminBilling() {
                 <BarChart data={monthlyCollectionsData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `$${value}`} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `J$${Number(value) / 1000}k`} />
                      <ChartTooltip
                       cursor={false}
-                      content={<ChartTooltipContent indicator="dot" />}
+                      content={<ChartTooltipContent indicator="dot" formatter={(value) => `JMD ${Number(value).toLocaleString()}`} />}
                     />
                     <Bar dataKey="total" radius={[4, 4, 0, 0]}>
                         {monthlyCollectionsData.map((entry, index) => (
@@ -190,7 +215,7 @@ export function AdminBilling() {
               <TableRow>
                 <TableHead>Homeowner</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Amount</TableHead>
+                <TableHead>Amount (JMD)</TableHead>
                 <TableHead>Status</TableHead>
                  <TableHead><span className="sr-only">Actions</span></TableHead>
               </TableRow>
@@ -200,7 +225,7 @@ export function AdminBilling() {
                 <TableRow key={transaction.id}>
                   <TableCell className="font-medium">{transaction.homeowner}</TableCell>
                   <TableCell>{transaction.date}</TableCell>
-                  <TableCell>${transaction.amount.toFixed(2)}</TableCell>
+                  <TableCell>{transaction.amount.toFixed(2)}</TableCell>
                   <TableCell>
                      <Badge variant={transaction.status === 'Paid' ? 'secondary' : 'destructive'}>
                         {transaction.status}
@@ -221,5 +246,3 @@ export function AdminBilling() {
     </div>
   );
 }
-
-    

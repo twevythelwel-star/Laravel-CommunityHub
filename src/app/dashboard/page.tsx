@@ -29,10 +29,10 @@ import type { Fundraiser, Donation } from "@/types";
 import { FundraiserProgressCard } from "@/components/dashboard/fundraiser-progress-card";
 
 const mockTransactions = [
-    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 30.00, status: 'Paid' },
-    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2025-07-19', amount: 30.00, status: 'Paid' },
-    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2025-07-01', amount: 30.00, status: 'Overdue' },
-    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 30.00, status: 'Paid' },
+    { id: '1', homeowner: 'John Smith (Lot 12)', date: '2025-07-20', amount: 5000.00, status: 'Paid' },
+    { id: '2', homeowner: 'Emma Watson (Lot 25)', date: '2025-07-19', amount: 5000.00, status: 'Paid' },
+    { id: '3', homeowner: 'Michael B. (Lot 03)', date: '2025-07-01', amount: 5000.00, status: 'Overdue' },
+    { id: '4', homeowner: 'Olivia Davis (Lot 42)', date: '2025-07-18', amount: 5000.00, status: 'Paid' },
 ];
 
 const mockPromotions = [
@@ -161,7 +161,7 @@ export default function Dashboard() {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${totalCollected.toFixed(2)}</div>
+                <div className="text-2xl font-bold">JMD {totalCollected.toLocaleString('en-JM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">
                   from {mockTransactions.filter(t => t.status === 'Paid').length} households
                 </p>
@@ -175,7 +175,7 @@ export default function Dashboard() {
                  <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${outstandingDues.toFixed(2)}</div>
+                <div className="text-2xl font-bold">JMD {outstandingDues.toLocaleString('en-JM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 <p className="text-xs text-muted-foreground">
                   from {mockTransactions.filter(t => t.status !== 'Paid').length} household
                 </p>
@@ -342,7 +342,7 @@ export default function Dashboard() {
                   <TableRow>
                     <TableHead>Homeowner</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Amount (JMD)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -359,7 +359,7 @@ export default function Dashboard() {
                                 {transaction.status}
                             </Badge>
                         </TableCell>
-                        <TableCell className="text-right">${transaction.amount.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">{transaction.amount.toFixed(2)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
