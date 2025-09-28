@@ -6,7 +6,7 @@ import { BillingProvider } from '@/context/billing-context';
 import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider, useTheme } from '@/context/theme-context';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Toaster } from './ui/toaster';
 
 function FontLoader() {
@@ -38,16 +38,6 @@ function FontLoader() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
-
-    if (!isMounted) {
-        return null;
-    }
-
     return (
         <ThemeProvider>
             <TooltipProvider>
