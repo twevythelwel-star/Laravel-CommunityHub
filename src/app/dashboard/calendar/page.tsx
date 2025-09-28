@@ -86,7 +86,7 @@ export default function CalendarPage() {
             <p className="text-muted-foreground">View community events and available visitor timeslots.</p>
         </div>
          {canManage && (
-            <EventForm open={isFormOpen} onOpenChange={handleCloseForm} onSave={handleSaveEvent} event={selectedEvent}>
+            <EventForm open={isFormOpen} onOpenChange={setFormOpen} onSave={handleSaveEvent} event={selectedEvent}>
                 <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
                     <PlusCircle className="h-3.5 w-3.5" />
                     <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
