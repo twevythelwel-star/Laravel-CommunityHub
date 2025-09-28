@@ -56,7 +56,22 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
     return `${header}.${payload}.${signature}`;
   };
 
-  const qrValue = getSimulatedJwsToken();
+  const [qrValue, setQrValue] = useState(getSimulatedJwsToken());
+
+  useEffect(() => {
+    if (open) {
+        // Set a new token when the dialog opens
+        setQrValue(getSimulatedJwsToken());
+        // Then, create an interval to rotate the token every 30 seconds
+        const interval = setInterval(() => {
+            setQrValue(getSimulatedJwsToken());
+        }, 30000); // 30 seconds
+
+        // Clear the interval when the dialog closes
+        return () => clearInterval(interval);
+    }
+  }, [open, staff]);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
