@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import dynamic from 'next/dynamic';
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import { latLngBounds } from 'leaflet';
 
@@ -93,4 +93,3 @@ export default function MapPage() {
         </div>
     );
 }
-
