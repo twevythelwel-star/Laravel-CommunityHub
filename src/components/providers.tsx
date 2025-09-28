@@ -6,6 +6,7 @@ import { AuthProvider } from '@/context/auth-context';
 import { BillingProvider } from '@/context/billing-context';
 import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider, useTheme } from '@/context/theme-context';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useEffect, useState } from 'react';
 
 function FontLoader() {
@@ -49,14 +50,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     return (
         <ThemeProvider>
-            <FontLoader />
-            <AuthProvider>
-                <BrandingProvider>
-                    <BillingProvider>
-                        {children}
-                    </BillingProvider>
-                </BrandingProvider>
-            </AuthProvider>
+            <TooltipProvider>
+                <FontLoader />
+                <AuthProvider>
+                    <BrandingProvider>
+                        <BillingProvider>
+                            {children}
+                        </BillingProvider>
+                    </BrandingProvider>
+                </AuthProvider>
+            </TooltipProvider>
         </ThemeProvider>
     )
 }
+
