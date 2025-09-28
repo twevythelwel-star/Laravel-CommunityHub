@@ -1,4 +1,3 @@
-
 // app/components/AreaLockMap.tsx
 "use client";
 
