@@ -30,6 +30,7 @@ const mockUserDatabase: Record<string, Omit<User, 'uid' | 'role'>> = {
     'user-homeowner': { name: 'Sample Homeowner', displayName: 'Homeowner', email: 'user-homeowner@example.com', phone: '555-0103' },
     'user-renter': { name: 'Sample Renter', displayName: 'Renter', email: 'user-renter@example.com', phone: '555-0104' },
     'user-security': { name: 'Community Security Inc.', displayName: 'Security', email: 'user-security@example.com', phone: '555-0105' },
+    'user-staff': { name: 'Maria Garcia', displayName: 'Maria G.', email: 'maria.g@example.com', phone: '555-0106' },
 };
 
 const mockRoleMapping: Record<string, UserRole> = {
@@ -38,6 +39,7 @@ const mockRoleMapping: Record<string, UserRole> = {
     'user-homeowner': 'Homeowner',
     'user-renter': 'Temporary Homeowner',
     'user-security': 'Security',
+    'user-staff': 'Staff',
 };
 
 

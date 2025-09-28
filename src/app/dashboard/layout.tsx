@@ -70,6 +70,7 @@ const allMenuItems = [
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner'] },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['Staff'] },
 ];
 
 export default function DashboardLayout({
@@ -90,6 +91,12 @@ export default function DashboardLayout({
   
   const menuItems = useMemo(() => {
     if (!user) return [];
+    
+    // Always show profile link for Staff
+    if (user.role === 'Staff') {
+        return allMenuItems.filter(item => item.href === '/dashboard/profile');
+    }
+
     // A regular admin should not see the full directory, but the user management page
     if (user.role === 'Admin') {
       return allMenuItems.filter(item => item.href !== '/dashboard/directory' && item.roles.includes(user.role));

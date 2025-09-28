@@ -32,6 +32,7 @@ const testUsers = [
     { role: 'Homeowner', username: 'user-homeowner' },
     { role: 'Temporary Homeowner', username: 'user-renter' },
     { role: 'Security', username: 'user-security' },
+    { role: 'Staff', username: 'user-staff' },
 ]
 
 export default function LoginPage() {

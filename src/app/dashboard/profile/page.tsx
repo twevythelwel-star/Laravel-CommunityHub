@@ -86,6 +86,52 @@ export default function ProfilePage() {
         )
     }
 
+    // Staff Role View
+    if (user.role === 'Staff') {
+        return (
+            <div className="grid gap-8">
+                <div>
+                    <h1 className="font-headline text-3xl font-bold">Staff Profile</h1>
+                    <p className="text-muted-foreground">Your personal information and access status.</p>
+                </div>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Your Details</CardTitle>
+                        <CardDescription>
+                            This information is managed by your employer (the Homeowner or Renter who registered you).
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="flex items-center gap-4">
+                            <Avatar className="h-20 w-20">
+                                <AvatarImage src={`https://picsum.photos/200?q=${user.uid}`} data-ai-hint="person avatar" />
+                                <AvatarFallback>{user.name?.charAt(0) || 'U'}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <p className="text-lg font-semibold">{user.name}</p>
+                                <p className="text-sm text-muted-foreground">Role: Staff</p>
+                            </div>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label>Email</Label>
+                                <Input value={user.email} disabled />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Phone Number</Label>
+                                <Input value={user.phone} disabled />
+                            </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground pt-4">
+                            Please contact your employer to update your profile information.
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
+
     // View for all other roles
     return (
         <div className="grid gap-8">
