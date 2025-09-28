@@ -3,50 +3,49 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 
-import { cn } from '@/lib/utils';
 import {
-  SidebarProvider,
   Sidebar,
-  SidebarHeader,
   SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarFooter,
+  SidebarProvider,
   SidebarTrigger,
-  SidebarInset,
 } from '@/components/ui/sidebar';
 import {
   Bell,
+  BookUser,
   Calendar,
+  ClipboardCheck,
+  ClipboardList,
   CreditCard,
+  Gift,
+  History,
   Home,
-  Siren,
-  User,
-  Users,
-  ShieldOff,
+  KeyRound,
+  Map,
+  MessageSquarePlus,
+  PiggyBank,
   Search,
   Settings,
+  ShieldOff,
+  Siren,
+  User,
   UserCog,
-  Camera,
-  MessageSquarePlus,
-  ClipboardCheck,
-  Map,
-  History,
   UserX,
-  KeyRound,
-  Gift,
-  PiggyBank,
-  BookUser,
-  ClipboardList,
+  Users,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
 import type { UserRole } from '@/types';
+import { useIsClient } from '@/hooks/use-is-client';
 
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
@@ -79,12 +78,13 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const router = useRouter();
+  const isClient = useIsClient();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (isClient && !loading && !user) {
       router.push('/');
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, isClient]);
   
   const menuItems = useMemo(() => {
     if (!user) return [];
@@ -92,10 +92,17 @@ export default function DashboardLayout({
     if (user.role === 'Admin') {
       return allMenuItems.filter(item => item.href !== '/dashboard/directory' && item.roles.includes(user.role));
     }
-    return allMenuItems.filter(item => item.roles.includes(user.role));
+    const filteredItems = allMenuItems.filter(item => item.roles.includes(user.role));
+
+    if (user.role === 'Security') {
+      return filteredItems.filter(item => item.href !== '/dashboard/updates');
+    }
+
+    return filteredItems;
+
   }, [user]);
 
-  if (loading || !user) {
+  if (!isClient || loading || !user) {
     return <div className="flex h-screen w-full items-center justify-center">Loading...</div>;
   }
 
