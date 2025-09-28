@@ -23,8 +23,10 @@ import { MoreHorizontal, PlusCircle } from "lucide-react";
 import type { Staff } from "@/types";
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import { useAuth } from '@/context/auth-context';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { StaffGatePassDialog } from '@/components/dashboard/staff-gate-pass-dialog';
+import { StaffForm } from '@/components/dashboard/staff-form';
+import { useToast } from '@/hooks/use-toast';
 
 const mockStaff: Staff[] = [
     { 
@@ -67,8 +69,11 @@ const mockStaff: Staff[] = [
 
 export default function GatePassPage() {
     const { user } = useAuth();
+    const { toast } = useToast();
     const [staffList, setStaffList] = useState<Staff[]>(mockStaff);
     const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+    const [staffToEdit, setStaffToEdit] = useState<Staff | undefined>(undefined);
+    const [isFormOpen, setFormOpen] = useState(false);
     
     // In a real app, filtering would be based on the logged-in user's properties or all properties for admins.
     const visibleStaff = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security'
@@ -82,6 +87,40 @@ export default function GatePassPage() {
             case 'Expired ID': return 'destructive';
             default: return 'default';
         }
+    }
+
+    const handleOpenForm = (staff?: Staff) => {
+        setStaffToEdit(staff);
+        setFormOpen(true);
+    };
+
+    const handleCloseForm = () => {
+        setStaffToEdit(undefined);
+        setFormOpen(false);
+    };
+
+    const handleSaveStaff = (data: Omit<Staff, 'id' | 'addedBy'>, id?: string) => {
+        if (id) {
+            setStaffList(staffList.map(s => s.id === id ? { ...s, ...data } : s));
+            toast({ title: "Staff Updated", description: `${data.name}'s details have been updated.`});
+        } else {
+            const newStaff: Staff = {
+                id: `staff_${Date.now()}`,
+                ...data,
+                addedBy: user!.uid, // Safe to assume user exists
+            };
+            setStaffList([newStaff, ...staffList]);
+            toast({ title: "Staff Added", description: `${data.name} has been registered.`});
+        }
+    };
+    
+    const handleRevokeAccess = (staffId: string) => {
+        setStaffList(staffList.map(s => s.id === staffId ? { ...s, status: 'Inactive' } : s));
+        toast({
+            variant: "destructive",
+            title: "Access Revoked",
+            description: "The staff member's access has been set to inactive."
+        });
     }
 
   return (
@@ -106,12 +145,19 @@ export default function GatePassPage() {
                         A list of all personnel with long-term gate access.
                     </CardDescription>
                 </div>
-                <Button size="sm" className="gap-1">
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                        Add Staff
-                    </span>
-                </Button>
+                <StaffForm
+                    open={isFormOpen}
+                    onOpenChange={handleCloseForm}
+                    onSave={handleSaveStaff}
+                    staff={staffToEdit}
+                >
+                    <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
+                        <PlusCircle className="h-3.5 w-3.5" />
+                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                            Add Staff
+                        </span>
+                    </Button>
+                </StaffForm>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -154,9 +200,10 @@ export default function GatePassPage() {
                                             <DropdownMenuItem onClick={() => setSelectedStaff(staff)}>
                                                 View Pass
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleOpenForm(staff)}>Edit Details</DropdownMenuItem>
                                             <DropdownMenuItem>Update ID</DropdownMenuItem>
-                                             <DropdownMenuItem className="text-destructive">Revoke Access</DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                             <DropdownMenuItem className="text-destructive" onClick={() => handleRevokeAccess(staff.id)}>Revoke Access</DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </TableCell>

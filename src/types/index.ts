@@ -1,6 +1,5 @@
 
-
-export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security" | "Staff";
+export type UserRole = "System Admin" | "Admin" | "Homeowner" | "Temporary Homeowner" | "Security";
 
 export type Homeowner = {
   id: string;
@@ -37,7 +36,7 @@ export type Staff = {
   id: string;
   name: string;
   job: string;
-  idType: string;
+  idType: "National ID" | "Driver's License" | "Passport";
   idNumber: string;
   idExpiry: Date;
   idImageUrl?: string;
