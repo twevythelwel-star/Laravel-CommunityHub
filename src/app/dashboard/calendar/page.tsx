@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { EventForm } from "@/components/dashboard/event-form";
 import type { CommunityEvent } from "@/types";
 import { useAuth } from "@/context/auth-context";
-import { isSameDay, isPast, format } from "date-fns";
+import { isSameDay, isPast, format, isValid } from "date-fns";
 import Image from "next/image";
 import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
 import {
@@ -31,10 +31,10 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const mockEvents: CommunityEvent[] = [
-    { id: 'evt_1', title: 'Community Pool Party', description: 'Join us for a fun day at the pool! Food and drinks will be provided.', date: new Date(new Date().getFullYear(), 6, 20, 12, 0), imageUrl: 'https://picsum.photos/seed/pool-party/800/400' },
-    { id: 'evt_2', title: 'Annual HOA Meeting', description: 'Discussing the budget and plans for the upcoming year.', date: new Date(new Date().getFullYear(), 7, 5, 19, 0) },
-    { id: 'evt_3', title: 'Movie Night Under the Stars', description: 'We\'ll be showing a family-friendly movie on a big screen in the park.', date: new Date(new Date().getFullYear(), 6, 25, 20, 0), imageUrl: 'https://picsum.photos/seed/movie-night/800/400' },
-     { id: 'evt_4', title: 'Yoga in the Park', description: 'Morning yoga session for all skill levels.', date: new Date(new Date().getFullYear(), 6, 20, 9, 0) },
+    { id: 'evt_1', title: 'Community Pool Party', description: 'Join us for a fun day at the pool! Food and drinks will be provided.', startDate: new Date(new Date().getFullYear(), 6, 20, 12, 0), endDate: new Date(new Date().getFullYear(), 6, 20, 16, 0), imageUrl: 'https://picsum.photos/seed/pool-party/800/400' },
+    { id: 'evt_2', title: 'Annual HOA Meeting', description: 'Discussing the budget and plans for the upcoming year.', startDate: new Date(new Date().getFullYear(), 7, 5, 19, 0), endDate: new Date(new Date().getFullYear(), 7, 5, 21, 0) },
+    { id: 'evt_3', title: 'Movie Night Under the Stars', description: 'We\'ll be showing a family-friendly movie on a big screen in the park.', startDate: new Date(new Date().getFullYear(), 6, 25, 20, 0), imageUrl: 'https://picsum.photos/seed/movie-night/800/400' },
+    { id: 'evt_4', title: 'Yoga in the Park', description: 'Morning yoga session for all skill levels.', startDate: new Date(new Date().getFullYear(), 6, 20, 9, 0) },
 ];
 
 
@@ -71,12 +71,34 @@ export default function CalendarPage() {
     };
 
     const todaysEvents = useMemo(() => {
-        const futureEvents = events.filter(e => !isPast(e.date));
+        const futureEvents = events.filter(e => !isPast(e.endDate || e.startDate));
         if (!selectedDate) return [];
         return futureEvents
-            .filter(event => isSameDay(event.date, selectedDate))
-            .sort((a, b) => a.date.getTime() - b.date.getTime());
+            .filter(event => isSameDay(event.startDate, selectedDate))
+            .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
     }, [events, selectedDate]);
+    
+    const formatEventTime = (event: CommunityEvent) => {
+        const { startDate, endDate } = event;
+        // Check if startTime and endTime are the same as the start of the day
+        const isAllDay = 
+            startDate.getHours() === 0 && startDate.getMinutes() === 0 &&
+            (!endDate || (endDate.getHours() === 0 && endDate.getMinutes() === 0));
+
+        if (isAllDay && !endDate) return "All-day event";
+        if (isAllDay && endDate && isSameDay(startDate, endDate)) return "All-day event";
+
+        let timeString = '';
+        if (isValid(startDate)) {
+            timeString = format(startDate, 'h:mm a');
+        }
+
+        if (isValid(endDate)) {
+            timeString += ` - ${format(endDate, 'h:mm a')}`;
+        }
+        
+        return timeString;
+    }
 
   return (
     <div className="grid gap-8">
@@ -135,7 +157,7 @@ export default function CalendarPage() {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <h4 className="font-semibold">{event.title}</h4>
-                                        <p className="text-sm text-muted-foreground">{format(event.date, 'h:mm a')}</p>
+                                        <p className="text-sm text-muted-foreground">{formatEventTime(event)}</p>
                                     </div>
                                     {canManage && (
                                          <DropdownMenu>

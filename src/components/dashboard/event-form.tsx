@@ -32,14 +32,35 @@ import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '../ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
+import { Switch } from '../ui/switch';
 
 const formSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters.'),
   description: z.string().min(10, 'Description must be at least 10 characters.'),
-  date: z.date({ required_error: "A date is required." }),
-  time: z.string({ required_error: "A time is required." }).regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Invalid time format (HH:mm)"),
+  startDate: z.date({ required_error: "A start date is required." }),
+  startTime: z.string().optional(),
+  hasEndTime: z.boolean().default(false),
+  endDate: z.date().optional(),
+  endTime: z.string().optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
+}).refine(data => {
+    if (!data.hasEndTime) return true;
+    if (!data.endDate) return false; // End date is required if hasEndTime is true
+    
+    const startDateTime = data.startTime 
+        ? setMinutes(setHours(data.startDate, parseInt(data.startTime.split(':')[0])), parseInt(data.startTime.split(':')[1]))
+        : data.startDate;
+        
+    const endDateTime = data.endTime
+        ? setMinutes(setHours(data.endDate, parseInt(data.endTime.split(':')[0])), parseInt(data.endTime.split(':')[1]))
+        : data.endDate;
+
+    return endDateTime >= startDateTime;
+}, {
+    message: "End date and time must be after the start date and time.",
+    path: ["endDate"],
 });
+
 
 type FormValues = z.infer<typeof formSchema>;
 
@@ -56,21 +77,31 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
   
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
+    defaultValues: {
+        hasEndTime: false,
+    }
   });
+
+  const hasEndTime = form.watch('hasEndTime');
 
   useEffect(() => {
     if (open) {
       if (event) {
         form.reset({
             ...event,
-            time: format(event.date, 'HH:mm'),
+            startTime: event.startDate ? format(event.startDate, 'HH:mm') : undefined,
+            hasEndTime: !!event.endDate,
+            endTime: event.endDate ? format(event.endDate, 'HH:mm') : undefined,
         });
       } else {
         form.reset({
             title: '',
             description: '',
-            date: new Date(),
-            time: format(new Date(), 'HH:mm'),
+            startDate: new Date(),
+            startTime: format(new Date(), 'HH:mm'),
+            hasEndTime: false,
+            endDate: undefined,
+            endTime: undefined,
             imageUrl: '',
         });
       }
@@ -78,13 +109,23 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
   }, [open, event, form]);
 
   function onSubmit(values: FormValues) {
-    const [hours, minutes] = values.time.split(':').map(Number);
-    const combinedDate = setMinutes(setHours(values.date, hours), minutes);
+    const finalStartDate = values.startTime 
+        ? setMinutes(setHours(values.startDate, parseInt(values.startTime.split(':')[0])), parseInt(values.startTime.split(':')[1]))
+        : values.startDate;
+
+    let finalEndDate: Date | undefined;
+    if (values.hasEndTime && values.endDate) {
+        finalEndDate = values.endTime
+            ? setMinutes(setHours(values.endDate, parseInt(values.endTime.split(':')[0])), parseInt(values.endTime.split(':')[1]))
+            : values.endDate;
+    }
+
 
     const finalData = {
         title: values.title,
         description: values.description,
-        date: combinedDate,
+        startDate: finalStartDate,
+        endDate: finalEndDate,
         imageUrl: values.imageUrl || undefined,
     }
 
@@ -99,13 +140,13 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <DialogHeader>
               <DialogTitle>{event ? 'Edit' : 'Add'} Community Event</DialogTitle>
               <DialogDescription>
-                Fill in the details for the event.
+                Fill in the details for the event. Times are optional for all-day events.
               </DialogDescription>
             </DialogHeader>
 
@@ -140,10 +181,10 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
             <div className="grid grid-cols-2 gap-4">
                  <FormField
                     control={form.control}
-                    name="date"
+                    name="startDate"
                     render={({ field }) => (
                         <FormItem className="flex flex-col">
-                        <FormLabel>Date</FormLabel>
+                        <FormLabel>Start Date</FormLabel>
                         <Popover>
                             <PopoverTrigger asChild>
                             <FormControl>
@@ -168,7 +209,6 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
                                 mode="single"
                                 selected={field.value}
                                 onSelect={field.onChange}
-                                disabled={(date) => date < new Date()}
                                 initialFocus
                             />
                             </PopoverContent>
@@ -179,10 +219,10 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
                 />
                  <FormField
                     control={form.control}
-                    name="time"
+                    name="startTime"
                     render={({ field }) => (
                         <FormItem>
-                        <FormLabel>Time</FormLabel>
+                        <FormLabel>Start Time (Optional)</FormLabel>
                         <FormControl>
                             <Input type="time" {...field} />
                         </FormControl>
@@ -191,6 +231,83 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
                     )}
                 />
             </div>
+            
+            <FormField
+              control={form.control}
+              name="hasEndTime"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <FormLabel>Add end date & time</FormLabel>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            {hasEndTime && (
+                 <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                        control={form.control}
+                        name="endDate"
+                        render={({ field }) => (
+                            <FormItem className="flex flex-col">
+                            <FormLabel>End Date</FormLabel>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <FormControl>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                        "pl-3 text-left font-normal",
+                                        !field.value && "text-muted-foreground"
+                                    )}
+                                    >
+                                    {field.value ? (
+                                        format(field.value, "PPP")
+                                    ) : (
+                                        <span>Pick a date</span>
+                                    )}
+                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    disabled={(date) => date < form.getValues('startDate')}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="endTime"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>End Time (Optional)</FormLabel>
+                            <FormControl>
+                                <Input type="time" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+            )}
+
+
              <FormField
               control={form.control}
               name="imageUrl"
