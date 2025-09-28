@@ -3,7 +3,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   Sidebar,
@@ -49,6 +49,7 @@ import { useAuth } from '@/context/auth-context';
 import type { UserRole } from '@/types';
 import { useIsClient } from '@/hooks/use-is-client';
 import { Button } from '@/components/ui/button';
+import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
@@ -59,7 +60,7 @@ const allMenuItems = [
   { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/renters', label: 'My Renters', icon: KeyRound, roles: ['Homeowner'] },
   { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/gate-pass', label: 'Gate Pass', icon: BadgeCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/gate-pass', label: 'Gate Pass', icon: BadgeCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/updates', label: 'Updates', icon: ClipboardList, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
@@ -84,6 +85,7 @@ export default function DashboardLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
   const isClient = useIsClient();
+  const [isPassOpen, setPassOpen] = useState(false);
 
   useEffect(() => {
     if (isClient && !loading && !user) {
@@ -96,7 +98,7 @@ export default function DashboardLayout({
     
     // Always show profile link for Staff
     if (user.role === 'Staff') {
-        return allMenuItems.filter(item => item.href === '/dashboard/profile');
+        return allMenuItems.filter(item => item.href === '/dashboard/profile' || item.href === '/dashboard/gate-pass');
     }
 
     // A regular admin should not see the full directory, but the user management page
@@ -119,6 +121,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <MyGatePassDialog open={isPassOpen} onOpenChange={setPassOpen} />
       <Sidebar>
         <SidebarHeader>
           <Logo />
@@ -156,7 +159,7 @@ export default function DashboardLayout({
             />
           </div>
           <div className="hidden items-center gap-2 sm:flex">
-             <Button variant="ghost" size="icon">
+             <Button variant="ghost" size="icon" onClick={() => setPassOpen(true)}>
                 <QrCode className="h-5 w-5" />
                 <span className="sr-only">View Gate Pass</span>
             </Button>

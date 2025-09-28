@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -80,6 +81,8 @@ export default function GatePassPage() {
         ? staffList
         : staffList.filter(s => s.addedBy === user?.uid);
 
+    const canManageStaff = user?.role !== 'Security' && user?.role !== 'Staff';
+
     const getStatusVariant = (status: Staff['status']) => {
         switch (status) {
             case 'Active': return 'secondary';
@@ -140,19 +143,21 @@ export default function GatePassPage() {
                         A list of all personnel with long-term gate access.
                     </CardDescription>
                 </div>
-                <StaffForm
-                    open={isFormOpen}
-                    onOpenChange={setFormOpen}
-                    onSave={handleSaveStaff}
-                    staff={staffToEdit}
-                >
-                    <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
-                        <PlusCircle className="h-3.5 w-3.5" />
-                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                            Add Staff
-                        </span>
-                    </Button>
-                </StaffForm>
+                {canManageStaff && (
+                    <StaffForm
+                        open={isFormOpen}
+                        onOpenChange={setFormOpen}
+                        onSave={handleSaveStaff}
+                        staff={staffToEdit}
+                    >
+                        <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
+                            <PlusCircle className="h-3.5 w-3.5" />
+                            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                                Add Staff
+                            </span>
+                        </Button>
+                    </StaffForm>
+                )}
             </CardHeader>
             <CardContent>
                 <Table>
@@ -195,10 +200,14 @@ export default function GatePassPage() {
                                             <DropdownMenuItem onClick={() => setSelectedStaff(staff)}>
                                                 View Pass
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={() => handleOpenForm(staff)}>Edit Details</DropdownMenuItem>
-                                            <DropdownMenuItem>Update ID</DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                             <DropdownMenuItem className="text-destructive" onClick={() => handleRevokeAccess(staff.id)}>Revoke Access</DropdownMenuItem>
+                                            {canManageStaff && (
+                                                <>
+                                                    <DropdownMenuItem onClick={() => handleOpenForm(staff)}>Edit Details</DropdownMenuItem>
+                                                    <DropdownMenuItem>Update ID</DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem className="text-destructive" onClick={() => handleRevokeAccess(staff.id)}>Revoke Access</DropdownMenuItem>
+                                                </>
+                                            )}
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </TableCell>

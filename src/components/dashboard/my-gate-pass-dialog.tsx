@@ -1,0 +1,122 @@
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import QRCode from "react-qr-code";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Badge } from '../ui/badge';
+import { Smartphone, Apple } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useIsClient } from '@/hooks/use-is-client';
+import { useAuth } from '@/context/auth-context';
+
+type MyGatePassDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+function getOperatingSystem(): 'iOS' | 'Android' | 'Other' {
+    if (typeof window === 'undefined') return 'Other';
+    const userAgent = window.navigator.userAgent;
+    if (/iPad|iPhone|iPod/.test(userAgent)) return 'iOS';
+    if (/Android/.test(userAgent)) return 'Android';
+    return 'Other';
+}
+
+export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) {
+  const { user } = useAuth();
+  const isClient = useIsClient();
+  const [os, setOs] = useState<'iOS' | 'Android' | 'Other'>('Other');
+  
+  useEffect(() => {
+    if (isClient) {
+        setOs(getOperatingSystem());
+    }
+  }, [isClient]);
+
+  // This simulates the JWS token that would be returned from a backend function.
+  const getSimulatedJwsToken = () => {
+    if (!user) return 'invalid-user';
+    const header = btoa(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
+    const payload = btoa(JSON.stringify({
+        sub: `user:${user.uid}`,
+        name: user.displayName,
+        role: user.role,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60, // Expires in 60 seconds for security
+    }));
+    const signature = btoa('mock-signature-for-ui-testing'); // This is not a real signature
+    return `${header}.${payload}.${signature}`;
+  };
+
+  const [qrValue, setQrValue] = useState(getSimulatedJwsToken());
+
+  useEffect(() => {
+    if (open) {
+        // Set a new token when the dialog opens
+        setQrValue(getSimulatedJwsToken());
+        // Then, create an interval to rotate the token every 30 seconds
+        const interval = setInterval(() => {
+            setQrValue(getSimulatedJwsToken());
+        }, 30000); // 30 seconds
+
+        // Clear the interval when the dialog closes
+        return () => clearInterval(interval);
+    }
+  }, [open, user]);
+
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Digital Gate Pass</DialogTitle>
+          <DialogDescription>
+            Present this pass at the security gate for entry. This code rotates for security.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="bg-gradient-to-br from-primary/80 to-accent/80 p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden">
+            <div className="absolute top-2 right-2 flex items-center gap-1 text-xs bg-black/20 px-2 py-1 rounded-full">
+               {os === 'iOS' ? <Apple className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
+               <span>{os} Wallet</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16 border-2 border-white/50">
+                    <AvatarImage src={`https://picsum.photos/100?q=${user.uid}`} alt={user.name} data-ai-hint="person face" />
+                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                    <p className="text-muted-foreground text-sm">{user.role}</p>
+                    <h3 className="font-bold text-xl">{user.displayName}</h3>
+                </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-white rounded-md flex justify-center">
+                 <QRCode value={qrValue} size={160} />
+            </div>
+
+             <div className="text-center mt-4 text-xs text-white/80">
+                <p>Tap QR code to activate NFC</p>
+            </div>
+            
+             <Badge className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-green-500">
+                Active
+            </Badge>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
