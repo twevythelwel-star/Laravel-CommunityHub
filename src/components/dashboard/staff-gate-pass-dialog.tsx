@@ -41,12 +41,22 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
     }
   }, [isClient]);
 
-  const qrValue = JSON.stringify({
-    staffId: staff.id,
-    name: staff.name,
-    property: staff.property,
-    timestamp: new Date().toISOString(),
-  });
+  // This simulates the JWS token that would be returned from the `mintPass` cloud function.
+  // A real implementation would call the backend function here to get a live token.
+  const getSimulatedJwsToken = () => {
+    const header = btoa(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
+    const payload = btoa(JSON.stringify({
+        sub: `staff:${staff.id}`,
+        name: staff.name,
+        role: "staff",
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60, // Expires in 60 seconds
+    }));
+    const signature = btoa('mock-signature-for-ui-testing'); // This is not a real signature
+    return `${header}.${payload}.${signature}`;
+  };
+
+  const qrValue = getSimulatedJwsToken();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,7 +64,7 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
         <DialogHeader>
           <DialogTitle>Digital Gate Pass</DialogTitle>
           <DialogDescription>
-            Present this pass at the security gate for entry.
+            Present this pass at the security gate for entry. This code rotates periodically.
           </DialogDescription>
         </DialogHeader>
         
