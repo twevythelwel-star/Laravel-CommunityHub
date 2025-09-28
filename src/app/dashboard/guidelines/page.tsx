@@ -38,6 +38,9 @@ const mockGuidelines: Guideline[] = [
     { id: 'g_4', category: 'Property Maintenance', title: 'Exterior Modifications', description: 'Any changes to the exterior of a home, including painting, requires prior approval from the Architectural Review Committee.' },
     { id: 'g_5', category: 'Amenities Usage', title: 'Pool Hours', description: 'The community pool is open from 9:00 AM to 9:00 PM, from May 1st to September 30th. No lifeguard on duty.' },
     { id: 'g_6', category: 'Amenities Usage', title: 'Clubhouse Booking', description: 'The clubhouse can be reserved for private events by contacting the HOA office at least two weeks in advance. A security deposit is required.' },
+    { id: 'g_7', category: 'Security Policies', title: 'Visitor Registration', description: 'All visitors must be registered in the app at least 24 hours prior to their arrival. Unregistered visitors may be denied entry.' },
+    { id: 'g_8', category: 'Security Policies', title: 'Gate Access', description: 'Do not tailgate or allow other vehicles to follow you through the gate. Each vehicle must use its own access credential.' },
+    { id: 'g_9', category: 'Security Policies', title: 'Emergency Procedures', description: 'In case of a security emergency, contact the front gate at (555) 123-4567 or dial 911 for immediate assistance.' },
 ];
 
 export default function GuidelinesPage() {
