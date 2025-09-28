@@ -8,6 +8,7 @@ import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider, useTheme } from '@/context/theme-context';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useEffect, useState } from 'react';
+import { Toaster } from './ui/toaster';
 
 function FontLoader() {
     const { theme } = useTheme();
@@ -56,6 +57,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                     <BrandingProvider>
                         <BillingProvider>
                             {children}
+                            <Toaster />
                         </BillingProvider>
                     </BrandingProvider>
                 </AuthProvider>
@@ -63,4 +65,3 @@ export function Providers({ children }: { children: React.ReactNode }) {
         </ThemeProvider>
     )
 }
-
