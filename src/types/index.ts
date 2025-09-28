@@ -55,8 +55,9 @@ export type Warning = {
 export type CommunityEvent = {
   id: string;
   title: string;
-  date: Date;
   description: string;
+  date: Date;
+  imageUrl?: string;
 };
 
 export type CommunityUpdate = {
