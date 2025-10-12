@@ -81,6 +81,16 @@ const mockStaff: Staff[] = [
     },
 ];
 
+const highContrastColors = [
+  "#000000", // Black
+  "#083344", // Dark Cyan
+  "#4A044E", // Dark Magenta
+  "#701A75", // Dark Fuchsia
+  "#004225", // Dark Green
+  "#4B0082", // Indigo
+  "#8B0000", // Dark Red
+];
+
 function AdminSecurityView() {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -92,6 +102,8 @@ function AdminSecurityView() {
     const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
     const [staffToEdit, setStaffToEdit] = useState<Staff | undefined>(undefined);
     const [isFormOpen, setFormOpen] = useState(false);
+    const [qrColor, setQrColor] = useState(highContrastColors[0]);
+
     
     const isAdmin = user?.role === 'Admin' || user?.role === 'System Admin';
 
@@ -101,6 +113,8 @@ function AdminSecurityView() {
     );
     
     const handleViewUserPass = (user: ManagedUser) => {
+        const randomIndex = Math.floor(Math.random() * highContrastColors.length);
+        setQrColor(highContrastColors[randomIndex]);
         setSelectedUser(user);
         setPassOpen(true);
     };
@@ -197,7 +211,7 @@ function AdminSecurityView() {
                             </div>
 
                             <div className="mt-6 p-4 bg-white rounded-md flex justify-center">
-                                <QRCode value={`https://communityapp.com/id/${selectedUser.id}`} size={160} />
+                                <QRCode value={`https://communityapp.com/id/${selectedUser.id}`} size={160} fgColor={qrColor} bgColor="#FFFFFF" />
                             </div>
                             
                             <Badge className={selectedUser.status === 'Active' ? 'bg-green-500' : 'bg-destructive'}>
@@ -370,7 +384,7 @@ export default function GatePassPage() {
         if (user?.role === 'Security') {
             return 'Verify residents, renters, and staff by searching the digital ID directories.';
         }
-        return 'View your digital gate pass.';
+        return 'Click the QR Code icon in the header to view your personal gate pass.';
     }
 
     return (
