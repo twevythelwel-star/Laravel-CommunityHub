@@ -207,7 +207,7 @@ export default function VisitorsPage() {
                       <Label htmlFor="id-number" className="text-right">ID #</Label>
                       <Input id="id-number" placeholder="Identification Number" className="col-span-3" />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
+                   <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="id-picture" className="text-right">ID Picture</Label>
                       <Input id="id-picture" type="file" className="col-span-3" />
                   </div>
