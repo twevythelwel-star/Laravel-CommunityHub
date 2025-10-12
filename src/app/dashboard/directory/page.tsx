@@ -245,7 +245,7 @@ export default function DirectoryPage() {
                                                                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                                     <AlertDialogDescription>
                                                                         This will permanently delete the user "{person.name}". This action cannot be undone.
-                                                                    </AlertDialogDescription>
+                                                                    </Description>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
