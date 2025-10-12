@@ -177,3 +177,12 @@ export type Guideline = {
   title: string;
   description: string;
 };
+
+export type AccessLogEntry = {
+    id: string;
+    userName: string;
+    userRole: UserRole;
+    method: 'Digital Pass' | 'Staff Pass' | 'Visitor Pass' | 'Manual Entry';
+    gate: 'Main Gate' | 'Service Gate' | 'Pedestrian Gate';
+    timestamp: Date;
+};

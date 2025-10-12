@@ -41,6 +41,7 @@ import {
   UserX,
   Users,
   BadgeCheck,
+  ListTree,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
@@ -66,6 +67,7 @@ const allMenuItems = [
   { href: '/dashboard/updates', label: 'Updates', icon: ClipboardList, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/warnings', label: 'Warnings', icon: Siren, roles: ['System Admin', 'Admin', 'Homeowner', 'Security'] },
   { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/access-log', label: 'Access Log', icon: ListTree, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/users', label: 'User Management', icon: UserCog, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
@@ -73,7 +75,7 @@ const allMenuItems = [
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner'] },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['Staff'] },
+  { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['Staff', 'Security'] },
 ];
 
 export default function DashboardLayout({
@@ -108,7 +110,13 @@ export default function DashboardLayout({
     const filteredItems = allMenuItems.filter(item => item.roles.includes(user.role));
 
     if (user.role === 'Security') {
-      return filteredItems.filter(item => item.href !== '/dashboard/updates');
+      // Show profile link explicitly for security
+      const securityItems = allMenuItems.filter(item => item.roles.includes(user.role));
+      const profileItem = allMenuItems.find(item => item.href === '/dashboard/profile');
+      if (profileItem && !securityItems.some(i => i.href === '/dashboard/profile')) {
+        return [...securityItems, profileItem];
+      }
+      return securityItems;
     }
 
     return filteredItems;

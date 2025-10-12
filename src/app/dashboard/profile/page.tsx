@@ -17,10 +17,12 @@ import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Building2 } from 'lucide-react';
 import Image from 'next/image';
+import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 
 export default function ProfilePage() {
     const { user, updateUser } = useAuth();
     const { toast } = useToast();
+    const [isPassOpen, setPassOpen] = useState(false);
 
     // Initialize state from user context
     const [displayName, setDisplayName] = useState(user?.displayName || '');
@@ -44,6 +46,8 @@ export default function ProfilePage() {
     // Security Role View
     if (user.role === 'Security') {
         return (
+            <>
+            <MyGatePassDialog open={isPassOpen} onOpenChange={setPassOpen} />
              <div className="grid gap-8">
                 <div>
                     <h1 className="font-headline text-3xl font-bold">Security Profile</h1>
@@ -77,12 +81,14 @@ export default function ProfilePage() {
                                 <Input value={user.phone} disabled />
                             </div>
                         </div>
+                        <Button onClick={() => setPassOpen(true)}>View My Access Pass</Button>
                         <p className="text-sm text-muted-foreground pt-4">
                             To update this information, please contact a System Administrator.
                         </p>
                     </CardContent>
                 </Card>
             </div>
+            </>
         )
     }
 
