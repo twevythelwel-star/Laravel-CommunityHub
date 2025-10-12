@@ -69,7 +69,6 @@ const allMenuItems = [
   { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/access-log', label: 'Access Log', icon: ListTree, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner'] },
-  { href: '/dashboard/users', label: 'User Management', icon: UserCog, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
   { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin'] },
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
@@ -103,10 +102,6 @@ export default function DashboardLayout({
         return allMenuItems.filter(item => item.href === '/dashboard/profile' || item.href === '/dashboard/gate-pass');
     }
 
-    // A regular admin should not see the full directory, but the user management page
-    if (user.role === 'Admin') {
-      return allMenuItems.filter(item => item.href !== '/dashboard/directory' && item.roles.includes(user.role));
-    }
     const filteredItems = allMenuItems.filter(item => item.roles.includes(user.role));
 
     if (user.role === 'Security') {

@@ -23,17 +23,17 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
 import type { ManagedUser, UserRole } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useEffect } from 'react';
 
-const creatableRoles: UserRole[] = ["Homeowner", "Temporary Homeowner", "Security"];
+const creatableRoles: UserRole[] = ["Homeowner", "Temporary Homeowner", "Security", "Admin"];
 
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
   email: z.string().email('Please enter a valid email address.'),
-  password: z.string().min(8, 'Password must be at least 8 characters.'),
   role: z.enum(creatableRoles),
+  status: z.enum(['Active', 'Inactive']),
   lotNumber: z.string().optional(),
   streetName: z.string().optional(),
 }).refine(data => {
@@ -46,57 +46,70 @@ const formSchema = z.object({
     path: ['lotNumber'], // Show error on the first of the two fields
 });
 
+type FormValues = z.infer<typeof formSchema>;
 
 type CreateUserFormProps = {
   children: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreateUser: (newUser: Omit<ManagedUser, 'id' | 'createdAt'>) => void;
+  onSaveUser: (data: Omit<ManagedUser, 'id' | 'createdAt'>, id?: string) => void;
+  userToEdit?: ManagedUser;
 };
 
-export function CreateUserForm({ children, open, onOpenChange, onCreateUser }: CreateUserFormProps) {
-  const { toast } = useToast();
-  const form = useForm<z.infer<typeof formSchema>>({
+export function CreateUserForm({ children, open, onOpenChange, onSaveUser, userToEdit }: CreateUserFormProps) {
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: '',
       email: '',
-      password: '',
       role: 'Homeowner',
+      status: 'Active',
       lotNumber: '',
       streetName: '',
     },
   });
 
+  useEffect(() => {
+    if (open && userToEdit) {
+        form.reset({
+            name: userToEdit.name,
+            email: userToEdit.email,
+            role: userToEdit.role as any, // Cast because creatableRoles is a subset
+            status: userToEdit.status,
+            lotNumber: userToEdit.lotNumber || '',
+            streetName: userToEdit.streetName || '',
+        });
+    } else if (open && !userToEdit) {
+        form.reset({
+            name: '',
+            email: '',
+            role: 'Homeowner',
+            status: 'Active',
+            lotNumber: '',
+            streetName: '',
+        });
+    }
+  }, [open, userToEdit, form])
+
   const selectedRole = form.watch('role');
   const showAddressFields = selectedRole === 'Homeowner' || selectedRole === 'Temporary Homeowner';
 
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    onCreateUser({ ...values, status: 'Active' });
-    toast({
-      title: 'User Created',
-      description: `${values.name} has been added as a new ${values.role}.`,
-    });
-    form.reset();
+  function onSubmit(values: FormValues) {
+    onSaveUser(values, userToEdit?.id);
     onOpenChange(false);
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-        onOpenChange(isOpen);
-        if (!isOpen) {
-            form.reset();
-        }
-    }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <DialogHeader>
-              <DialogTitle>Create New User</DialogTitle>
+              <DialogTitle>{userToEdit ? 'Edit User' : 'Create New User'}</DialogTitle>
               <DialogDescription>
-                Fill out the form to create a new user account. They will be sent an invitation to set a permanent password.
+                {userToEdit ? `Update the profile details for ${userToEdit.name}.` : 'Fill out the form to create a new user account.'}
               </DialogDescription>
             </DialogHeader>
             
@@ -128,28 +141,52 @@ export function CreateUserForm({ children, open, onOpenChange, onCreateUser }: C
               )}
             />
             
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Role</FormLabel>
-                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                        {creatableRoles.map(role => (
-                            <SelectItem key={role} value={role}>{role}</SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+             <div className="grid grid-cols-2 gap-4">
+                <FormField
+                control={form.control}
+                name="role"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Role</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                        <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                            {creatableRoles.map(role => (
+                                <SelectItem key={role} value={role}>{role}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+                 <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                    <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                        <FormControl>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select a status" />
+                        </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           <SelectItem value="Active">Active</SelectItem>
+                           <SelectItem value="Inactive">Inactive</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <FormMessage />
+                    </FormItem>
+                )}
+                />
+            </div>
+
 
             {showAddressFields && (
                 <div className="grid grid-cols-2 gap-4">
@@ -181,24 +218,10 @@ export function CreateUserForm({ children, open, onOpenChange, onCreateUser }: C
                     />
                 </div>
             )}
-
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Temporary Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Create User</Button>
+              <Button type="submit">Save Changes</Button>
             </DialogFooter>
           </form>
         </Form>
