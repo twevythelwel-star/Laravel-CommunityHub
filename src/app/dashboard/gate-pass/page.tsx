@@ -31,6 +31,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import QRCode from 'react-qr-code';
 
 const mockUsers: ManagedUser[] = [
     { id: 'usr_ho_1', name: 'Olivia Davis', email: 'olivia.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2023-01-15T09:00:00Z'), lotNumber: '42', streetName: 'Main St' },
@@ -79,7 +81,7 @@ const mockStaff: Staff[] = [
     },
 ];
 
-function AdminView() {
+function DirectoryView() {
     const [allUsers] = useState<ManagedUser[]>(mockUsers);
     const [searchTerm, setSearchTerm] = useState('');
     const [isPassOpen, setPassOpen] = useState(false);
@@ -135,7 +137,7 @@ function AdminView() {
                 <CardHeader>
                     <CardTitle>Digital ID Directory</CardTitle>
                     <CardDescription>
-                        View and manage digital passes for all residents and renters.
+                        View and search for digital passes for all residents and renters.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -316,22 +318,35 @@ function HomeownerStaffView() {
 export default function GatePassPage() {
     const { user } = useAuth();
     
-    const isAdmin = user?.role === 'System Admin' || user?.role === 'Admin';
-    const isHomeownerOrRenter = user?.role === 'Homeowner' || user?.role === 'Temporary Homeowner';
+    const canManageDirectory = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security';
+    const canManageStaff = user?.role === 'Homeowner' || user?.role === 'Temporary Homeowner';
+
+    const getPageDescription = () => {
+        if (canManageDirectory && user?.role !== 'Security') {
+            return 'Manage digital IDs for all residents and renters.';
+        }
+        if (user?.role === 'Security') {
+            return 'Verify residents and renters by searching the digital ID directory.';
+        }
+        if (canManageStaff) {
+            return 'Manage long-term access for your personal staff.';
+        }
+        return 'View your digital gate pass and related information.';
+    }
 
     return (
         <div className="grid gap-8">
             <div>
                 <h1 className="font-headline text-3xl font-bold">Gate Pass Management</h1>
                 <p className="text-muted-foreground">
-                    {isAdmin ? 'Manage digital IDs for all residents and renters.' : 'Manage long-term access for your personal staff.'}
+                    {getPageDescription()}
                 </p>
             </div>
             
-            {isAdmin && <AdminView />}
-            {isHomeownerOrRenter && <HomeownerStaffView />}
+            {canManageDirectory && <DirectoryView />}
+            {canManageStaff && <HomeownerStaffView />}
             
-            {(user?.role === 'Security' || user?.role === 'Staff') && (
+            {(user?.role === 'Staff') && (
                 <Card>
                     <CardHeader>
                         <CardTitle>Access Denied</CardTitle>
