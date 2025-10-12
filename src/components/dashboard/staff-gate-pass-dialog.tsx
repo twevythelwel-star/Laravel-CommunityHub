@@ -102,7 +102,7 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
             </div>
 
             <div className="mt-6 p-4 bg-white rounded-md flex justify-center">
-                 <QRCode value={qrValue} size={160} />
+                 <QRCode value={qrValue} size={160} fgColor="hsl(var(--primary))" bgColor="hsl(var(--card))" />
             </div>
 
              <div className="text-center mt-4 text-xs text-white/80">
