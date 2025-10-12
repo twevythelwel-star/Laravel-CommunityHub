@@ -100,7 +100,7 @@ export default function DirectoryPage() {
   const handleSaveUser = (data: Omit<ManagedUser, 'id' | 'createdAt'>, id?: string) => {
     if (id) {
         // Update
-        setUsers(users.map(u => u.id === id ? { ...u, ...data } : u));
+        setUsers(users.map(u => u.id === id ? { ...u, ...data, createdAt: u.createdAt } : u));
         toast({ title: 'User Updated', description: `${data.name}'s profile has been updated.` });
     } else {
         // Create
@@ -245,7 +245,7 @@ export default function DirectoryPage() {
                                                                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                                     <AlertDialogDescription>
                                                                         This will permanently delete the user "{person.name}". This action cannot be undone.
-                                                                    </Description>
+                                                                    </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -272,7 +272,7 @@ export default function DirectoryPage() {
                                             )}
                                         </CardContent>
                                     </Card>
-                                )})}
+                                );})}
                             </AccordionContent>
                         </AccordionItem>
                     )
