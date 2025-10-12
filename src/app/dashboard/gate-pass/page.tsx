@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -33,6 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import QRCode from 'react-qr-code';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const mockUsers: ManagedUser[] = [
     { id: 'usr_ho_1', name: 'Olivia Davis', email: 'olivia.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2023-01-15T09:00:00Z'), lotNumber: '42', streetName: 'Main St' },
@@ -81,20 +81,26 @@ const mockStaff: Staff[] = [
     },
 ];
 
-function DirectoryView() {
+function AdminSecurityView() {
     const { user } = useAuth();
     const { toast } = useToast();
     const [allUsers] = useState<ManagedUser[]>(mockUsers);
+    const [staffList, setStaffList] = useState<Staff[]>(mockStaff);
     const [searchTerm, setSearchTerm] = useState('');
     const [isPassOpen, setPassOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
+    const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+    const [staffToEdit, setStaffToEdit] = useState<Staff | undefined>(undefined);
+    const [isFormOpen, setFormOpen] = useState(false);
+    
+    const isAdmin = user?.role === 'Admin' || user?.role === 'System Admin';
 
     const filteredUsers = allUsers.filter(user => 
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
         (user.role === 'Homeowner' || user.role === 'Temporary Homeowner')
     );
     
-    const handleViewPass = (user: ManagedUser) => {
+    const handleViewUserPass = (user: ManagedUser) => {
         setSelectedUser(user);
         setPassOpen(true);
     };
@@ -102,7 +108,6 @@ function DirectoryView() {
     const handleAllowAccess = () => {
         if (!selectedUser) return;
         
-        // In a real app, you would record this event to your backend/access log.
         console.log(`Access granted for ${selectedUser.name} by ${user?.displayName}.`);
         
         toast({
@@ -126,11 +131,50 @@ function DirectoryView() {
         setPassOpen(false);
         setSelectedUser(null);
     };
+    
+    const getStatusVariant = (status: Staff['status']) => {
+        switch (status) {
+            case 'Active': return 'secondary';
+            case 'Inactive': return 'outline';
+            case 'Expired ID': return 'destructive';
+            default: return 'default';
+        }
+    }
+
+    const handleOpenForm = (staff?: Staff) => {
+        setStaffToEdit(staff);
+        setFormOpen(true);
+    };
+
+    const handleSaveStaff = (data: Omit<Staff, 'id' | 'addedBy'>, id?: string) => {
+        if (id) {
+            setStaffList(staffList.map(s => s.id === id ? { ...s, ...data } : s));
+            toast({ title: "Staff Updated", description: `${data.name}'s details have been updated.`});
+        } else {
+            const newStaff: Staff = {
+                id: `staff_${Date.now()}`,
+                ...data,
+                addedBy: user!.uid,
+            };
+            setStaffList([newStaff, ...staffList]);
+            toast({ title: "Staff Added", description: `${data.name} has been registered.`});
+        }
+    };
+    
+    const handleRevokeAccess = (staffId: string) => {
+        setStaffList(staffList.map(s => s.id === staffId ? { ...s, status: 'Inactive' } : s));
+        toast({
+            variant: "destructive",
+            title: "Access Revoked",
+            description: "The staff member's access has been set to inactive."
+        });
+    }
+
 
     return (
         <>
             {selectedUser && (
-                 <Dialog open={isPassOpen} onOpenChange={setPassOpen}>
+                 <Dialog open={isPassOpen} onOpenChange={(isOpen) => !isOpen && setSelectedUser(null)}>
                     <DialogContent className="sm:max-w-sm">
                         <DialogHeader>
                         <DialogTitle>Digital Gate Pass</DialogTitle>
@@ -171,184 +215,145 @@ function DirectoryView() {
                     </DialogContent>
                 </Dialog>
             )}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Digital ID Directory</CardTitle>
-                    <CardDescription>
-                        View and search for digital passes for all residents and renters.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search by name..." 
-                            className="pl-8" 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {filteredUsers.map(user => (
-                            <Card key={user.id}>
-                                <CardContent className="pt-6 flex flex-col items-center text-center gap-4">
-                                    <Avatar className="h-20 w-20">
-                                        <AvatarImage src={`https://picsum.photos/200?q=${user.id}`} data-ai-hint="person avatar" />
-                                        <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                    </Avatar>
-                                    <div>
-                                        <p className="font-semibold">{user.name}</p>
-                                        <p className="text-sm text-muted-foreground">Lot {user.lotNumber}, {user.streetName}</p>
-                                         <Badge className="mt-2" variant={user.status === 'Active' ? 'secondary' : 'outline'}>
-                                            {user.status}
-                                        </Badge>
-                                    </div>
-                                    <Button variant="outline" size="sm" onClick={() => handleViewPass(user)}>
-                                        View Pass
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                </CardContent>
-            </Card>
-        </>
-    );
-}
-
-
-function HomeownerStaffView() {
-    const { user } = useAuth();
-    const { toast } = useToast();
-    const [staffList, setStaffList] = useState<Staff[]>(mockStaff);
-    const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
-    const [staffToEdit, setStaffToEdit] = useState<Staff | undefined>(undefined);
-    const [isFormOpen, setFormOpen] = useState(false);
-    
-    // In a real app, filtering would be based on the logged-in user's properties or all properties for admins.
-    const visibleStaff = staffList.filter(s => s.addedBy === user?.uid);
-
-    const getStatusVariant = (status: Staff['status']) => {
-        switch (status) {
-            case 'Active': return 'secondary';
-            case 'Inactive': return 'outline';
-            case 'Expired ID': return 'destructive';
-            default: return 'default';
-        }
-    }
-
-    const handleOpenForm = (staff?: Staff) => {
-        setStaffToEdit(staff);
-        setFormOpen(true);
-    };
-
-    const handleSaveStaff = (data: Omit<Staff, 'id' | 'addedBy'>, id?: string) => {
-        if (id) {
-            setStaffList(staffList.map(s => s.id === id ? { ...s, ...data } : s));
-            toast({ title: "Staff Updated", description: `${data.name}'s details have been updated.`});
-        } else {
-            const newStaff: Staff = {
-                id: `staff_${Date.now()}`,
-                ...data,
-                addedBy: user!.uid, // Safe to assume user exists
-            };
-            setStaffList([newStaff, ...staffList]);
-            toast({ title: "Staff Added", description: `${data.name} has been registered.`});
-        }
-    };
-    
-    const handleRevokeAccess = (staffId: string) => {
-        setStaffList(staffList.map(s => s.id === staffId ? { ...s, status: 'Inactive' } : s));
-        toast({
-            variant: "destructive",
-            title: "Access Revoked",
-            description: "The staff member's access has been set to inactive."
-        });
-    }
-
-    return (
-        <>
-            {selectedStaff && (
+             {selectedStaff && (
                 <StaffGatePassDialog
                     staff={selectedStaff}
                     open={!!selectedStaff}
                     onOpenChange={() => setSelectedStaff(null)}
                 />
             )}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Registered Staff</CardTitle>
-                        <CardDescription>
-                            A list of all personnel you have registered for long-term gate access.
-                        </CardDescription>
-                    </div>
-                    <StaffForm
-                        open={isFormOpen}
-                        onOpenChange={setFormOpen}
-                        onSave={handleSaveStaff}
-                        staff={staffToEdit}
-                    >
-                        <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
-                            <PlusCircle className="h-3.5 w-3.5" />
-                            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                                Add Staff
-                            </span>
-                        </Button>
-                    </StaffForm>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Job / Role</TableHead>
-                                <TableHead>ID Expiry</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>
-                                    <span className="sr-only">Actions</span>
-                                </TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {visibleStaff.map((staff) => (
-                                <TableRow key={staff.id}>
-                                    <TableCell className="font-medium">{staff.name}</TableCell>
-                                    <TableCell>{staff.job}</TableCell>
-                                    <TableCell>
-                                        <ClientFormattedDate date={staff.idExpiry} formatString="MMM d, yyyy" />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={getStatusVariant(staff.status)}>
-                                            {staff.status}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                                <MoreHorizontal className="h-4 w-4" />
-                                                <span className="sr-only">Toggle menu</span>
+            
+            <Tabs defaultValue="residents" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="residents">Residents & Renters</TabsTrigger>
+                    <TabsTrigger value="staff">Staff</TabsTrigger>
+                </TabsList>
+                <TabsContent value="residents">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Digital ID Directory</CardTitle>
+                            <CardDescription>
+                                View and search for digital passes for all residents and renters.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Search by name..." 
+                                    className="pl-8" 
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {filteredUsers.map(user => (
+                                    <Card key={user.id}>
+                                        <CardContent className="pt-6 flex flex-col items-center text-center gap-4">
+                                            <Avatar className="h-20 w-20">
+                                                <AvatarImage src={`https://picsum.photos/200?q=${user.id}`} data-ai-hint="person avatar" />
+                                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="font-semibold">{user.name}</p>
+                                                <p className="text-sm text-muted-foreground">Lot {user.lotNumber}, {user.streetName}</p>
+                                                <Badge className="mt-2" variant={user.status === 'Active' ? 'secondary' : 'outline'}>
+                                                    {user.status}
+                                                </Badge>
+                                            </div>
+                                            <Button variant="outline" size="sm" onClick={() => handleViewUserPass(user)}>
+                                                View Pass
                                             </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => setSelectedStaff(staff)}>
-                                                    View Pass
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleOpenForm(staff)}>Edit Details</DropdownMenuItem>
-                                                <DropdownMenuItem>Update ID</DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem className="text-destructive" onClick={() => handleRevokeAccess(staff.id)}>Revoke Access</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="staff">
+                     <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Registered Staff</CardTitle>
+                                <CardDescription>
+                                    A list of all personnel registered for long-term gate access.
+                                </CardDescription>
+                            </div>
+                            {isAdmin && (
+                                <StaffForm
+                                    open={isFormOpen}
+                                    onOpenChange={setFormOpen}
+                                    onSave={handleSaveStaff}
+                                    staff={staffToEdit}
+                                >
+                                    <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
+                                        <PlusCircle className="h-3.5 w-3.5" />
+                                        <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                                            Add Staff
+                                        </span>
+                                    </Button>
+                                </StaffForm>
+                            )}
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Job / Role</TableHead>
+                                        <TableHead>ID Expiry</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>
+                                            <span className="sr-only">Actions</span>
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {staffList.map((staff) => (
+                                        <TableRow key={staff.id}>
+                                            <TableCell className="font-medium">{staff.name}</TableCell>
+                                            <TableCell>{staff.job}</TableCell>
+                                            <TableCell>
+                                                <ClientFormattedDate date={staff.idExpiry} formatString="MMM d, yyyy" />
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={getStatusVariant(staff.status)}>
+                                                    {staff.status}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                        <span className="sr-only">Toggle menu</span>
+                                                    </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => setSelectedStaff(staff)}>
+                                                            View Pass
+                                                        </DropdownMenuItem>
+                                                        {isAdmin && (
+                                                            <>
+                                                                <DropdownMenuItem onClick={() => handleOpenForm(staff)}>Edit Details</DropdownMenuItem>
+                                                                <DropdownMenuItem>Update ID</DropdownMenuItem>
+                                                                <DropdownMenuSeparator />
+                                                                <DropdownMenuItem className="text-destructive" onClick={() => handleRevokeAccess(staff.id)}>Revoke Access</DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </>
     );
 }
@@ -356,20 +361,16 @@ function HomeownerStaffView() {
 export default function GatePassPage() {
     const { user } = useAuth();
     
-    const canManageDirectory = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security';
-    const canManageStaff = user?.role === 'Homeowner' || user?.role === 'Temporary Homeowner';
+    const canManage = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security';
 
     const getPageDescription = () => {
-        if (canManageDirectory && user?.role !== 'Security') {
-            return 'Manage digital IDs for all residents and renters.';
+        if (user?.role === 'System Admin' || user?.role === 'Admin') {
+            return 'Manage digital IDs for all residents, renters, and staff.';
         }
         if (user?.role === 'Security') {
-            return 'Verify residents and renters by searching the digital ID directory.';
+            return 'Verify residents, renters, and staff by searching the digital ID directories.';
         }
-        if (canManageStaff) {
-            return 'Manage long-term access for your personal staff.';
-        }
-        return 'View your digital gate pass and related information.';
+        return 'View your digital gate pass.';
     }
 
     return (
@@ -381,17 +382,21 @@ export default function GatePassPage() {
                 </p>
             </div>
             
-            {canManageDirectory && <DirectoryView />}
-            {canManageStaff && <HomeownerStaffView />}
-            
-            {(user?.role === 'Staff') && (
+            {canManage ? <AdminSecurityView /> : (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Access Denied</CardTitle>
-                        <CardDescription>You do not have permission to manage gate passes.</CardDescription>
+                        <CardTitle>My Digital Pass</CardTitle>
+                        <CardDescription>Click the QR Code icon in the header to view your personal gate pass.</CardDescription>
                     </CardHeader>
+                     <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                            Only administrators and security can view the full directory of digital passes.
+                        </p>
+                    </CardContent>
                 </Card>
             )}
         </div>
     );
 }
+
+    
