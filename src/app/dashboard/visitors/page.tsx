@@ -135,6 +135,7 @@ export default function VisitorsPage() {
             visitor={selectedVisitor}
             open={!!selectedVisitor}
             onOpenChange={(isOpen) => !isOpen && setSelectedVisitor(null)}
+            onStatusChange={handleStatusChange}
         />
     )}
     <div className="flex flex-col gap-8">
@@ -414,5 +415,7 @@ export default function VisitorsPage() {
     </>
   );
 }
+
+    
 
     

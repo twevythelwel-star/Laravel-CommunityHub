@@ -11,24 +11,20 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, FileQuestion, Video, VideoOff } from 'lucide-react';
+import { Camera, Check, FileQuestion, Video, VideoOff } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
-
-type Visitor = {
-  id: string;
-  name: string;
-  idImageUrl?: string;
-};
+import type { Visitor, VisitorStatus } from '@/types';
 
 type VisitorIdModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   visitor: Visitor;
+  onStatusChange: (visitorId: string, newStatus: VisitorStatus) => void;
 };
 
-export function VisitorIdModal({ open, onOpenChange, visitor }: VisitorIdModalProps) {
+export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange }: VisitorIdModalProps) {
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -99,6 +95,11 @@ export function VisitorIdModal({ open, onOpenChange, visitor }: VisitorIdModalPr
     onOpenChange(isOpen);
   }
 
+  const handleAllowEntry = () => {
+    onStatusChange(visitor.id, 'Checked In');
+    onOpenChange(false); // Close the modal
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -141,6 +142,14 @@ export function VisitorIdModal({ open, onOpenChange, visitor }: VisitorIdModalPr
         </div>
 
         <DialogFooter className="sm:justify-center flex-col sm:flex-col sm:space-x-0 gap-2">
+            <Button 
+                type="button" 
+                onClick={handleAllowEntry} 
+                disabled={visitor.isBlocked || visitor.status === 'Checked In'}
+            >
+                <Check className="mr-2 h-4 w-4" />
+                Allow Entry
+            </Button>
            {isCapturing && hasCameraPermission && (
              <Button type="button">
                 <Camera className="mr-2 h-4 w-4" />
@@ -156,3 +165,5 @@ export function VisitorIdModal({ open, onOpenChange, visitor }: VisitorIdModalPr
     </Dialog>
   );
 }
+
+    
