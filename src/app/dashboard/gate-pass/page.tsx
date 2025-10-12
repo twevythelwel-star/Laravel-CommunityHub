@@ -31,7 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import QRCode from 'react-qr-code';
 
 const mockUsers: ManagedUser[] = [
@@ -82,6 +82,8 @@ const mockStaff: Staff[] = [
 ];
 
 function DirectoryView() {
+    const { user } = useAuth();
+    const { toast } = useToast();
     const [allUsers] = useState<ManagedUser[]>(mockUsers);
     const [searchTerm, setSearchTerm] = useState('');
     const [isPassOpen, setPassOpen] = useState(false);
@@ -96,6 +98,21 @@ function DirectoryView() {
         setSelectedUser(user);
         setPassOpen(true);
     };
+
+    const handleAllowAccess = () => {
+        if (!selectedUser) return;
+        
+        // In a real app, you would record this event to your backend/access log.
+        console.log(`Access granted for ${selectedUser.name} by ${user?.displayName}.`);
+        
+        toast({
+            title: "Access Granted",
+            description: `${selectedUser.name} has been granted entry. The event has been logged.`
+        });
+        
+        setPassOpen(false);
+        setSelectedUser(null);
+    }
 
     return (
         <>
@@ -130,6 +147,11 @@ function DirectoryView() {
                                 {selectedUser.status}
                             </Badge>
                         </div>
+                        {user?.role === 'Security' && (
+                            <DialogFooter>
+                                <Button onClick={handleAllowAccess} className="w-full">Allow Access</Button>
+                            </DialogFooter>
+                        )}
                     </DialogContent>
                 </Dialog>
             )}
