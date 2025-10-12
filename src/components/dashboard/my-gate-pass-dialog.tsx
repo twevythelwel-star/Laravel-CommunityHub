@@ -22,6 +22,16 @@ type MyGatePassDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+const highContrastColors = [
+  "#000000", // Black
+  "#083344", // Dark Cyan
+  "#4A044E", // Dark Magenta
+  "#701A75", // Dark Fuchsia
+  "#004225", // Dark Green
+  "#4B0082", // Indigo
+  "#8B0000", // Dark Red
+];
+
 function getOperatingSystem(): 'iOS' | 'Android' | 'Other' {
     if (typeof window === 'undefined') return 'Other';
     const userAgent = window.navigator.userAgent;
@@ -34,12 +44,21 @@ export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) 
   const { user } = useAuth();
   const isClient = useIsClient();
   const [os, setOs] = useState<'iOS' | 'Android' | 'Other'>('Other');
+  const [qrColor, setQrColor] = useState(highContrastColors[0]);
   
   useEffect(() => {
     if (isClient) {
         setOs(getOperatingSystem());
     }
   }, [isClient]);
+
+  useEffect(() => {
+    if (open) {
+      // Pick a new random color from the list each time the dialog is opened
+      const randomIndex = Math.floor(Math.random() * highContrastColors.length);
+      setQrColor(highContrastColors[randomIndex]);
+    }
+  }, [open]);
 
   // This simulates the JWS token that would be returned from a backend function.
   const getSimulatedJwsToken = () => {
@@ -105,7 +124,7 @@ export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) 
             </div>
 
             <div className="mt-6 p-4 bg-white rounded-md flex justify-center">
-                 <QRCode value={qrValue} size={160} fgColor="hsl(var(--primary))" bgColor="hsl(var(--card))" />
+                 <QRCode value={qrValue} size={160} fgColor={qrColor} bgColor="#FFFFFF" />
             </div>
 
              <div className="text-center mt-4 text-xs text-white/80">
