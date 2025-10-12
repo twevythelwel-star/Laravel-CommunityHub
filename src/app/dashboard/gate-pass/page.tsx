@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, PlusCircle, Search } from "lucide-react";
+import { MoreHorizontal, PlusCircle, Search, AlertTriangle } from "lucide-react";
 import type { Staff, ManagedUser } from "@/types";
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import { useAuth } from '@/context/auth-context';
@@ -114,6 +114,19 @@ function DirectoryView() {
         setSelectedUser(null);
     }
 
+    const handleReportMismatch = () => {
+        if (!selectedUser) return;
+
+        toast({
+            variant: "destructive",
+            title: "Security Alert: ID Mismatch",
+            description: `An alert has been logged for a potential impersonation attempt for ${selectedUser.name}. The user and admins have been notified.`,
+        });
+
+        setPassOpen(false);
+        setSelectedUser(null);
+    };
+
     return (
         <>
             {selectedUser && (
@@ -148,8 +161,11 @@ function DirectoryView() {
                             </Badge>
                         </div>
                         {user?.role === 'Security' && (
-                            <DialogFooter>
-                                <Button onClick={handleAllowAccess} className="w-full">Allow Access</Button>
+                            <DialogFooter className="flex-row justify-center gap-2">
+                                <Button onClick={handleAllowAccess} className="flex-1">Allow Access</Button>
+                                <Button onClick={handleReportMismatch} variant="destructive" className="flex-1">
+                                    <AlertTriangle className="mr-2 h-4 w-4" /> Report Mismatch
+                                </Button>
                             </DialogFooter>
                         )}
                     </DialogContent>
