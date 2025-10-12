@@ -116,6 +116,14 @@ export default function VisitorsPage() {
     })
   };
 
+  const handleReportMismatch = (visitor: Visitor) => {
+    toast({
+      variant: "destructive",
+      title: "Security Alert: ID Mismatch",
+      description: `Resident ${visitor.homeowner} has been notified about a potential impersonation attempt by someone claiming to be ${visitor.name}.`,
+    });
+  }
+
   const getStatusVariant = (status: VisitorStatus) => {
     switch (status) {
         case 'Checked In':
@@ -136,6 +144,7 @@ export default function VisitorsPage() {
             open={!!selectedVisitor}
             onOpenChange={(isOpen) => !isOpen && setSelectedVisitor(null)}
             onStatusChange={handleStatusChange}
+            onReportMismatch={handleReportMismatch}
         />
     )}
     <div className="flex flex-col gap-8">
@@ -248,11 +257,11 @@ export default function VisitorsPage() {
                             <SelectContent>{Array.from({length: 12}, (_,i)=> i+1).map(h => <SelectItem key={h} value={`${h}`}>{h}</SelectItem>)}</SelectContent>
                           </Select>
                            <Select defaultValue="00">
-                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
-                            <SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
+                            </SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                           </Select>
                           <Select defaultValue="PM">
-                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
+                            <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
                             <SelectContent>
                               <SelectItem value="AM">AM</SelectItem>
                               <SelectItem value="PM">PM</SelectItem>

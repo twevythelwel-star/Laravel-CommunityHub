@@ -11,7 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, Check, FileQuestion, Video, VideoOff } from 'lucide-react';
+import { Camera, Check, FileQuestion, Video, VideoOff, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -22,9 +22,10 @@ type VisitorIdModalProps = {
   onOpenChange: (open: boolean) => void;
   visitor: Visitor;
   onStatusChange: (visitorId: string, newStatus: VisitorStatus) => void;
+  onReportMismatch: (visitor: Visitor) => void;
 };
 
-export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange }: VisitorIdModalProps) {
+export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange, onReportMismatch }: VisitorIdModalProps) {
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -100,6 +101,11 @@ export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange }: 
     onOpenChange(false); // Close the modal
   };
 
+  const handleReportMismatch = () => {
+    onReportMismatch(visitor);
+    onOpenChange(false);
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -159,6 +165,10 @@ export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange }: 
             <Button type="button" variant="outline" onClick={handleCaptureClick}>
               {isCapturing ? <VideoOff className="mr-2 h-4 w-4" /> : <Video className="mr-2 h-4 w-4" />}
               {isCapturing ? 'Cancel Capture' : 'Capture New ID'}
+            </Button>
+             <Button type="button" variant="destructive" onClick={handleReportMismatch}>
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              Report ID Mismatch
             </Button>
         </DialogFooter>
       </DialogContent>
