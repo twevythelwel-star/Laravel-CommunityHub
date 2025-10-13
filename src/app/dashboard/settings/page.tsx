@@ -14,54 +14,81 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/auth-context";
 import { ThemeCustomizer } from "@/components/dashboard/theme-customizer";
-import { Textarea } from "@/components/ui/textarea";
 import { BrandingSettings } from "@/components/dashboard/branding-settings";
 import { useMap } from "@/context/map-context";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { Trash2 } from "lucide-react";
 
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const { coordinates, setCoordinates } = useMap();
   const { toast } = useToast();
-  const [coordsString, setCoordsString] = useState('');
+  const [localCoords, setLocalCoords] = useState<[number, number][]>([]);
 
   useEffect(() => {
-    // Format the coordinates from the context into a pretty-printed JSON string for the textarea
-    const formattedCoords = coordinates.map(c => ({ latitude: c[0], longitude: c[1] }));
-    setCoordsString(JSON.stringify(formattedCoords, null, 2));
+    setLocalCoords(coordinates);
   }, [coordinates]);
 
-  const isAdmin = user?.role === 'System Admin' || user?.role === 'Admin';
-  
-  const handleSaveMapCoords = () => {
-    try {
-        const parsed = JSON.parse(coordsString);
-        if (!Array.isArray(parsed)) throw new Error("Input must be an array.");
+  const handleCoordChange = (index: number, position: 'lat' | 'lon', value: string) => {
+    const newCoords = [...localCoords];
+    const numValue = parseFloat(value);
+    if (!isNaN(numValue)) {
+        newCoords[index] = position === 'lat'
+            ? [numValue, newCoords[index][1]]
+            : [newCoords[index][0], numValue];
+        setLocalCoords(newCoords);
+    }
+  };
 
-        const newCoords = parsed.map(item => {
-            if (typeof item.latitude !== 'number' || typeof item.longitude !== 'number') {
-                throw new Error("Each coordinate object must have 'latitude' and 'longitude' as numbers.");
-            }
-            return [item.latitude, item.longitude] as [number, number];
-        });
+  const addCoordinate = () => {
+    // Add a new coordinate pair, defaulting to the last one or a base value
+    const lastCoord = localCoords[localCoords.length - 1] || [18.47, -77.92];
+    setLocalCoords([...localCoords, [lastCoord[0] + 0.0001, lastCoord[1] + 0.0001]]);
+  };
 
-        setCoordinates(newCoords);
-        toast({
-            title: "Success",
-            description: "Map coordinates have been updated successfully.",
-        });
-    } catch (e) {
-        const error = e as Error;
-        console.error("Failed to parse map coordinates:", error);
+  const removeCoordinate = (index: number) => {
+    if (localCoords.length <= 3) {
         toast({
             variant: "destructive",
-            title: "Invalid JSON",
-            description: `Could not save coordinates. ${error.message}`,
+            title: "Minimum Coordinates",
+            description: "A polygon must have at least 3 points.",
         });
+        return;
     }
+    const newCoords = localCoords.filter((_, i) => i !== index);
+    setLocalCoords(newCoords);
+  };
+
+  const handleSaveMapCoords = () => {
+    // Basic validation
+    if (localCoords.some(c => isNaN(c[0]) || isNaN(c[1]))) {
+        toast({
+            variant: "destructive",
+            title: "Invalid Input",
+            description: "All latitude and longitude values must be valid numbers.",
+        });
+        return;
+    }
+    if (localCoords.length < 3) {
+         toast({
+            variant: "destructive",
+            title: "Invalid Shape",
+            description: "A polygon requires at least 3 coordinate points.",
+        });
+        return;
+    }
+
+    setCoordinates(localCoords);
+    toast({
+        title: "Success",
+        description: "Map coordinates have been updated successfully.",
+    });
   }
+
+  const isAdmin = user?.role === 'System Admin' || user?.role === 'Admin';
 
 
   return (
@@ -103,15 +130,40 @@ export default function SettingsPage() {
           <CardHeader>
             <CardTitle>Map Configuration</CardTitle>
             <CardDescription>
-              Define the community boundaries by providing polygon coordinates.
+              Define the community boundaries by providing an ordered list of polygon coordinates.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-2">
-                <Label htmlFor="map-coords">Polygon Coordinates (JSON format)</Label>
-                <Textarea id="map-coords" className="font-code h-48" value={coordsString} onChange={e => setCoordsString(e.target.value)} />
-            </div>
-            <Button onClick={handleSaveMapCoords}>Save Map Coordinates</Button>
+             <div className="space-y-4">
+                {localCoords.map((coord, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                        <Label className="w-10 text-center text-muted-foreground">{index + 1}.</Label>
+                        <div className="grid flex-1 grid-cols-2 gap-2">
+                            <Input 
+                                type="number" 
+                                placeholder="Latitude" 
+                                value={coord[0]}
+                                onChange={(e) => handleCoordChange(index, 'lat', e.target.value)}
+                                step="any"
+                            />
+                            <Input 
+                                type="number" 
+                                placeholder="Longitude" 
+                                value={coord[1]}
+                                onChange={(e) => handleCoordChange(index, 'lon', e.target.value)}
+                                step="any"
+                            />
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => removeCoordinate(index)} aria-label="Remove coordinate">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                    </div>
+                ))}
+             </div>
+             <div className="flex gap-2 pt-2">
+                <Button onClick={handleSaveMapCoords}>Save Map Coordinates</Button>
+                <Button variant="outline" onClick={addCoordinate}>Add Coordinate</Button>
+             </div>
           </CardContent>
         </Card>
       )}
