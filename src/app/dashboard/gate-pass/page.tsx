@@ -29,11 +29,11 @@ import { StaffForm } from '@/components/dashboard/staff-form';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import QRCode from 'react-qr-code';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { GatePassDisplay } from '@/components/dashboard/gate-pass-display';
 
 const mockUsers: ManagedUser[] = [
     { id: 'usr_ho_1', name: 'Olivia Davis', email: 'olivia.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2023-01-15T09:00:00Z'), lotNumber: '42', streetName: 'Main St' },
@@ -101,6 +101,9 @@ const getPassGradient = (role: UserRole): string => {
             return 'from-primary/80 to-accent/80';
         case 'Temporary Homeowner':
             return 'from-purple-400 to-indigo-500';
+        case 'Security':
+        case 'Staff':
+            return 'from-slate-400 to-slate-600';
         default:
             return 'from-primary/80 to-accent/80';
     }
@@ -233,12 +236,12 @@ function AdminSecurityView() {
                                 <QRCode value={`https://communityapp.com/id/${selectedUser.id}`} size={160} fgColor={qrColor} bgColor="#FFFFFF" />
                             </div>
                             
-                            <Badge className={selectedUser.status === 'Active' ? 'bg-green-500' : 'bg-destructive'}>
+                            <Badge className={cn("absolute bottom-4 left-1/2 -translate-x-1/2", selectedUser.status === 'Active' ? 'bg-green-500' : 'bg-destructive')}>
                                 {selectedUser.status}
                             </Badge>
                         </div>
                         {user?.role === 'Security' && (
-                            <DialogFooter className="flex-row justify-center gap-2">
+                            <DialogFooter className="grid grid-cols-2 gap-2">
                                 <Button onClick={handleAllowAccess} className="flex-1">Allow Access</Button>
                                 <Button onClick={handleReportMismatch} variant="destructive" className="flex-1">
                                     <AlertTriangle className="mr-2 h-4 w-4" /> Report Mismatch
@@ -403,7 +406,7 @@ export default function GatePassPage() {
         if (user?.role === 'Security') {
             return 'Verify residents, renters, and staff by searching the digital ID directories.';
         }
-        return 'Click the QR Code icon in the header to view your personal gate pass.';
+        return 'Your personal gate pass for community access.';
     }
 
     return (
@@ -416,17 +419,11 @@ export default function GatePassPage() {
             </div>
             
             {canManage ? <AdminSecurityView /> : (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>My Digital Pass</CardTitle>
-                        <CardDescription>Click the QR Code icon in the header to view your personal gate pass.</CardDescription>
-                    </CardHeader>
-                     <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                            Only administrators and security can view the full directory of digital passes.
-                        </p>
-                    </CardContent>
-                </Card>
+                <div className='flex justify-center'>
+                    <div className='w-full max-w-sm'>
+                        <GatePassDisplay />
+                    </div>
+                </div>
             )}
         </div>
     );
