@@ -16,6 +16,7 @@ import { Smartphone, Apple } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsClient } from '@/hooks/use-is-client';
 import { useAuth } from '@/context/auth-context';
+import type { UserRole } from '@/types';
 
 type MyGatePassDialogProps = {
   open: boolean;
@@ -38,6 +39,23 @@ function getOperatingSystem(): 'iOS' | 'Android' | 'Other' {
     if (/iPad|iPhone|iPod/.test(userAgent)) return 'iOS';
     if (/Android/.test(userAgent)) return 'Android';
     return 'Other';
+}
+
+const getPassGradient = (role: UserRole): string => {
+    switch (role) {
+        case 'System Admin':
+        case 'Admin':
+            return 'from-sky-400 to-blue-600';
+        case 'Homeowner':
+            return 'from-primary/80 to-accent/80';
+        case 'Temporary Homeowner':
+            return 'from-purple-400 to-indigo-500';
+        case 'Security':
+        case 'Staff':
+            return 'from-slate-400 to-slate-600';
+        default:
+            return 'from-primary/80 to-accent/80';
+    }
 }
 
 export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) {
@@ -106,7 +124,10 @@ export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) 
           </DialogDescription>
         </DialogHeader>
         
-        <div className="bg-gradient-to-br from-primary/80 to-accent/80 p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden">
+        <div className={cn(
+            "bg-gradient-to-br p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden",
+            getPassGradient(user.role)
+        )}>
             <div className="absolute top-2 right-2 flex items-center gap-1 text-xs bg-black/20 px-2 py-1 rounded-full">
                {os === 'iOS' ? <Apple className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
                <span>{os} Wallet</span>

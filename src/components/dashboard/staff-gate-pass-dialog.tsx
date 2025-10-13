@@ -102,7 +102,7 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
           </DialogDescription>
         </DialogHeader>
         
-        <div className="bg-gradient-to-br from-primary/80 to-accent/80 p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden">
+        <div className="bg-gradient-to-br from-slate-400 to-slate-600 p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden">
             <div className="absolute top-2 right-2 flex items-center gap-1 text-xs bg-black/20 px-2 py-1 rounded-full">
                {os === 'iOS' ? <Apple className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
                <span>{os} Wallet</span>

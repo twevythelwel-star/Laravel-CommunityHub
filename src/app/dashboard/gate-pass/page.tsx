@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, PlusCircle, Search, AlertTriangle } from "lucide-react";
-import type { Staff, ManagedUser } from "@/types";
+import type { Staff, ManagedUser, UserRole } from "@/types";
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import { useAuth } from '@/context/auth-context';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -33,6 +33,7 @@ import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import QRCode from 'react-qr-code';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 const mockUsers: ManagedUser[] = [
     { id: 'usr_ho_1', name: 'Olivia Davis', email: 'olivia.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2023-01-15T09:00:00Z'), lotNumber: '42', streetName: 'Main St' },
@@ -90,6 +91,21 @@ const highContrastColors = [
   "#4B0082", // Indigo
   "#8B0000", // Dark Red
 ];
+
+const getPassGradient = (role: UserRole): string => {
+    switch (role) {
+        case 'System Admin':
+        case 'Admin':
+            return 'from-sky-400 to-blue-600';
+        case 'Homeowner':
+            return 'from-primary/80 to-accent/80';
+        case 'Temporary Homeowner':
+            return 'from-purple-400 to-indigo-500';
+        default:
+            return 'from-primary/80 to-accent/80';
+    }
+}
+
 
 function AdminSecurityView() {
     const { user } = useAuth();
@@ -197,7 +213,10 @@ function AdminSecurityView() {
                         </DialogDescription>
                         </DialogHeader>
                         
-                        <div className="bg-gradient-to-br from-primary/80 to-accent/80 p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden">
+                        <div className={cn(
+                            "bg-gradient-to-br p-6 rounded-lg text-primary-foreground shadow-2xl relative overflow-hidden",
+                            getPassGradient(selectedUser.role)
+                        )}>
                             <div className="flex items-center gap-4">
                                 <Avatar className="h-16 w-16 border-2 border-white/50">
                                     <AvatarImage src={`https://picsum.photos/100?q=${selectedUser.id}`} alt={selectedUser.name} data-ai-hint="person face" />
