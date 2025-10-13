@@ -397,14 +397,11 @@ function AdminSecurityView() {
 export default function GatePassPage() {
     const { user } = useAuth();
     
-    const canManage = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security';
+    const isManager = user?.role === 'System Admin' || user?.role === 'Admin' || user?.role === 'Security';
 
     const getPageDescription = () => {
-        if (user?.role === 'System Admin' || user?.role === 'Admin') {
+        if (isManager) {
             return 'Manage digital IDs for all residents, renters, and staff.';
-        }
-        if (user?.role === 'Security') {
-            return 'Verify residents, renters, and staff by searching the digital ID directories.';
         }
         return 'Your personal gate pass for community access.';
     }
@@ -418,7 +415,16 @@ export default function GatePassPage() {
                 </p>
             </div>
             
-            {canManage ? <AdminSecurityView /> : (
+            {isManager ? (
+                 <div className="grid gap-8">
+                    <div className='flex justify-center'>
+                        <div className='w-full max-w-sm'>
+                            <GatePassDisplay />
+                        </div>
+                    </div>
+                    <AdminSecurityView />
+                </div>
+            ) : (
                 <div className='flex justify-center'>
                     <div className='w-full max-w-sm'>
                         <GatePassDisplay />
@@ -428,5 +434,3 @@ export default function GatePassPage() {
         </div>
     );
 }
-
-    
