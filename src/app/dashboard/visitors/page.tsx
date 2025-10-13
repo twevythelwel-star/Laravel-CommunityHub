@@ -252,11 +252,11 @@ export default function VisitorsPage() {
                               </PopoverContent>
                             </Popover>
                             <Select defaultValue="10">
-                              <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
+                              <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
                               <SelectContent>{Array.from({length: 12}, (_,i)=> i+1).map(h => <SelectItem key={h} value={`${h}`}>{h}</SelectItem>)}</SelectContent>
                             </Select>
                              <Select defaultValue="00">
-                              <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
+                              <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
                               <SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                             </Select>
                             <Select defaultValue="PM">
