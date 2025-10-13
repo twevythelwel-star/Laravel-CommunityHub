@@ -258,7 +258,7 @@ export default function VisitorsPage() {
                           </Select>
                            <Select defaultValue="00">
                             <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
-                            </SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                            <SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                           </Select>
                           <Select defaultValue="PM">
                             <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
@@ -428,3 +428,4 @@ export default function VisitorsPage() {
     
 
     
+
