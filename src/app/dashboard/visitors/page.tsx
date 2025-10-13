@@ -260,7 +260,7 @@ export default function VisitorsPage() {
                               <SelectContent>{['00', '15', '30', '45'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                             </Select>
                             <Select defaultValue="PM">
-                              <SelectTrigger className="w-[80px]"><SelectValue/></SelectValue>
+                              <SelectTrigger className="w-[80px]"><SelectValue/></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="AM">AM</SelectItem>
                                 <SelectItem value="PM">PM</SelectItem>
