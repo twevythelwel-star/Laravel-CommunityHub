@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { AuthProvider } from '@/context/auth-context';
@@ -7,7 +6,7 @@ import { BillingProvider } from '@/context/billing-context';
 import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider, useTheme } from '@/context/theme-context';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Toaster } from './ui/toaster';
 import { MapProvider } from '@/context/map-context';
 
@@ -40,15 +39,6 @@ function FontLoader() {
 }
 
 export function Providers({ children }: { children: React.ReactNode }) {
-    const [isClient, setIsClient] = useState(false);
-
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    if (!isClient) {
-        return null;
-    }
 
     return (
         <ThemeProvider>
