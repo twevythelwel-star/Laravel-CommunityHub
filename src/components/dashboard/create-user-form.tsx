@@ -27,7 +27,7 @@ import type { ManagedUser, UserRole } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useEffect } from 'react';
 
-const creatableRoles: UserRole[] = ["Homeowner", "Temporary Homeowner", "Security", "Admin"];
+const creatableRoles = ["Homeowner", "Temporary Homeowner", "Security", "Admin"] as const;
 
 const formSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -96,7 +96,7 @@ export function CreateUserForm({ children, open, onOpenChange, onSaveUser, userT
 
 
   function onSubmit(values: FormValues) {
-    onSaveUser(values, userToEdit?.id);
+    onSaveUser({ ...values, role: values.role as UserRole }, userToEdit?.id);
     onOpenChange(false);
   }
 

@@ -22,7 +22,7 @@ export function Logo() {
         ) : (
              <Building2 className="h-6 w-6 text-primary" />
         )}
-      <h1 className="font-headline text-xl font-bold text-foreground">{branding.communityName}</h1>
+      <h1 className="font-headline text-xl font-bold text-foreground">{branding.appName}</h1>
     </div>
   );
 }

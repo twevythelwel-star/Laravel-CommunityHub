@@ -1,17 +1,23 @@
 
 'use client';
 
-import { useBranding } from '@/context/branding-context';
+import { useBranding, ThemePreset, THEME_PRESETS } from '@/context/branding-context';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import { useToast } from '@/hooks/use-toast';
 import { ChangeEvent } from 'react';
+import { cn } from '@/lib/utils';
+import { Check } from 'lucide-react';
 
 export function BrandingSettings() {
   const { branding, setBranding, resetBranding } = useBranding();
   const { toast } = useToast();
+
+  const handleAppNameChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setBranding({ appName: e.target.value });
+  };
 
   const handleNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setBranding({ communityName: e.target.value });
@@ -51,12 +57,65 @@ export function BrandingSettings() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
+        <Label htmlFor="app-name">App Name</Label>
+        <Input
+          id="app-name"
+          value={branding.appName}
+          onChange={handleAppNameChange}
+        />
+        <p className="text-xs text-muted-foreground">The primary name of this application.</p>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="community-name">Community Name</Label>
         <Input
           id="community-name"
           value={branding.communityName}
           onChange={handleNameChange}
         />
+        <p className="text-xs text-muted-foreground">The name of the residential community.</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Theme Preset</Label>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {(Object.keys(THEME_PRESETS) as ThemePreset[]).map((preset) => {
+            const colors = THEME_PRESETS[preset];
+            const isActive = branding.themePreset === preset;
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setBranding({ themePreset: preset })}
+                style={{
+                  boxShadow: isActive ? `0 6px 16px -4px hsl(${colors.primary} / 0.4)` : undefined
+                }}
+                className={cn(
+                  "relative flex flex-col items-center justify-center p-4 rounded-xl border bg-card hover:bg-accent/5 hover:scale-[1.03] hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-200 text-center gap-3",
+                  isActive ? "border-primary ring-2 ring-primary/10 scale-[1.02]" : "border-border hover:border-muted-foreground/30"
+                )}
+              >
+                {isActive && (
+                  <div className="absolute top-1.5 right-1.5 flex items-center justify-center w-4 h-4 rounded-full bg-primary text-primary-foreground shadow-sm">
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
+                )}
+                <div className="flex -space-x-1.5">
+                  <span 
+                    className="w-5 h-5 rounded-full border-2 border-background shadow-md" 
+                    style={{ backgroundColor: `hsl(${colors.primary})` }}
+                  />
+                  <span 
+                    className="w-5 h-5 rounded-full border-2 border-background shadow-md" 
+                    style={{ backgroundColor: `hsl(${colors.accent})` }}
+                  />
+                </div>
+                <span className="text-[11px] font-semibold tracking-wide capitalize">{preset}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-muted-foreground">Select a curated color palette for the application branding.</p>
       </div>
 
       <div className="space-y-2">
