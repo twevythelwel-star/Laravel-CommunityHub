@@ -30,12 +30,14 @@ import {
   KeyRound,
   Map,
   MessageSquarePlus,
+  Moon,
   PiggyBank,
   QrCode,
   Search,
   Settings,
   ShieldOff,
   Siren,
+  Sun,
   User,
   UserCog,
   UserX,
@@ -43,6 +45,7 @@ import {
   BadgeCheck,
   ListTree,
 } from 'lucide-react';
+import { useDarkMode } from '@/hooks/use-dark-mode';
 import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
 import { Input } from '@/components/ui/input';
@@ -51,11 +54,21 @@ import type { UserRole } from '@/types';
 import { useIsClient } from '@/hooks/use-is-client';
 import { Button } from '@/components/ui/button';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus } from "lucide-react";
 
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/deals', label: 'Deals', icon: Gift, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/deals', label: 'Perks & Savings', icon: Gift, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin'] },
@@ -65,7 +78,7 @@ const allMenuItems = [
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['System Admin', 'Admin', 'Homeowner'] },
   { href: '/dashboard/updates', label: 'Updates', icon: ClipboardList, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/warnings', label: 'Warnings', icon: Siren, roles: ['System Admin', 'Admin', 'Homeowner', 'Security'] },
+  { href: '/dashboard/warnings', label: 'Safety Alert', icon: Siren, roles: ['System Admin', 'Admin', 'Homeowner', 'Security'] },
   { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/access-log', label: 'Access Log', icon: ListTree, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner'] },
@@ -87,6 +100,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const isClient = useIsClient();
   const [isPassOpen, setPassOpen] = useState(false);
+  const { isDark, toggle: toggleDark } = useDarkMode();
 
   useEffect(() => {
     if (isClient && !loading && !user) {
@@ -158,18 +172,72 @@ export default function DashboardLayout({
             <Input
               type="search"
               placeholder="Search..."
-              className="w-full rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
+              className="w-full max-w-xs md:max-w-none rounded-lg bg-background pl-8 md:w-[200px] lg:w-[320px]"
             />
           </div>
           <div className="hidden items-center gap-2 sm:flex">
-             <Button variant="ghost" size="icon" onClick={() => setPassOpen(true)}>
-                <QrCode className="h-5 w-5" />
-                <span className="sr-only">View Gate Pass</span>
-            </Button>
+             <Tooltip>
+                 <TooltipTrigger asChild>
+                     <Button variant="ghost" size="icon" onClick={() => setPassOpen(true)} aria-label="View Gate Pass">
+                        <QrCode className="h-5 w-5" />
+                        <span className="sr-only">View Gate Pass</span>
+                    </Button>
+                 </TooltipTrigger>
+                 <TooltipContent>View Gate Pass</TooltipContent>
+             </Tooltip>
+             <Tooltip>
+                 <TooltipTrigger asChild>
+                     <Button variant="ghost" size="icon" onClick={toggleDark} aria-label="Toggle dark mode">
+                        {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    </Button>
+                 </TooltipTrigger>
+                 <TooltipContent>{isDark ? 'Light Mode' : 'Dark Mode'}</TooltipContent>
+             </Tooltip>
+             
+             <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="default" size="sm" className="hidden md:flex gap-1 h-9 px-4 rounded-full shadow-md hover:shadow-lg transition-all duration-200 bg-primary text-primary-foreground">
+                    <Plus className="h-4 w-4" />
+                    <span>Quick Action</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/directory?action=add" className="cursor-pointer">
+                      <Users className="mr-2 h-4 w-4" />
+                      <span>Add Resident</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/calendar?action=create" className="cursor-pointer">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      <span>Create Event</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/updates?action=new" className="cursor-pointer">
+                      <Bell className="mr-2 h-4 w-4" />
+                      <span>New Announcement</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/visitors?action=register" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>Register Visitor</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <Button variant="default" size="icon" className="md:hidden rounded-full h-10 w-10 bg-primary text-primary-foreground shadow-md">
+                <Plus className="h-5 w-5" />
+              </Button>
             <UserNav />
           </div>
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
+        <main key={pathname} className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-0 md:gap-8 animate-fade-in">
           {children}
         </main>
       </SidebarInset>
