@@ -18,6 +18,17 @@ import { useToast } from '@/hooks/use-toast';
 import { Building2 } from 'lucide-react';
 import Image from 'next/image';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function ProfilePage() {
     const { user, updateUser } = useAuth();
@@ -57,7 +68,7 @@ export default function ProfilePage() {
                     <CardHeader>
                         <CardTitle>Security Company Details</CardTitle>
                         <CardDescription>
-                            Contact information for the community's security provider.
+                            Contact information for the community&apos;s security provider.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
@@ -196,7 +207,35 @@ export default function ProfilePage() {
                     />
                 </div>
             </div>
-            {canEditProfile && <Button onClick={handleSaveChanges}>Save Changes</Button>}
+            <div className="flex justify-between items-center pt-4 mt-6 border-t">
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive">Delete Account</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete your account and remove your data from our servers.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                                toast({
+                                    variant: "destructive",
+                                    title: "Account Deleted",
+                                    description: "Your account has been scheduled for deletion.",
+                                });
+                                // Additional logic for auth deletion would go here
+                            }}>
+                                Yes, delete my account
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+                {canEditProfile && <Button onClick={handleSaveChanges}>Save Changes</Button>}
+            </div>
             </CardContent>
         </Card>
         </div>

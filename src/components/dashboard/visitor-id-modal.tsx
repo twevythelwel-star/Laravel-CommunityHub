@@ -32,6 +32,10 @@ export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange, on
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Capture the current node so the cleanup below acts on the same element
+    // the effect ran against, not whatever videoRef points to at cleanup time.
+    const videoElement = videoRef.current;
+
     const getCameraPermission = async () => {
       if (open && isCapturing) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -47,8 +51,8 @@ export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange, on
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ video: true });
           setHasCameraPermission(true);
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+          if (videoElement) {
+            videoElement.srcObject = stream;
           }
         } catch (error) {
           console.error('Error accessing camera:', error);
@@ -61,10 +65,10 @@ export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange, on
         }
       } else {
         // Stop camera stream when modal is closed or capture is cancelled
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
+        if (videoElement && videoElement.srcObject) {
+            const stream = videoElement.srcObject as MediaStream;
             stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
+            videoElement.srcObject = null;
         }
       }
     };
@@ -73,8 +77,8 @@ export function VisitorIdModal({ open, onOpenChange, visitor, onStatusChange, on
 
     // Cleanup function to stop tracks when component unmounts or dependencies change
     return () => {
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
+        if (videoElement && videoElement.srcObject) {
+            const stream = videoElement.srcObject as MediaStream;
             stream.getTracks().forEach(track => track.stop());
         }
     }

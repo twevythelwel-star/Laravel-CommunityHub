@@ -1,7 +1,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
 
 type Theme = {
   primary: string;
@@ -87,9 +87,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const resetTheme = () => {
+  const resetTheme = useCallback(() => {
     setTheme(DEFAULT_THEME);
-  };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('app-theme', JSON.stringify(theme));

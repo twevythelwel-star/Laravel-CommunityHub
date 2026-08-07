@@ -130,11 +130,11 @@ export default function DirectoryPage() {
     ));
   };
 
-  const visibleRoles = user?.role === 'System Admin' 
+  const visibleRoles = (user?.role === 'System Admin' 
     ? roleOrder.filter(r => r !== 'Staff')
     : user?.role === 'Admin'
       ? adminVisibleRoles.filter(r => r !== 'Staff')
-      : [];
+      : []) as UserRole[];
 
   const groupedUsers = users.reduce((acc, currentUser) => {
     if (visibleRoles.includes(currentUser.role)) {
@@ -244,7 +244,7 @@ export default function DirectoryPage() {
                                                                 <AlertDialogHeader>
                                                                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                                     <AlertDialogDescription>
-                                                                        This will permanently delete the user "{person.name}". This action cannot be undone.
+                                                                        This will permanently delete the user &ldquo;{person.name}&rdquo;. This action cannot be undone.
                                                                     </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>

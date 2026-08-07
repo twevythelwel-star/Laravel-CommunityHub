@@ -74,7 +74,7 @@ export function RequestRemovalForm({ open, onOpenChange, entry }: RequestRemoval
             <DialogHeader>
               <DialogTitle>Request Removal for {entry.name}</DialogTitle>
               <DialogDescription>
-                Please provide a reason for requesting this individual's removal from the blocklist. This will be sent to an administrator for review.
+                Please provide a reason for requesting this individual&apos;s removal from the blocklist. This will be sent to an administrator for review.
               </DialogDescription>
             </DialogHeader>
             

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QRCode from "react-qr-code";
 import {
   Dialog,
@@ -41,6 +41,10 @@ function getOperatingSystem(): 'iOS' | 'Android' | 'Other' {
     return 'Other';
 }
 
+// btoa only handles Latin1, so UTF-8 (accented names, emoji) must be encoded first.
+const base64Utf8 = (str: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+
 export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePassDialogProps) {
   const isClient = useIsClient();
   const [os, setOs] = useState<'iOS' | 'Android' | 'Other'>('Other');
@@ -62,20 +66,20 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
 
   // This simulates the JWS token that would be returned from the `mintPass` cloud function.
   // A real implementation would call the backend function here to get a live token.
-  const getSimulatedJwsToken = () => {
-    const header = btoa(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
-    const payload = btoa(JSON.stringify({
+  const getSimulatedJwsToken = useCallback(() => {
+    const header = base64Utf8(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
+    const payload = base64Utf8(JSON.stringify({
         sub: `staff:${staff.id}`,
         name: staff.name,
         role: "staff",
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 60, // Expires in 60 seconds
     }));
-    const signature = btoa('mock-signature-for-ui-testing'); // This is not a real signature
+    const signature = base64Utf8('mock-signature-for-ui-testing'); // This is not a real signature
     return `${header}.${payload}.${signature}`;
-  };
+  }, [staff]);
 
-  const [qrValue, setQrValue] = useState(getSimulatedJwsToken());
+  const [qrValue, setQrValue] = useState(getSimulatedJwsToken);
 
   useEffect(() => {
     if (open) {
@@ -89,7 +93,7 @@ export function StaffGatePassDialog({ open, onOpenChange, staff }: StaffGatePass
         // Clear the interval when the dialog closes
         return () => clearInterval(interval);
     }
-  }, [open, staff]);
+  }, [open, getSimulatedJwsToken]);
 
 
   return (

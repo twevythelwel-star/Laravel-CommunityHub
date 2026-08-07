@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QRCode from "react-qr-code";
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Badge } from '../ui/badge';
@@ -28,6 +28,10 @@ function getOperatingSystem(): 'iOS' | 'Android' | 'Other' {
     if (/Android/.test(userAgent)) return 'Android';
     return 'Other';
 }
+
+// btoa only handles Latin1, so UTF-8 (accented names, emoji) must be encoded first.
+const base64Utf8 = (str: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(str)));
 
 const getPassGradient = (role: UserRole): string => {
     switch (role) {
@@ -63,30 +67,30 @@ export function GatePassDisplay() {
       setQrColor(highContrastColors[randomIndex]);
   }, []);
 
-  const getSimulatedJwsToken = () => {
+  const getSimulatedJwsToken = useCallback(() => {
     if (!user) return 'invalid-user';
-    const header = btoa(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
-    const payload = btoa(JSON.stringify({
+    const header = base64Utf8(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
+    const payload = base64Utf8(JSON.stringify({
         sub: `user:${user.uid}`,
         name: user.displayName,
         role: user.role,
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 60, // Expires in 60 seconds
     }));
-    const signature = btoa('mock-signature-for-ui-testing'); 
+    const signature = base64Utf8('mock-signature-for-ui-testing');
     return `${header}.${payload}.${signature}`;
-  };
+  }, [user]);
 
-  const [qrValue, setQrValue] = useState(getSimulatedJwsToken());
+  const [qrValue, setQrValue] = useState(getSimulatedJwsToken);
 
   useEffect(() => {
         setQrValue(getSimulatedJwsToken());
         const interval = setInterval(() => {
             setQrValue(getSimulatedJwsToken());
-        }, 30000); 
+        }, 30000);
 
         return () => clearInterval(interval);
-  }, [user]);
+  }, [getSimulatedJwsToken]);
 
 
   if (!user) {

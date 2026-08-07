@@ -4,10 +4,11 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
+
 import type { Business, FoodApp, Voucher } from "@/types";
 import { useToast } from "@/hooks/use-toast";
-import { placeholderData } from "@/lib/placeholder-images.json";
+import data from "@/lib/placeholder-images.json";
+const placeholderData = data.placeholderData;
 import { useAuth } from "@/context/auth-context";
 import { PlusCircle, Trash2 } from "lucide-react";
 import { FoodAppForm } from "@/components/dashboard/food-app-form";
@@ -41,19 +42,14 @@ function VoucherCard({ voucher, business, canManage, onDelete }: { voucher: Vouc
   };
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col h-full relative">
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
                 {business && (
-                    <Image 
-                    src={business.logoUrl} 
-                    alt={`${business.name} logo`} 
-                    width={40} 
-                    height={40} 
-                    className="rounded-full"
-                    data-ai-hint={business.aiHint}
-                    />
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/20 text-primary font-bold flex-shrink-0">
+                        {business.name.charAt(0)}
+                    </div>
                 )}
                 <div>
                     <CardTitle className="text-lg">{voucher.title}</CardTitle>
@@ -63,7 +59,7 @@ function VoucherCard({ voucher, business, canManage, onDelete }: { voucher: Vouc
              {canManage && (
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive absolute top-2 right-2">
                             <Trash2 className="h-4 w-4" />
                         </Button>
                     </AlertDialogTrigger>
@@ -71,7 +67,7 @@ function VoucherCard({ voucher, business, canManage, onDelete }: { voucher: Vouc
                         <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently remove the voucher "{voucher.title}".
+                            This action cannot be undone. This will permanently remove the voucher &ldquo;{voucher.title}&rdquo;.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -88,7 +84,7 @@ function VoucherCard({ voucher, business, canManage, onDelete }: { voucher: Vouc
       <CardContent className="flex-grow">
         <p className="text-sm text-muted-foreground">{voucher.description}</p>
       </CardContent>
-      <CardContent>
+      <CardContent className="mt-auto">
         <Button onClick={handleClip} className="w-full">Clip Voucher</Button>
       </CardContent>
     </Card>
@@ -100,14 +96,9 @@ function FoodAppCard({ app, onRemove, canManage }: { app: FoodApp, onRemove: (id
     <Card>
       <CardContent className="pt-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Image 
-            src={app.logoUrl}
-            alt={`${app.name} logo`}
-            width={48}
-            height={48}
-            className="rounded-lg"
-            data-ai-hint={app.aiHint}
-          />
+          <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-orange-100 text-orange-600 font-bold text-lg flex-shrink-0">
+            {app.name.charAt(0)}
+          </div>
           <div>
             <p className="font-semibold">{app.name}</p>
              {app.couponPercentage && (
@@ -132,7 +123,7 @@ function FoodAppCard({ app, onRemove, canManage }: { app: FoodApp, onRemove: (id
                         <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently remove the "{app.name}" delivery option.
+                            This action cannot be undone. This will permanently remove the &ldquo;{app.name}&rdquo; delivery option.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -209,7 +200,7 @@ export default function DealsPage() {
   return (
     <div className="grid gap-8">
       <div>
-        <h1 className="font-headline text-3xl font-bold">Deals & Promotions</h1>
+        <h1 className="font-headline text-3xl font-bold">Perks & Savings</h1>
         <p className="text-muted-foreground">
           Exclusive offers from local businesses and easy access to food delivery.
         </p>

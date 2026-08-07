@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QRCode from "react-qr-code";
 import {
   Dialog,
@@ -41,6 +41,10 @@ function getOperatingSystem(): 'iOS' | 'Android' | 'Other' {
     return 'Other';
 }
 
+// btoa only handles Latin1, so UTF-8 (accented names, emoji) must be encoded first.
+const base64Utf8 = (str: string) =>
+  btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+
 const getPassGradient = (role: UserRole): string => {
     switch (role) {
         case 'System Admin':
@@ -79,21 +83,21 @@ export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) 
   }, [open]);
 
   // This simulates the JWS token that would be returned from a backend function.
-  const getSimulatedJwsToken = () => {
+  const getSimulatedJwsToken = useCallback(() => {
     if (!user) return 'invalid-user';
-    const header = btoa(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
-    const payload = btoa(JSON.stringify({
+    const header = base64Utf8(JSON.stringify({ alg: 'EdDSA', typ: 'JWT' }));
+    const payload = base64Utf8(JSON.stringify({
         sub: `user:${user.uid}`,
         name: user.displayName,
         role: user.role,
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 60, // Expires in 60 seconds for security
     }));
-    const signature = btoa('mock-signature-for-ui-testing'); // This is not a real signature
+    const signature = base64Utf8('mock-signature-for-ui-testing'); // This is not a real signature
     return `${header}.${payload}.${signature}`;
-  };
+  }, [user]);
 
-  const [qrValue, setQrValue] = useState(getSimulatedJwsToken());
+  const [qrValue, setQrValue] = useState(getSimulatedJwsToken);
 
   useEffect(() => {
     if (open) {
@@ -107,7 +111,7 @@ export function MyGatePassDialog({ open, onOpenChange }: MyGatePassDialogProps) 
         // Clear the interval when the dialog closes
         return () => clearInterval(interval);
     }
-  }, [open, user]);
+  }, [open, getSimulatedJwsToken]);
 
 
   if (!user) {

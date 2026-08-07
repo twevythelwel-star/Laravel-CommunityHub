@@ -115,7 +115,7 @@ export default function SettingsPage() {
             <CardHeader>
                 <CardTitle>Theme Customization</CardTitle>
                 <CardDescription>
-                As a System Admin, you can customize the application's appearance.
+                As a System Admin, you can customize the application&apos;s appearance.
                 </CardDescription>
             </CardHeader>
             <CardContent>

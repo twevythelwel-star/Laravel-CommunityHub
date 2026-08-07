@@ -145,7 +145,7 @@ export default function GuidelinesPage() {
                                                             <AlertDialogHeader>
                                                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                             <AlertDialogDescription>
-                                                                This action cannot be undone. This will permanently delete the guideline titled "{guideline.title}".
+                                                                This action cannot be undone. This will permanently delete the guideline titled &ldquo;{guideline.title}&rdquo;.
                                                             </AlertDialogDescription>
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter>

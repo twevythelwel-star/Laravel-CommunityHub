@@ -73,25 +73,26 @@ export default function VisitorsPage() {
       const now = new Date();
       const twelveHoursAgo = sub(now, { hours: 12 });
       
-      setVisitors(currentVisitors => {
-        const updatedVisitors = currentVisitors.filter(visitor => {
-            if (visitor.status === 'Expected' && new Date(visitor.expectedAt) < twelveHoursAgo) {
-            toast({
-                variant: "destructive",
-                title: "Visitor Removed",
-                description: `${visitor.name} was automatically removed for not checking in within 12 hours.`
-            });
-            return false;
-            }
-            return true;
+      const expired = visitors.filter(visitor => 
+        visitor.status === 'Expected' && new Date(visitor.expectedAt) < twelveHoursAgo
+      );
+
+      if (expired.length > 0) {
+        expired.forEach(visitor => {
+          toast({
+            variant: "destructive",
+            title: "Visitor Removed",
+            description: `${visitor.name} was automatically removed for not checking in within 12 hours.`
+          });
         });
-        return updatedVisitors;
-      });
+        
+        setVisitors(prev => prev.filter(v => !expired.some(e => e.id === v.id)));
+      }
 
     }, 60 * 1000); // Check every minute
 
     return () => clearInterval(interval);
-  }, [toast]);
+  }, [toast, visitors]);
 
 
   const handleStatusChange = (visitorId: string, newStatus: VisitorStatus) => {
@@ -171,7 +172,7 @@ export default function VisitorsPage() {
                   <DialogHeader>
                   <DialogTitle>Register New Visitor</DialogTitle>
                   <DialogDescription>
-                      Fill in the details for the new visitor. Click save when you're done.
+                      Fill in the details for the new visitor. Click save when you&apos;re done.
                   </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
@@ -194,7 +195,7 @@ export default function VisitorsPage() {
                           <SelectValue placeholder="Select ID Type" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="drivers-license">Driver's License</SelectItem>
+                          <SelectItem value="drivers-license">Driver&apos;s License</SelectItem>
                           <SelectItem value="passport">Passport</SelectItem>
                           <SelectItem value="national-id">National ID</SelectItem>
                           <SelectItem value="school-id">School ID</SelectItem>
@@ -335,7 +336,7 @@ export default function VisitorsPage() {
               }
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -352,7 +353,7 @@ export default function VisitorsPage() {
                   <TableRow key={visitor.id} className={cn(visitor.isBlocked && "bg-destructive/10 hover:bg-destructive/20")}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                          {visitor.name}
+                          <span>{visitor.name}</span>
                           {visitor.isBlocked && (
                               <Tooltip>
                                   <TooltipTrigger>

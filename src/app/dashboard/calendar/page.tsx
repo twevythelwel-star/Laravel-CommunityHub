@@ -93,7 +93,7 @@ export default function CalendarPage() {
             timeString = format(startDate, 'h:mm a');
         }
 
-        if (isValid(endDate)) {
+        if (isValid(endDate) && endDate) {
             timeString += ` - ${format(endDate, 'h:mm a')}`;
         }
         
@@ -183,7 +183,7 @@ export default function CalendarPage() {
                                                         <AlertDialogHeader>
                                                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            This will permanently delete the event "{event.title}".
+                                                            This will permanently delete the event &ldquo;{event.title}&rdquo;.
                                                         </AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
