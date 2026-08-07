@@ -33,7 +33,7 @@ export default function WarningsPage() {
     <div className="flex flex-col gap-8">
       <div className="flex items-center">
         <div className="flex-1">
-          <h1 className="font-headline text-3xl font-bold">Community Warnings</h1>
+          <h1 className="font-headline text-3xl font-bold">Community Safety Alerts</h1>
           <p className="text-muted-foreground">Send and validate urgent alerts within the community.</p>
         </div>
         <WarningForm />

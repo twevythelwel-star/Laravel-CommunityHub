@@ -49,6 +49,12 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
     setIsLoading(true);
     const success = await login(username, password);
     setIsLoading(false);
@@ -57,9 +63,9 @@ export default function LoginPage() {
       setIsLoggedIn(true);
       setTimeout(() => {
         router.push('/dashboard');
-      }, 2500); // Wait for animation to complete
+      }, 1500); // Wait for 1.5-second cinematic animation to complete
     } else {
-      setError('Invalid username. Please use one of the test usernames.');
+      setError('Invalid username. Please use one of the test usernames shown below.');
     }
   };
 
@@ -74,7 +80,7 @@ export default function LoginPage() {
   };
 
   if (isLoggedIn && user) {
-    return <WelcomeAnimation username={user.role} />;
+    return <WelcomeAnimation username={user.name} />;
   }
 
   return (
@@ -171,7 +177,7 @@ export default function LoginPage() {
                 <AccordionContent>
                   <Alert>
                     <AlertDescription className="space-y-2">
-                       <p>You can use any password. Login is not validated.</p>
+                       <p>Use any password of <strong>6 or more characters</strong>.</p>
                        <ul className="list-disc pl-4 text-muted-foreground">
                         {testUsers.map(user => (
                             <li key={user.role}><span className="font-medium text-foreground">{user.role}:</span> {user.username}</li>

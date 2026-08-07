@@ -16,7 +16,7 @@ import { ClientFormattedDate } from "@/components/client-formatted-date";
 import type { Fundraiser, Donation } from "@/types";
 import { useState, useMemo } from "react";
 import { DonateForm } from "./donate-form";
-import { HeartHandshake } from "lucide-react";
+import { HeartHandshake, Share2 } from "lucide-react";
 
 // Mock exchange rates. In a real app, this would come from an API.
 const MOCK_EXCHANGE_RATES = {
@@ -76,7 +76,7 @@ export function FundraiserProgressCard({ fundraiser, donations, onDonate, canMan
 
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col h-full overflow-hidden">
         <CardHeader>
             <div className="flex justify-between items-start">
                 <CardTitle>{fundraiser.title}</CardTitle>
@@ -86,35 +86,41 @@ export function FundraiserProgressCard({ fundraiser, donations, onDonate, canMan
         </CardHeader>
         <CardContent className="flex-grow space-y-4">
             <div>
-                <div className="flex justify-between items-end mb-1">
-                    <p className="text-sm text-muted-foreground">
-                        <span className="text-lg font-bold text-primary">{totalDonatedInJMD.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}</span> raised
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                        Goal: {fundraiser.goal.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}
-                    </p>
+                <div className="flex flex-col gap-1 mb-2">
+                    <div className="flex items-baseline justify-between">
+                        <span className="text-2xl font-bold tracking-tight text-primary">{totalDonatedInJMD.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}</span>
+                        <span className="text-sm font-medium text-muted-foreground">Goal: {fundraiser.goal.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' })}</span>
+                    </div>
                 </div>
-                <Progress value={progress} />
-                 <p className="text-xs text-muted-foreground mt-2">
-                    Approx. {equivalentGoals.USD} / {equivalentGoals.GBP} / {equivalentGoals.EUR} / {equivalentGoals.CAD}
-                 </p>
-                 <p className="text-xs text-muted-foreground mt-1 text-right">{donations.length} donations</p>
+                <Progress value={progress} className="h-2" />
+                 <div className="flex justify-between items-center mt-2">
+                    <p className="text-xs text-muted-foreground">
+                        Approx. {equivalentGoals.USD} / {equivalentGoals.GBP} / {equivalentGoals.EUR} / {equivalentGoals.CAD}
+                    </p>
+                    <p className="text-xs text-muted-foreground font-medium">{donations.length} donations</p>
+                 </div>
             </div>
             
         </CardContent>
-        <CardFooter className="flex flex-wrap justify-between items-center bg-muted/50 py-3 px-6">
+        <CardFooter className="flex flex-wrap justify-between items-center bg-muted/50 py-3 px-6 mt-auto">
             <div className="text-xs text-muted-foreground">
                 {fundraiser.status === 'Upcoming' && <span>Starts: <ClientFormattedDate date={fundraiser.startDate} formatString="MMM d, yyyy" /></span>}
                 {fundraiser.status === 'Active' && <span>Ends: <ClientFormattedDate date={fundraiser.endDate} formatString="MMM d, yyyy" /></span>}
                  {fundraiser.status === 'Completed' && <span>Ended: <ClientFormattedDate date={fundraiser.endDate} formatString="MMM d, yyyy" /></span>}
             </div>
-            {!isCompleted && !isUpcoming && onDonate && (
-                <DonateForm open={isDonateOpen} onOpenChange={setDonateOpen} fundraiser={fundraiser} onDonate={onDonate}>
-                     <Button>
-                        <HeartHandshake className="mr-2 h-4 w-4" />
-                        Donate Now
+            {fundraiser.status === 'Active' && (
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <DonateForm open={isDonateOpen} onOpenChange={setDonateOpen} fundraiser={fundraiser} onDonate={onDonate || (() => {})}>
+                        <Button className="flex-1 sm:flex-none">
+                            <HeartHandshake className="mr-2 h-4 w-4" />
+                            Donate Now
+                        </Button>
+                    </DonateForm>
+                    <Button variant="outline" className="flex-1 sm:flex-none">
+                        <Share2 className="mr-2 h-4 w-4" />
+                        Share
                     </Button>
-                </DonateForm>
+                </div>
             )}
             {isUpcoming && canManage && (
                  <Button variant="outline" size="sm">Enable Now</Button>

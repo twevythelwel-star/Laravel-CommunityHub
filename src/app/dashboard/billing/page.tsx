@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, CreditCard } from "lucide-react";
 import { format } from "date-fns";
 import { BillingSummary } from "@/components/dashboard/billing-summary";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -44,35 +44,40 @@ function HomeownerBilling() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
                  <div className="grid gap-2">
                     <Label htmlFor="card-name">Name on Card</Label>
-                    <Input id="card-name" placeholder="John Doe" />
+                    <Input id="card-name" placeholder="John Doe" className="max-w-md" />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="card-number">Card Number</Label>
-                    <Input id="card-number" placeholder="**** **** **** 1234" />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="expiry">Expiry Date</Label>
-                    <Input id="expiry" placeholder="MM/YY" />
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="cvc">CVC</Label>
-                    <Input id="cvc" placeholder="123" />
+                  <Label>Secure Payment Details</Label>
+                  <div className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm text-muted-foreground items-center gap-2">
+                      <span>🔒</span>
+                      <span>Card information is securely collected by Stripe (PCI-DSS Level 1 Compliant)</span>
+                  </div>
                 </div>
             </div>
             <div className="flex items-center gap-4">
-                <img src="https://picsum.photos/40/25?v=visa" alt="Visa" className="rounded-sm" data-ai-hint="credit card" />
-                <img src="https://picsum.photos/40/25?v=mastercard" alt="Mastercard" className="rounded-sm" data-ai-hint="credit card" />
-                <img src="https://picsum.photos/40/25?v=amex" alt="American Express" className="rounded-sm" data-ai-hint="credit card" />
-                <img src="https://picsum.photos/40/25?v=discover" alt="Discover" className="rounded-sm" data-ai-hint="credit card" />
+            <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center p-2 rounded-md border bg-muted/20">
+                    <CreditCard className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div className="flex items-center justify-center p-2 rounded-md border bg-muted/20">
+                    <CreditCard className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div className="flex items-center justify-center p-2 rounded-md border bg-muted/20">
+                    <CreditCard className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div className="flex items-center justify-center p-2 rounded-md border bg-muted/20">
+                    <CreditCard className="h-6 w-6 text-muted-foreground" />
+                </div>
+            </div>
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox id="remember-card" />
               <Label htmlFor="remember-card" className="text-sm font-normal">Remember this card for future payments</Label>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-4 pt-2">
               <Button>Pay JMD {monthlyFee.toLocaleString('en-JM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Button>
               <Button variant="outline">Save Payment Method</Button>
             </div>

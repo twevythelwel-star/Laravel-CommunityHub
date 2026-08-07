@@ -26,7 +26,7 @@ const mockAccessLog: AccessLogEntry[] = [
     { id: 'al_1', userName: 'Liam Johnson', userRole: 'Homeowner', method: 'Digital Pass', gate: 'Main Gate', timestamp: new Date('2024-07-30T10:00:00Z') },
     { id: 'al_2', userName: 'Guard McSecurity', userRole: 'Security', method: 'Digital Pass', gate: 'Main Gate', timestamp: new Date('2024-07-30T09:58:00Z') },
     { id: 'al_3', userName: 'Maria Garcia', userRole: 'Staff', method: 'Staff Pass', gate: 'Service Gate', timestamp: new Date('2024-07-30T09:45:00Z') },
-    { id: 'al_4', userName: 'Noah Williams', userRole: 'Homeowner', method: 'Visitor Pass (for guest)', gate: 'Main Gate', timestamp: new Date('2024-07-30T09:30:00Z') },
+    { id: 'al_4', userName: 'Noah Williams', userRole: 'Homeowner', method: 'Visitor Pass', gate: 'Main Gate', timestamp: new Date('2024-07-30T09:30:00Z') },
     { id: 'al_5', userName: 'Sam Wilson', userRole: 'Temporary Homeowner', method: 'Digital Pass', gate: 'Main Gate', timestamp: new Date('2024-07-30T09:15:00Z') },
 ];
 

@@ -16,8 +16,20 @@ import { Input } from "@/components/ui/input";
 import { useToast } from '@/hooks/use-toast';
 import { add, differenceInSeconds, format } from 'date-fns';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Timer } from 'lucide-react';
+import { ShieldAlert, Timer } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { useRouter } from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 
 function Countdown({ targetDate }: { targetDate: Date }) {
@@ -52,8 +64,9 @@ function Countdown({ targetDate }: { targetDate: Date }) {
 
 
 export default function DeactivationPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   const [deactivationDate, setDeactivationDate] = useState<Date | null>(null);
   const [dateString, setDateString] = useState('');
   const [timeString, setTimeString] = useState('');
@@ -120,6 +133,16 @@ export default function DeactivationPage() {
     });
   }
   
+  const handleImmediateDelete = () => {
+    localStorage.clear();
+    toast({
+      title: 'Account Permanently Deleted',
+      description: 'Your account and all associated data have been removed.',
+    });
+    logout();
+    router.push('/');
+  };
+
   if (!isClient) {
     return null;
   }
@@ -141,8 +164,43 @@ export default function DeactivationPage() {
     <div className="grid gap-8">
       <div>
         <h1 className="font-headline text-3xl font-bold">Account Deactivation</h1>
-        <p className="text-muted-foreground">Request to deactivate your account on a future date.</p>
+        <p className="text-muted-foreground">Request to deactivate your account on a future date, or delete it immediately.</p>
       </div>
+
+      {/* Immediate Deletion */}
+      <Card className="border-destructive">
+        <CardHeader>
+          <CardTitle className="font-headline text-xl flex items-center gap-2 text-destructive">
+            <ShieldAlert className="w-5 h-5" />
+            Immediate Account Deletion
+          </CardTitle>
+          <CardDescription>
+            Permanently delete your account and all associated data right now. This cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive">Delete My Account Now</Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete your account, visitor records, billing history, and all personal data
+                  associated with your Community Hub profile. This action cannot be reversed.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleImmediateDelete} className="bg-destructive hover:bg-destructive/90">
+                  Yes, Delete Everything
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </CardFooter>
+      </Card>
 
        {showCountdown && deactivationDate && (
         <Alert variant="destructive">

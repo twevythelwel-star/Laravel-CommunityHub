@@ -1,5 +1,7 @@
 
 
+
+// Triggering a cache invalidation recompilation
 import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers';
