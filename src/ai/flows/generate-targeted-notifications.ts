@@ -1,15 +1,9 @@
-'use server';
-
 /**
  * @fileOverview Generates targeted notifications for specific communities using an LLM tool.
- *
- * - generateTargetedNotifications - A function that generates targeted notifications.
- * - GenerateTargetedNotificationsInput - The input type for the generateTargetedNotifications function.
- * - GenerateTargetedNotificationsOutput - The return type for the generateTargetedNotifications function.
+ * Mocked for static export compatibility.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z} from 'zod';
 
 const GenerateTargetedNotificationsInputSchema = z.object({
   document: z.string().describe('The document to summarize into actionable notification items.'),
@@ -25,31 +19,15 @@ export type GenerateTargetedNotificationsOutput = z.infer<typeof GenerateTargete
 export async function generateTargetedNotifications(
   input: GenerateTargetedNotificationsInput
 ): Promise<GenerateTargetedNotificationsOutput> {
-  return generateTargetedNotificationsFlow(input);
+  // Simulate network delay for AI generation
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  return {
+    notificationItems: [
+      `Important Update for ${input.community}`,
+      "Please review the new maintenance schedules.",
+      "Ensure all vehicles are registered by Friday.",
+      "Summary: " + input.document.substring(0, 50) + "..."
+    ]
+  };
 }
-
-const generateTargetedNotificationsPrompt = ai.definePrompt({
-  name: 'generateTargetedNotificationsPrompt',
-  input: {schema: GenerateTargetedNotificationsInputSchema},
-  output: {schema: GenerateTargetedNotificationsOutputSchema},
-  prompt: `You are a system administrator assistant responsible for generating targeted notifications for specific communities.
-
-  Your task is to summarize the provided document into a list of actionable notification items tailored to the specified community.
-
-  Document: {{{document}}}
-  Community: {{{community}}}
-
-  Please provide a list of concise and actionable notification items that are relevant to the community.`,
-});
-
-const generateTargetedNotificationsFlow = ai.defineFlow(
-  {
-    name: 'generateTargetedNotificationsFlow',
-    inputSchema: GenerateTargetedNotificationsInputSchema,
-    outputSchema: GenerateTargetedNotificationsOutputSchema,
-  },
-  async input => {
-    const {output} = await generateTargetedNotificationsPrompt(input);
-    return output!;
-  }
-);

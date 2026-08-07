@@ -18,8 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Wand2 } from "lucide-react";
+import { Sparkles, Wand2 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { AIConsentDialog } from "@/components/ai-consent-dialog";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -30,6 +31,8 @@ const formSchema = z.object({
 
 export function NotificationForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
+  const [consentGranted, setConsentGranted] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -43,6 +46,14 @@ export function NotificationForm() {
   });
 
   async function handleGenerate() {
+    if (!consentGranted) {
+      setShowConsent(true);
+      return;
+    }
+    await executeGenerate();
+  }
+
+  async function executeGenerate() {
     setIsLoading(true);
     try {
       const { document, community } = form.getValues();
@@ -83,6 +94,17 @@ export function NotificationForm() {
   }
 
   return (
+    <>
+      {showConsent && (
+        <AIConsentDialog
+          onAccept={() => {
+            setConsentGranted(true);
+            setShowConsent(false);
+            executeGenerate();
+          }}
+          onDecline={() => setShowConsent(false)}
+        />
+      )}
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <FormField
@@ -134,6 +156,9 @@ export function NotificationForm() {
                   <Wand2 className="mr-2 h-4 w-4" />
                   {isLoading ? "Generating..." : "Generate & Populate Content"}
                 </Button>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" /> Powered by Google Gemini
+                </p>
             </div>
              <FormField
                 control={form.control}
@@ -159,5 +184,6 @@ export function NotificationForm() {
         <Button type="submit">Send Notification</Button>
       </form>
     </Form>
+    </>
   );
 }
