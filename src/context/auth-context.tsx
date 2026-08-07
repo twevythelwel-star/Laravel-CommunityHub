@@ -60,6 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, pass: string): Promise<boolean> => {
+    // Basic password guard — even in mock mode, require a non-trivial password
+    if (!pass || pass.length < 6) {
+      return false;
+    }
+
     const role = mockRoleMapping[username.toLowerCase()];
     const userData = mockUserDatabase[username.toLowerCase()];
 

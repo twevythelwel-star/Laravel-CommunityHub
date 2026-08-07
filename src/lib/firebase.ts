@@ -16,17 +16,31 @@ let app: FirebaseApp;
 let auth: Auth;
 let db: Firestore;
 
-// Initialize Firebase robustly
-if (firebaseConfig.projectId) {
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
+const isPlaceholder = (val?: string) =>
+  !val || val === 'your-api-key-here' || val.startsWith('your-');
+
+// Initialize Firebase robustly only on the client-side
+if (typeof window !== 'undefined') {
+  if (firebaseConfig.projectId && !isPlaceholder(firebaseConfig.apiKey)) {
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApp();
+    }
+    auth = getAuth(app);
+    db = getFirestore(app);
+  } else if (isPlaceholder(firebaseConfig.apiKey)) {
+    console.warn(
+      '[Community Hub] Firebase API key is a placeholder.\n' +
+      'Get your real API key from: https://console.firebase.google.com\n' +
+      '→ Project Settings → Your Apps → Web App → SDK config\n' +
+      'Then update NEXT_PUBLIC_FIREBASE_API_KEY in .env.local\n\n' +
+      'The app will continue to run using mock authentication — ' +
+      'Firebase features (Firestore, Auth) will be disabled until a valid key is provided.'
+    );
   } else {
-    app = getApp();
+    console.warn('[Community Hub] Firebase projectId is missing. Check your .env.local file.');
   }
-  auth = getAuth(app);
-  db = getFirestore(app);
-} else {
-    console.warn("Firebase configuration is missing. Features depending on Firebase will be disabled.");
 }
 
 export { app, auth, db };
