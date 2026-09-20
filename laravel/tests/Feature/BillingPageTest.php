@@ -311,19 +311,24 @@ class BillingPageTest extends TestCase
 
     // ── The claim that is gone ───────────────────────────────────────
 
-    public function test_the_page_no_longer_claims_to_take_card_payments(): void
+    public function test_the_page_does_not_claim_a_compliance_certification(): void
     {
         /*
          | The resident view stated "Card information is securely collected by
          | Stripe (PCI-DSS Level 1 Compliant)" above a Pay button with no
-         | handler. There is no payment processor in this application. This test
-         | exists so nobody reintroduces the claim without also building the
-         | integration behind it.
+         | handler, and collected card-holder details in its own inputs.
+         |
+         | This no longer asserts the absence of "Stripe": a real integration
+         | was added alongside this page (StripeCheckoutController,
+         | StripePaymentService), so the word legitimately appears in a checkout
+         | URL. What must stay absent is the compliance claim and any attempt to
+         | take card details in this application's own form — the parts that
+         | were untrue, and that are a question of fact rather than of wording.
          */
         $response = $this->actingAs($this->resident())->get('/dashboard/billing');
 
-        $response->assertDontSee('Stripe');
         $response->assertDontSee('PCI-DSS');
+        $response->assertDontSee('PCI DSS');
         $response->assertDontSee('Name on Card');
         $response->assertDontSee('Remember this card');
     }

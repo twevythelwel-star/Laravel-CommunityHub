@@ -32,7 +32,7 @@ class StripePaymentService
                         'currency' => strtolower($invoice->currency ?: 'usd'),
                         'product_data' => [
                             'name' => "HOA Assessment — Ref: {$invoice->reference}",
-                            'description' => "Community Hub Maintenance & Operations Assessment",
+                            'description' => 'Community Hub Maintenance & Operations Assessment',
                         ],
                         'unit_amount' => $invoice->amount_minor,
                     ],
@@ -41,7 +41,7 @@ class StripePaymentService
                 'mode' => 'payment',
                 'customer_email' => $invoice->user->email,
                 'client_reference_id' => (string) $invoice->id,
-                'success_url' => $successUrl . '?session_id={CHECKOUT_SESSION_ID}',
+                'success_url' => $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url' => $cancelUrl,
             ]);
 
@@ -51,10 +51,10 @@ class StripePaymentService
         }
 
         // Demo / Sandbox mode: create a simulated session token and return direct success redirect
-        $demoSessionId = 'cs_demo_' . bin2hex(random_bytes(12));
+        $demoSessionId = 'cs_demo_'.bin2hex(random_bytes(12));
         $invoice->update(['stripe_session_id' => $demoSessionId]);
 
-        return $successUrl . '?session_id=' . $demoSessionId;
+        return $successUrl.'?session_id='.$demoSessionId;
     }
 
     /**
@@ -82,6 +82,7 @@ class StripePaymentService
             ]);
 
             Log::info("Invoice {$invoice->reference} paid via live Stripe ({$session->id})");
+
             return true;
         }
 
@@ -90,10 +91,11 @@ class StripePaymentService
             'status' => 'Paid',
             'paid_at' => now(),
             'stripe_session_id' => $sessionId,
-            'stripe_payment_intent' => 'pi_demo_' . bin2hex(random_bytes(10)),
+            'stripe_payment_intent' => 'pi_demo_'.bin2hex(random_bytes(10)),
         ]);
 
         Log::info("Invoice {$invoice->reference} paid via simulated Stripe session ({$sessionId})");
+
         return true;
     }
 }

@@ -18,7 +18,7 @@ class StripeCheckoutController extends Controller
     {
         // Enforce access control: only invoice recipient or admins can pay
         $user = Auth::user();
-        if ($invoice->user_id !== $user->id && !$user->role->isAdministrative()) {
+        if ($invoice->user_id !== $user->id && ! $user->role->isAdministrative()) {
             abort(403, 'Unauthorized to pay this statement.');
         }
 

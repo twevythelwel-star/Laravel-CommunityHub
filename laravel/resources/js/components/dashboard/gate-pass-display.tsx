@@ -17,6 +17,8 @@ import { GateScannerDialog } from '@/components/dashboard/gate-scanner-dialog';
  */
 
 export type OwnPass = {
+    /** Primary key, used by the PDF download route. */
+    id: number;
     passId: string;
     category: PassCategory;
     holderName: string;

@@ -18,11 +18,11 @@ class SecurityAlertBroadcastEvent implements ShouldBroadcast
     public function __construct(public Warning $warning)
     {
         $this->payload = [
-            'id'          => $warning->id,
-            'title'       => $warning->title,
+            'id' => $warning->id,
+            'title' => $warning->title,
             'description' => $warning->description,
-            'severity'    => $warning->severity ?? 'high',
-            'created_at'  => $warning->created_at->toIso8601String(),
+            'severity' => $warning->severity ?? 'high',
+            'created_at' => $warning->created_at->toIso8601String(),
         ];
     }
 

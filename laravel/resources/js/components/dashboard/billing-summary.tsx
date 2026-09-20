@@ -155,16 +155,18 @@ export function BillingSummary({ settings, summary, invoices }: Props) {
       </div>
 
       {/*
-        What replaced the card form. Saying plainly that payment happens
-        elsewhere is the honest version of a Pay button that never did anything.
+        This replaced the original card form, which claimed PCI-DSS compliance
+        above a Pay button with no handler. It briefly read "this application
+        does not take card payments", which was true when written and false as
+        soon as the Stripe checkout landed — directly below it. Describing what
+        the buttons in the table actually do is the version that stays true.
       */}
       <Alert>
         <Info className="h-4 w-4" />
         <AlertTitle>How to pay</AlertTitle>
         <AlertDescription>
-          This application does not take card payments. Settle your dues with the community
-          office, and an administrator records the payment against your invoice here — the status
-          below updates once they do.
+          Settle your dues with the community office and an administrator records the payment
+          against your invoice here. The status below updates once they do.
         </AlertDescription>
       </Alert>
 

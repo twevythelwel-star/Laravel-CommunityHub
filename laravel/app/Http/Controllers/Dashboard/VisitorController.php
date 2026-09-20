@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\VisitorStatus;
+use App\Events\VisitorCheckedInEvent;
 use App\Http\Controllers\Controller;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
@@ -162,7 +163,7 @@ class VisitorController extends Controller
         $visitor->checkIn();
 
         $gate = $request->string('gate')->toString() ?: 'Main Gate';
-        event(new \App\Events\VisitorCheckedInEvent($visitor, $gate));
+        event(new VisitorCheckedInEvent($visitor, $gate));
 
         AccessLogEntry::create([
             'user_id' => $visitor->homeowner_id,

@@ -18,16 +18,24 @@ use Inertia\Response;
  * half had a card-payment form that collected a name, showed four identical
  * generic icons as though they were card brands, and stated that
  * "Card information is securely collected by Stripe (PCI-DSS Level 1
- * Compliant)" — there is no Stripe integration anywhere in this codebase, and
- * that line sat above a Pay button with no handler. The admin half showed four
+ * Compliant)" above a Pay button with no handler. The admin half showed four
  * fabricated transactions, a twelve-month collections chart of made-up figures,
- * and totals derived from them.
+ * and totals derived from them. All of that is gone; the figures here are
+ * aggregated from the invoices table.
  *
- * Meanwhile two working endpoints existed that the UI could not reach:
- * `markPaid`, and the currency and due-day halves of `updateSettings`.
+ * Two working endpoints also existed that the UI could not reach: `markPaid`,
+ * and the currency and due-day halves of `updateSettings`.
  *
- * The card form is gone. See the README for why, and for what building real
- * payments would actually involve.
+ * A Stripe integration has since been added alongside this controller
+ * (StripeCheckoutController, StripePaymentService) and `checkoutUrl` below
+ * points at it.
+ *
+ * DO NOT enable that path in production as it stands. `config/services.php`
+ * declares no `stripe` key, so `config('services.stripe.secret')` is null and
+ * StripePaymentService always takes its demo branch — which marks the invoice
+ * Paid without taking any payment. Configure the key, and settle invoices from
+ * a verified `checkout.session.completed` webhook rather than from the browser
+ * hitting the success URL, before this is exposed to residents.
  */
 class BillingController extends Controller
 {

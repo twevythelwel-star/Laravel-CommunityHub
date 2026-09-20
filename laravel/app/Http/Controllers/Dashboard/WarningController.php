@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Events\SecurityAlertBroadcastEvent;
 use App\Http\Controllers\Controller;
 use App\Models\Warning;
 use Illuminate\Http\RedirectResponse;
@@ -80,7 +81,7 @@ class WarningController extends Controller
             'issued_at' => now(),
         ]);
 
-        event(new \App\Events\SecurityAlertBroadcastEvent($warning));
+        event(new SecurityAlertBroadcastEvent($warning));
 
         // A community-wide alert is worth an audit trail of who raised it.
         Log::channel('security')->notice('Safety alert raised', [

@@ -19,13 +19,13 @@ class VisitorCheckedInEvent implements ShouldBroadcast
     public function __construct(public Visitor $visitor, public string $gate = 'Main Gate 1')
     {
         $this->payload = [
-            'visitor_id'     => $visitor->id,
-            'visitor_name'   => $visitor->name,
-            'vehicle'        => $visitor->vehicle,
-            'entry_gate'     => $gate,
-            'homeowner_id'   => $visitor->homeowner_id,
+            'visitor_id' => $visitor->id,
+            'visitor_name' => $visitor->name,
+            'vehicle' => $visitor->vehicle,
+            'entry_gate' => $gate,
+            'homeowner_id' => $visitor->homeowner_id,
             'homeowner_name' => $visitor->homeowner_name,
-            'checked_in_at'  => $visitor->checked_in_at?->toIso8601String() ?? now()->toIso8601String(),
+            'checked_in_at' => $visitor->checked_in_at?->toIso8601String() ?? now()->toIso8601String(),
         ];
     }
 

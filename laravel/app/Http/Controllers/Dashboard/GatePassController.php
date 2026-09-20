@@ -39,6 +39,8 @@ class GatePassController extends Controller
 
         return Inertia::render('Dashboard/GatePass', [
             'pass' => [
+                // Needed by the PDF link, whose route binds {gatePass} by primary key.
+                'id' => $pass->id,
                 'passId' => $pass->pass_id,
                 'category' => $category->value,
                 'holderName' => $pass->holder_name,
