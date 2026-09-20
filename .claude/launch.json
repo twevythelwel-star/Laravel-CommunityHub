@@ -4,8 +4,21 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "laravel",
+      "runtimeExecutable": "php",
+      "runtimeArgs": [
+        "laravel/artisan",
+        "serve",
+        "--port=8123"
+      ],
+      "port": 8123
     }
   ]
 }

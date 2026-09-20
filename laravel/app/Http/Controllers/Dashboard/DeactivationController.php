@@ -1,0 +1,68 @@
+<?php
+
+namespace App\Http\Controllers\Dashboard;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * Backs src/app/dashboard/deactivation/page.tsx, which previously wrote a flag
+ * to localStorage — clearable by the user and invisible to administrators.
+ * Deactivation now revokes the gate pass, ends the session, and is logged.
+ */
+class DeactivationController extends Controller
+{
+    public function show(Request $request): Response
+    {
+        return Inertia::render('Dashboard/Deactivation', [
+            'user' => [
+                'displayName' => $request->user()->display_name,
+                'email' => $request->user()->email,
+            ],
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'password' => ['required', 'current_password'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+            'confirm' => ['accepted'],
+        ]);
+
+        $user = $request->user();
+
+        $user->update([
+            'status' => 'Inactive',
+            'deactivated_at' => now(),
+        ]);
+
+        /*
+         | A deactivated account must not keep a working pass.
+         |
+         | `->get()` matters: the higher-order `->each->` proxy exists on
+         | Collection, not on Builder, so calling it on the query threw
+         | "Undefined property: HasMany::$each" and deactivation 500'd.
+         */
+        $user->gatePasses()->active()->get()->each->revoke($user, 'Account deactivated by holder');
+
+        $user->recordActivity('Deactivated own account');
+
+        Log::channel('security')->notice('Account deactivated', [
+            'uid' => $user->uid,
+            'reason' => $validated['reason'] ?? null,
+        ]);
+
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('landing')
+            ->with('success', 'Your account has been deactivated.');
+    }
+}

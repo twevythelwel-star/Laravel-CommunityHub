@@ -1,0 +1,138 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Renter;
+use App\Models\Staff;
+use App\Models\User;
+use App\Models\Visitor;
+use Illuminate\Database\Seeder;
+
+/**
+ * Visitors from getInitialVisitors() in src/lib/visitors-data.ts, plus staff and
+ * lease records. The relative dates in the original (now, now-1d, now-13h) are
+ * preserved so the visitors screen shows the same mix of statuses.
+ */
+class DirectorySeeder extends Seeder
+{
+    public function run(): void
+    {
+        $olivia = User::where('email', 'olivia.davis@residence.net')->first();
+        $john = User::where('email', 'john.smith@residence.net')->first();
+        $jane = User::where('email', 'jane.doe@residence.net')->first();
+        $marcus = User::where('email', 'marcus.vance@residence.net')->first();
+        $sophia = User::where('email', 'sophia.taylor@residence.net')->first();
+
+        $now = now();
+
+        $visitors = [
+            [
+                'name' => 'Liam Johnson',
+                'type' => 'One-time',
+                'status' => 'Expected',
+                'expected_at' => $now,
+                'date_range' => $now->format('Y-m-d'),
+                'homeowner_id' => $olivia?->id,
+                'homeowner_name' => 'Olivia Davis (Lot 42)',
+                'id_image_url' => 'https://picsum.photos/300/200?q=id1',
+                'is_blocked' => false,
+            ],
+            [
+                'name' => 'Noah Williams',
+                'type' => 'Recurring',
+                'status' => 'Checked In',
+                'expected_at' => $now->copy()->subDay(),
+                'date_range' => $now->copy()->subDay()->format('Y-m-d').' - '.$now->copy()->addDays(60)->format('Y-m-d'),
+                'homeowner_id' => $john?->id,
+                'homeowner_name' => 'John Smith (Lot 12)',
+                'id_image_url' => 'https://picsum.photos/300/200?q=id2',
+                'is_blocked' => false,
+                'checked_in_at' => $now->copy()->subDay(),
+            ],
+            [
+                'name' => 'Expired Visitor',
+                'type' => 'One-time',
+                'status' => 'Expected',
+                'expected_at' => $now->copy()->subHours(13),
+                'date_range' => $now->copy()->subHours(13)->format('Y-m-d'),
+                'homeowner_id' => $john?->id,
+                'homeowner_name' => 'John Smith (Lot 12)',
+                'is_blocked' => false,
+            ],
+            [
+                'name' => 'Known Troublemaker',
+                'type' => 'One-time',
+                'status' => 'Expected',
+                'expected_at' => $now,
+                'date_range' => $now->format('Y-m-d'),
+                'homeowner_id' => $jane?->id,
+                'homeowner_name' => 'Jane Doe (Lot 03)',
+                'id_image_url' => 'https://picsum.photos/300/200?q=trouble',
+                // Flagged because the name is on the seeded blocklist.
+                'is_blocked' => true,
+            ],
+        ];
+
+        foreach ($visitors as $visitor) {
+            Visitor::updateOrCreate(
+                ['name' => $visitor['name'], 'homeowner_name' => $visitor['homeowner_name']],
+                $visitor,
+            );
+        }
+
+        $staff = [
+            [
+                'name' => 'Maria Garcia',
+                'job' => 'Housekeeper',
+                'id_type' => 'National ID',
+                'id_number' => 'JM-8841-2290',
+                'id_expiry' => now()->addYears(2)->toDateString(),
+                'property' => 'Lot 42, Royal Palm Drive',
+                'added_by' => $marcus?->id,
+                'status' => 'Active',
+            ],
+            [
+                'name' => 'Devon Clarke',
+                'job' => 'Gardener',
+                'id_type' => 'Passport',
+                'id_number' => 'A4471902',
+                'id_expiry' => now()->addMonths(8)->toDateString(),
+                'property' => 'Lot 42, Royal Palm Drive',
+                'added_by' => $marcus?->id,
+                'status' => 'Active',
+            ],
+            [
+                'name' => 'Andre Bailey',
+                'job' => 'Grounds Maintenance',
+                'id_type' => 'National ID',
+                'id_number' => 'JM-2210-7741',
+                // Deliberately past, so the Expired ID state is visible.
+                'id_expiry' => now()->subMonths(2)->toDateString(),
+                'property' => 'Community Grounds',
+                'added_by' => $marcus?->id,
+                'status' => 'Active',
+            ],
+        ];
+
+        foreach ($staff as $member) {
+            Staff::updateOrCreate(
+                ['name' => $member['name'], 'property' => $member['property']],
+                $member,
+            );
+        }
+
+        if ($sophia) {
+            Renter::updateOrCreate(
+                ['user_id' => $sophia->id],
+                [
+                    'name' => $sophia->display_name,
+                    'status' => 'Active',
+                    'lease_start' => now()->subMonths(4)->toDateString(),
+                    'lease_end' => now()->addMonths(8)->toDateString(),
+                    'lot' => $sophia->lot,
+                    'street' => $sophia->street,
+                ],
+            );
+        }
+    }
+}

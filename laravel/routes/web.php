@@ -1,0 +1,265 @@
+<?php
+
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Dashboard\AccessLogController;
+use App\Http\Controllers\Dashboard\BillingController;
+use App\Http\Controllers\Dashboard\BlocklistController;
+use App\Http\Controllers\Dashboard\BoundaryController;
+use App\Http\Controllers\Dashboard\CalendarController;
+use App\Http\Controllers\Dashboard\ChangelogController;
+use App\Http\Controllers\Dashboard\DeactivationController;
+use App\Http\Controllers\Dashboard\DealsController;
+use App\Http\Controllers\Dashboard\DirectoryController;
+use App\Http\Controllers\Dashboard\FeedbackController;
+use App\Http\Controllers\Dashboard\FundraisingController;
+use App\Http\Controllers\Dashboard\GatePassController;
+use App\Http\Controllers\Dashboard\GuidelinesController;
+use App\Http\Controllers\Dashboard\MapController;
+use App\Http\Controllers\Dashboard\NotificationController;
+use App\Http\Controllers\Dashboard\OverviewController;
+use App\Http\Controllers\Dashboard\ProfileController;
+use App\Http\Controllers\Dashboard\RenterController;
+use App\Http\Controllers\Dashboard\ReviewFeedbackController;
+use App\Http\Controllers\Dashboard\SettingsController;
+use App\Http\Controllers\Dashboard\StripeCheckoutController;
+use App\Http\Controllers\Dashboard\UpdateController;
+use App\Http\Controllers\Dashboard\VisitorController;
+use App\Http\Controllers\Dashboard\WarningController;
+use App\Http\Controllers\GuestPassController;
+use App\Http\Controllers\PdfController;
+use App\Http\Controllers\PublicPageController;
+use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Public pages — rendered with Blade
+|--------------------------------------------------------------------------
+| These replace src/app/page.tsx and src/app/privacy/page.tsx. They are
+| content pages with no application state, so Blade serves them without
+| shipping the React bundle.
+*/
+
+Route::get('/', [PublicPageController::class, 'landing'])->name('landing');
+Route::get('/privacy', [PublicPageController::class, 'privacy'])->name('privacy');
+Route::get('/guest/pass/{token}', [GuestPassController::class, 'show'])->name('guest-pass.show');
+Route::get('/guest/pass/{visitor}/pdf', [PdfController::class, 'downloadVisitorPass'])->name('pdf.visitor-pass');
+
+/*
+|--------------------------------------------------------------------------
+| Authentication
+|--------------------------------------------------------------------------
+| Replaces the mock login in src/context/auth-context.tsx.
+*/
+
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
+    Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:6,1');
+});
+
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
+    ->middleware('auth')
+    ->name('logout');
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard — rendered with Inertia + React
+|--------------------------------------------------------------------------
+| One route per page under src/app/dashboard/. Each maps to a component in
+| resources/js/Pages/Dashboard/.
+*/
+
+Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->group(function () {
+
+    Route::get('/', OverviewController::class)->name('index');
+
+    // ── Profile & personal settings ──
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar');
+    Route::post('/profile/ai-consent', [ProfileController::class, 'setAiConsent'])->name('profile.ai-consent');
+
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+    Route::patch('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+    Route::get('/deactivation', [DeactivationController::class, 'show'])->name('deactivation');
+    Route::post('/deactivation', [DeactivationController::class, 'store'])->name('deactivation.store');
+
+    // ── Gate pass ──
+    Route::get('/gate-pass', [GatePassController::class, 'index'])->name('gate-pass');
+    Route::get('/gate-pass/token', [GatePassController::class, 'token'])->name('gate-pass.token');
+    Route::post('/gate-pass/rotate', [GatePassController::class, 'rotate'])->name('gate-pass.rotate');
+    Route::post('/gate-pass/scan', [GatePassController::class, 'scan'])
+        ->middleware('can:scanPasses')
+        ->name('gate-pass.scan');
+    Route::post('/gate-pass/{gatePass}/revoke', [GatePassController::class, 'revoke'])
+        ->middleware('can:manageSecurity')
+        ->name('gate-pass.revoke');
+    Route::get('/gate-pass/pdf/{gatePass}', [PdfController::class, 'downloadGatePass'])->name('gate-pass.pdf');
+
+    // ── Visitors & directory ──
+    Route::get('/visitors', [VisitorController::class, 'index'])->name('visitors');
+    Route::post('/visitors', [VisitorController::class, 'store'])->name('visitors.store');
+    Route::patch('/visitors/{visitor}', [VisitorController::class, 'update'])->name('visitors.update');
+    Route::post('/visitors/{visitor}/check-in', [VisitorController::class, 'checkIn'])->name('visitors.check-in');
+    Route::post('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOut'])->name('visitors.check-out');
+    Route::delete('/visitors/{visitor}', [VisitorController::class, 'destroy'])->name('visitors.destroy');
+
+    /*
+     | Admin-only, which is what the original always showed: the page rendered
+     | an "Access Denied" card for everyone else and the sidebar offered it to
+     | System Admin and Admin alone. The route was open, so those three
+     | disagreed — a resident could load it and receive a payload the page then
+     | refused to draw. The controller still redacts contact details for a
+     | non-admin viewer; that is defence in depth behind this gate, not a
+     | second access model.
+     */
+    Route::get('/directory', [DirectoryController::class, 'index'])
+        ->middleware('can:manageUsers')
+        ->name('directory');
+    Route::post('/directory/staff', [DirectoryController::class, 'storeStaff'])->name('directory.staff.store');
+    Route::patch('/directory/staff/{staff}', [DirectoryController::class, 'updateStaff'])->name('directory.staff.update');
+    Route::delete('/directory/staff/{staff}', [DirectoryController::class, 'destroyStaff'])->name('directory.staff.destroy');
+    Route::post('/directory/users', [DirectoryController::class, 'storeUser'])
+        ->middleware('can:manageUsers')
+        ->name('directory.users.store');
+    Route::patch('/directory/users/{user}', [DirectoryController::class, 'updateUser'])
+        ->middleware('can:manageUsers')
+        ->name('directory.users.update');
+
+    Route::get('/renters', [RenterController::class, 'index'])->name('renters');
+    Route::post('/renters', [RenterController::class, 'store'])->name('renters.store');
+    Route::patch('/renters/{renter}', [RenterController::class, 'update'])->name('renters.update');
+    Route::delete('/renters/{renter}', [RenterController::class, 'destroy'])->name('renters.destroy');
+
+    // ── Security ──
+    /*
+     | `manageSecurity`, which is the audience the controller and the export
+     | gate already assumed. The route was open while the page rendered "Access
+     | Denied" to anyone who was not an Admin — so a Security guard, who works
+     | the gate this log records, was shut out of it while a resident could load
+     | a payload nothing would draw.
+     */
+    Route::middleware('can:manageSecurity')->group(function () {
+        Route::get('/access-log', [AccessLogController::class, 'index'])->name('access-log');
+        Route::get('/access-log/export', [AccessLogController::class, 'export'])->name('access-log.export');
+    });
+
+    /*
+     | Read is open to any signed-in user, write is not.
+     |
+     | The sidebar has always offered Block List to residents, and the page has a
+     | resident-only "Request Removal" action — but the GET was gated on
+     | `manageBlocklist`, so the menu item 403'd and the feature was unreachable.
+     | Residents now get a redacted list (name, status and date only; the reason,
+     | photo and author are withheld by the controller).
+     */
+    Route::get('/block-list', [BlocklistController::class, 'index'])->name('block-list');
+
+    Route::post('/block-list/{blocklistEntry}/request-removal', [BlocklistController::class, 'requestRemoval'])
+        ->whereNumber('blocklistEntry')
+        ->name('block-list.request-removal');
+
+    Route::middleware('can:manageBlocklist')->group(function () {
+        Route::post('/block-list', [BlocklistController::class, 'store'])
+            ->name('block-list.store');
+
+        // Registered before the {blocklistEntry} PATCH: a wildcard segment would
+        // otherwise capture the literal "requests" and fail model binding.
+        Route::patch('/block-list/requests/{removalRequest}', [BlocklistController::class, 'reviewRemoval'])
+            ->name('block-list.requests.review');
+
+        Route::patch('/block-list/{blocklistEntry}', [BlocklistController::class, 'update'])
+            ->whereNumber('blocklistEntry')
+            ->name('block-list.update');
+        Route::delete('/block-list/{blocklistEntry}', [BlocklistController::class, 'destroy'])
+            ->whereNumber('blocklistEntry')
+            ->name('block-list.destroy');
+    });
+
+    /*
+     | Safety alerts. Any signed-in resident may raise one — the page is built
+     | around resident reports, and the confirm/deny vote is the community
+     | corroborating an unverified claim. Because an alert reaches everybody,
+     | raising one is rate limited and `manageSecurity` can delete a false alarm.
+     */
+    Route::get('/warnings', [WarningController::class, 'index'])->name('warnings');
+    Route::post('/warnings', [WarningController::class, 'store'])
+        ->middleware('throttle:3,60')
+        ->name('warnings.store');
+    Route::post('/warnings/{warning}/respond', [WarningController::class, 'respond'])->name('warnings.respond');
+    Route::delete('/warnings/{warning}', [WarningController::class, 'destroy'])
+        ->middleware('can:manageSecurity')
+        ->name('warnings.destroy');
+
+    // ── Map & boundary ──
+    Route::get('/map', [MapController::class, 'index'])->name('map');
+    Route::post('/map/landmarks', [MapController::class, 'storeLandmark'])->name('map.landmarks.store');
+    Route::delete('/map/landmarks/{landmark}', [MapController::class, 'destroyLandmark'])->name('map.landmarks.destroy');
+    Route::post('/map/locate', [MapController::class, 'locate'])->name('map.locate');
+
+    Route::middleware('can:manageBoundary')->group(function () {
+        Route::get('/map/boundary', [BoundaryController::class, 'edit'])->name('boundary');
+        Route::post('/map/boundary/draft', [BoundaryController::class, 'saveDraft'])->name('boundary.draft');
+        Route::post('/map/boundary/publish', [BoundaryController::class, 'publish'])->name('boundary.publish');
+        Route::post('/map/boundary/validate', [BoundaryController::class, 'validateBoundary'])->name('boundary.validate');
+    });
+
+    // ── Communications ──
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications');
+    Route::post('/notifications', [NotificationController::class, 'store'])
+        ->middleware('can:broadcastNotices')
+        ->name('notifications.store');
+    Route::post('/notifications/suggest-audience', [NotificationController::class, 'suggestAudience'])
+        ->middleware('can:broadcastNotices')
+        ->name('notifications.suggest-audience');
+
+    Route::get('/updates', [UpdateController::class, 'index'])->name('updates');
+    Route::post('/updates', [UpdateController::class, 'store'])
+        ->middleware('can:broadcastNotices')
+        ->name('updates.store');
+
+    Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
+    Route::post('/calendar', [CalendarController::class, 'store'])->name('calendar.store');
+    Route::patch('/calendar/{communityEvent}', [CalendarController::class, 'update'])->name('calendar.update');
+    Route::delete('/calendar/{communityEvent}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+
+    Route::get('/guidelines', [GuidelinesController::class, 'index'])->name('guidelines');
+    Route::get('/changelog', [ChangelogController::class, 'index'])->name('changelog');
+
+    Route::get('/feedback', [FeedbackController::class, 'index'])->name('feedback');
+    Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
+
+    Route::get('/review-feedback', [ReviewFeedbackController::class, 'index'])
+        ->middleware('can:reviewFeedback')
+        ->name('review-feedback');
+    Route::patch('/review-feedback/{feedback}', [ReviewFeedbackController::class, 'update'])
+        ->middleware('can:reviewFeedback')
+        ->name('review-feedback.update');
+
+    // ── Community life ──
+    Route::get('/deals', [DealsController::class, 'index'])->name('deals');
+    Route::post('/deals/businesses', [DealsController::class, 'storeBusiness'])
+        ->middleware('can:manageUsers')
+        ->name('deals.businesses.store');
+    Route::post('/deals/food-apps', [DealsController::class, 'storeFoodApp'])
+        ->middleware('can:manageUsers')
+        ->name('deals.food-apps.store');
+
+    Route::get('/fundraising', [FundraisingController::class, 'index'])->name('fundraising');
+    Route::post('/fundraising', [FundraisingController::class, 'store'])
+        ->middleware('can:manageFundraisers')
+        ->name('fundraising.store');
+    Route::post('/fundraising/{fundraiser}/donate', [FundraisingController::class, 'donate'])->name('fundraising.donate');
+
+    Route::get('/billing', [BillingController::class, 'index'])->name('billing');
+    Route::patch('/billing/settings', [BillingController::class, 'updateSettings'])
+        ->middleware('can:manageBilling')
+        ->name('billing.settings.update');
+    Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'markPaid'])
+        ->middleware('can:manageBilling')
+        ->name('billing.invoices.pay');
+    Route::get('/billing/invoices/{invoice}/pdf', [PdfController::class, 'downloadInvoice'])->name('billing.invoice.pdf');
+    Route::post('/billing/invoices/{invoice}/stripe-checkout', [StripeCheckoutController::class, 'checkout'])->name('billing.stripe.checkout');
+    Route::get('/billing/invoices/{invoice}/stripe-success', [StripeCheckoutController::class, 'success'])->name('billing.stripe.success');
+    Route::get('/billing/invoices/{invoice}/stripe-cancel', [StripeCheckoutController::class, 'cancel'])->name('billing.stripe.cancel');
+});
