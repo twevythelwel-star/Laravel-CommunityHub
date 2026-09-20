@@ -8,9 +8,14 @@
   "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "192x192",
-      "type": "image/x-icon"
+      "src": "/community-hub-app-icon.png",
+      "sizes": "1024x1024 512x512 192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/community-hub-app-icon.webp",
+      "sizes": "1024x1024 512x512 192x192",
+      "type": "image/webp"
     }
   ]
 }

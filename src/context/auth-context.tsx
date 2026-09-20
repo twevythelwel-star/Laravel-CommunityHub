@@ -5,13 +5,17 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { useRouter } from 'next/navigation';
 import type { UserRole } from '@/types';
 
-type User = {
+export type User = {
   uid: string;
   name: string; // This is the "legal" name, not editable by user
   displayName: string;
   email: string;
   phone: string;
   role: UserRole;
+  lot?: string;
+  street?: string;
+  title?: string;
+  avatarUrl?: string;
 };
 
 type AuthContextType = {
@@ -22,15 +26,62 @@ type AuthContextType = {
   loading: boolean;
 };
 
-// This is a mock mapping from username to full user object.
-// In a real application, this would be stored in a database (e.g., Firestore).
+// Enterprise mock user database for Community Hub
 const mockUserDatabase: Record<string, Omit<User, 'uid' | 'role'>> = {
-    'user-sysadmin': { name: 'Root Sysadmin', displayName: 'Root', email: 'user-sysadmin@example.com', phone: '555-0101' },
-    'user-admin': { name: 'Lead Admin', displayName: 'LeadAdmin', email: 'user-admin@example.com', phone: '555-0102' },
-    'user-homeowner': { name: 'Sample Homeowner', displayName: 'Homeowner', email: 'user-homeowner@example.com', phone: '555-0103' },
-    'user-renter': { name: 'Sample Renter', displayName: 'Renter', email: 'user-renter@example.com', phone: '555-0104' },
-    'user-security': { name: 'Community Security Inc.', displayName: 'Security', email: 'user-security@example.com', phone: '555-0105' },
-    'user-staff': { name: 'Maria Garcia', displayName: 'Maria G.', email: 'maria.g@example.com', phone: '555-0106' },
+    'user-sysadmin': { 
+      name: 'Alexander Wright', 
+      displayName: 'Alex Wright', 
+      email: 'alexander.wright@communityhub.org', 
+      phone: '(876) 555-0101',
+      title: 'Senior Systems Administrator',
+      lot: 'HQ-01',
+      street: 'Executive Pavilion'
+    },
+    'user-admin': { 
+      name: 'Elena Rostova', 
+      displayName: 'Elena Rostova', 
+      email: 'elena.rostova@communityhub.org', 
+      phone: '(876) 555-0102',
+      title: 'Community Operations Director',
+      lot: 'Admin Suite',
+      street: 'Central Clubhouse Way'
+    },
+    'user-homeowner': { 
+      name: 'Marcus Vance', 
+      displayName: 'Marcus Vance', 
+      email: 'marcus.vance@residence.net', 
+      phone: '(876) 555-0103',
+      title: 'Verified Homeowner',
+      lot: 'Lot 42',
+      street: 'Royal Palm Drive'
+    },
+    'user-renter': { 
+      name: 'Sophia Taylor', 
+      displayName: 'Sophia Taylor', 
+      email: 'sophia.taylor@residence.net', 
+      phone: '(876) 555-0104',
+      title: 'Resident Member',
+      lot: 'Unit 15B',
+      street: 'Hibiscus Crescent'
+    },
+    'user-security': { 
+      name: 'Apex Security Command', 
+      displayName: 'Security Dispatch', 
+      email: 'dispatch@apexguard.com', 
+      phone: '(876) 555-0105',
+      title: 'Authorized Gate & Patrol Lead',
+      lot: 'Gatehouse 1',
+      street: 'Main Perimeter Entrance'
+    },
+    'user-staff': { 
+      name: 'Maria Garcia', 
+      displayName: 'Maria Garcia', 
+      email: 'maria.garcia@communitystaff.org', 
+      phone: '(876) 555-0106',
+      title: 'Lead Facilities Coordinator',
+      lot: 'Lot 42',
+      street: 'Royal Palm Drive'
+    },
 };
 
 const mockRoleMapping: Record<string, UserRole> = {
@@ -54,7 +105,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check local storage for a logged-in user
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
-        setUser(JSON.parse(savedUser));
+      try {
+        const parsed = JSON.parse(savedUser);
+        const usernameKey = Object.keys(mockUserDatabase).find(k => 
+          parsed.uid === `mock-uid-${k}` || 
+          parsed.email === mockUserDatabase[k].email || 
+          parsed.email === `${k}@example.com`
+        );
+        if (usernameKey && mockUserDatabase[usernameKey]) {
+          const upgradedUser: User = {
+            ...mockUserDatabase[usernameKey],
+            ...parsed,
+            name: mockUserDatabase[usernameKey].name,
+            role: mockRoleMapping[usernameKey] || parsed.role,
+            lot: parsed.lot || mockUserDatabase[usernameKey].lot,
+            street: parsed.street || mockUserDatabase[usernameKey].street,
+            title: parsed.title || mockUserDatabase[usernameKey].title,
+            email: parsed.email?.includes('@example.com') ? mockUserDatabase[usernameKey].email : parsed.email,
+          };
+          setUser(upgradedUser);
+          localStorage.setItem('currentUser', JSON.stringify(upgradedUser));
+        } else {
+          setUser(parsed);
+        }
+      } catch {
+        const defaultUser: User = {
+          uid: 'mock-uid-user-sysadmin',
+          role: 'System Admin',
+          ...mockUserDatabase['user-sysadmin']
+        };
+        setUser(defaultUser);
+        localStorage.setItem('currentUser', JSON.stringify(defaultUser));
+      }
+    } else {
+      const defaultUser: User = {
+        uid: 'mock-uid-user-sysadmin',
+        role: 'System Admin',
+        ...mockUserDatabase['user-sysadmin']
+      };
+      setUser(defaultUser);
+      localStorage.setItem('currentUser', JSON.stringify(defaultUser));
     }
     setLoading(false);
   }, []);

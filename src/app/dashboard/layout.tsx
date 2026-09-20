@@ -44,6 +44,7 @@ import {
   Users,
   BadgeCheck,
   ListTree,
+  ShieldCheck,
 } from 'lucide-react';
 import { useDarkMode } from '@/hooks/use-dark-mode';
 import { Logo } from '@/components/logo';
@@ -68,6 +69,7 @@ import { Plus } from "lucide-react";
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/map?tab=boundary', label: 'Boundary Manager', icon: ShieldCheck, roles: ['System Admin'] },
   { href: '/dashboard/deals', label: 'Perks & Savings', icon: Gift, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },

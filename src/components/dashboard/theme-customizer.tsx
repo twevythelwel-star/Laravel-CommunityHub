@@ -85,7 +85,7 @@ export function ThemeCustomizer() {
             <CardContent className="p-4">
                 <div className="flex justify-between items-center">
                     <h3 style={{ color: `color-mix(in srgb, ${theme.primary} 90%, black)`}} className="font-bold text-lg">Example Card</h3>
-                    <Button style={{ backgroundColor: theme.primary, color: `color-mix(in srgb, ${theme.background} 90%, black)` }}>A Button</Button>
+                    <Button style={{ backgroundColor: theme.primary, color: '#ffffff' }}>A Button</Button>
                 </div>
                  <p style={{ color: `color-mix(in srgb, ${theme.primary} 70%, #555555)` }} className="text-sm mt-2">This is a preview of the new theme. Use the controls above to see your changes live.</p>
                  <div className="flex gap-2 mt-4">

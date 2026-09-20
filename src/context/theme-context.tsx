@@ -1,4 +1,3 @@
-
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -10,12 +9,12 @@ type Theme = {
   font: string;
 };
 
-// Default theme matching globals.css HSL values converted to HEX
+// Enterprise high-contrast default theme
 const DEFAULT_THEME: Theme = {
-  primary: '#a7d7d0',   // hsl(188, 55%, 72%)
-  background: '#f0f9ff', // hsl(208, 100%, 97%)
-  accent: '#a5d9af',     // hsl(140, 44%, 73%)
-  font: 'PT Sans',
+  primary: '#2563eb',   // Royal Blue (high contrast against white & dark)
+  background: '#f8fafc', // Clean Slate Light
+  accent: '#0d9488',     // Teal
+  font: 'Inter',
 };
 
 // Function to convert HEX to HSL string for CSS variables
@@ -55,8 +54,7 @@ const hexToHsl = (hex: string): string => {
     l = Math.round(l * 100);
     
     return `${h} ${s}% ${l}%`;
-}
-
+};
 
 type ThemeContextType = {
   theme: Theme;
@@ -66,13 +64,12 @@ type ThemeContextType = {
 };
 
 const availableFonts = [
+    'Inter',
     'PT Sans',
     'Roboto',
     'Open Sans',
     'Lato',
     'Montserrat',
-    'Oswald',
-    'Raleway',
 ];
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -83,29 +80,54 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedTheme = localStorage.getItem('app-theme');
     if (savedTheme) {
-      setTheme(JSON.parse(savedTheme));
+      try {
+        const parsed = JSON.parse(savedTheme);
+        // Clean up legacy washed out pastel cyan presets
+        if (parsed.primary === '#a7d7d0' || parsed.background === '#f0f9ff') {
+          setTheme(DEFAULT_THEME);
+          localStorage.setItem('app-theme', JSON.stringify(DEFAULT_THEME));
+        } else {
+          setTheme(parsed);
+        }
+      } catch {
+        setTheme(DEFAULT_THEME);
+      }
     }
   }, []);
 
   const resetTheme = useCallback(() => {
     setTheme(DEFAULT_THEME);
+    localStorage.removeItem('app-theme');
   }, []);
 
   useEffect(() => {
     localStorage.setItem('app-theme', JSON.stringify(theme));
     
     const root = document.documentElement;
-    root.style.setProperty('--primary', hexToHsl(theme.primary));
-    root.style.setProperty('--background', hexToHsl(theme.background));
-    root.style.setProperty('--accent', hexToHsl(theme.accent));
     root.style.setProperty('--font-family', theme.font);
 
-    // For simplicity, we'll derive other colors from these base colors.
-    // This part can be expanded to allow full control.
-    root.style.setProperty('--card', hexToHsl(theme.background)); // Card is same as background in default light theme
-    root.style.setProperty('--sidebar-background', `color-mix(in srgb, ${theme.background} 95%, white)`);
-    root.style.setProperty('--sidebar-accent', `color-mix(in srgb, ${theme.primary} 20%, ${theme.background})`);
+    // Apply primary & accent colors if customized
+    if (theme.primary && theme.primary !== DEFAULT_THEME.primary) {
+      root.style.setProperty('--primary', hexToHsl(theme.primary));
+    }
+    if (theme.accent && theme.accent !== DEFAULT_THEME.accent) {
+      root.style.setProperty('--accent', hexToHsl(theme.accent));
+    }
 
+    // Never allow light inline background/card overrides to clobber dark mode
+    const observer = new MutationObserver(() => {
+      const isDark = root.classList.contains('dark');
+      if (isDark) {
+        root.style.removeProperty('--background');
+        root.style.removeProperty('--card');
+        root.style.removeProperty('--sidebar-background');
+        root.style.removeProperty('--sidebar-accent');
+      }
+    });
+
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
   }, [theme]);
 
   const value = useMemo(() => ({ theme, setTheme, resetTheme, availableFonts }), [theme, resetTheme]);

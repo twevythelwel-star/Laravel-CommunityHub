@@ -176,13 +176,31 @@ export default function LoginPage() {
                 <AccordionTrigger className="py-2 text-muted-foreground">View Test Credentials</AccordionTrigger>
                 <AccordionContent>
                   <Alert>
-                    <AlertDescription className="space-y-2">
-                       <p>Use any password of <strong>6 or more characters</strong>.</p>
-                       <ul className="list-disc pl-4 text-muted-foreground">
-                        {testUsers.map(user => (
-                            <li key={user.role}><span className="font-medium text-foreground">{user.role}:</span> {user.username}</li>
+                    <AlertDescription className="space-y-3">
+                       <p>Click any account below to <strong>Instant Demo</strong> or use password <code>password123</code>:</p>
+                       <div className="grid grid-cols-2 gap-2 pt-1">
+                        {testUsers.map(u => (
+                            <Button 
+                              key={u.role} 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs justify-start h-8"
+                              onClick={async () => {
+                                setUsername(u.username);
+                                setPassword('password123');
+                                setIsLoading(true);
+                                const success = await login(u.username, 'password123');
+                                setIsLoading(false);
+                                if (success) {
+                                  setIsLoggedIn(true);
+                                  setTimeout(() => router.push('/dashboard'), 1500);
+                                }
+                              }}
+                            >
+                              ⚡ {u.role}
+                            </Button>
                         ))}
-                       </ul>
+                       </div>
                     </AlertDescription>
                   </Alert>
                 </AccordionContent>

@@ -1,81 +1,103 @@
-
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 208 100% 97%;
-    --foreground: 224 71.4% 4.1%;
-    --card: 208 100% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --popover: 208 100% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 188 55% 72%;
-    --primary-foreground: 188 100% 10%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 224 71.4% 4.1%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 140 44% 73%;
-    --accent-foreground: 140 100% 10%;
+    /* Community Hub Enterprise Light Palette */
+    /* Light Surface: Crisp off-white background with pure white cards */
+    --background: 210 40% 98%;           /* #f8fafc */
+    --foreground: 222.2 84% 4.9%;         /* #020817 - Deep dark text (16:1 contrast) */
+    
+    --card: 0 0% 100%;                   /* #ffffff - Pure white surface */
+    --card-foreground: 222.2 84% 4.9%;    /* #020817 - Dark text on light card */
+    
+    --popover: 0 0% 100%;                /* #ffffff */
+    --popover-foreground: 222.2 84% 4.9%; /* #020817 */
+    
+    /* Primary: Royal Sapphire Blue */
+    --primary: 221.2 83.2% 53.3%;        /* #2563eb */
+    --primary-foreground: 210 40% 98%;   /* #f8fafc - Crisp white text (8.6:1 contrast) */
+    
+    --secondary: 210 40% 94%;            /* Light blue-slate */
+    --secondary-foreground: 222.2 47.4% 11.2%; /* Deep dark text on secondary */
+    
+    --muted: 210 40% 95%;                /* Soft light neutral */
+    --muted-foreground: 215.4 20% 38%;   /* Accessible dark muted text (5.2:1 contrast) */
+    
+    --accent: 210 40% 94%;               /* Soft accent surface */
+    --accent-foreground: 222.2 47.4% 11.2%; /* Dark text */
+    
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 188 55% 62%;
-    --radius: 0.8rem;
-    --chart-1: 188 55% 72%;
-    --chart-2: 140 44% 73%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 214.3 31.8% 88%;           /* Crisp light border */
+    --input: 214.3 31.8% 88%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.75rem;
+    
+    --chart-1: 221.2 83.2% 53.3%;
+    --chart-2: 160 84% 39%;
     --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-4: 43 74% 50%;
+    --chart-5: 27 87% 55%;
 
-    --sidebar-background: 208 100% 99%;
-    --sidebar-foreground: 224 71.4% 20%;
-    --sidebar-primary: 188 55% 72%;
-    --sidebar-primary-foreground: 188 100% 10%;
-    --sidebar-accent: 188 55% 90%;
-    --sidebar-accent-foreground: 188 100% 10%;
-    --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 188 55% 62%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222.2 84% 4.9%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222.2 84% 4.9%;
+    --sidebar-border: 214.3 31.8% 90%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
   }
 
   .dark {
-    --background: 224 71.4% 4.1%;
-    --foreground: 210 20% 98%;
-    --card: 224 71.4% 4.1%;
-    --card-foreground: 210 20% 98%;
-    --popover: 224 71.4% 4.1%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 188 55% 72%;
-    --primary-foreground: 188 100% 10%;
-    --secondary: 215 27.9% 16.9%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 215 27.9% 16.9%;
-    --muted-foreground: 217.9 10.6% 64.9%;
-    --accent: 140 44% 73%;
-    --accent-foreground: 140 100% 10%;
+    /* Community Hub Enterprise Dark Palette */
+    /* Dark Surface: Deep obsidian/slate background with dark slate cards */
+    --background: 222.2 84% 4.9%;         /* #020817 - Deep obsidian dark */
+    --foreground: 210 40% 98%;           /* #f8fafc - Crisp light text (16:1 contrast) */
+    
+    --card: 222.2 84% 6.8%;              /* #040a1a - Rich dark card */
+    --card-foreground: 210 40% 98%;      /* #f8fafc - Light text on dark card */
+    
+    --popover: 222.2 84% 6.8%;           /* #040a1a */
+    --popover-foreground: 210 40% 98%;   /* #f8fafc */
+    
+    /* Primary: Bright Royal Blue */
+    --primary: 217.2 91.2% 59.8%;        /* #3b82f6 */
+    --primary-foreground: 0 0% 100%;     /* #ffffff - Pure white text (7.5:1 contrast) */
+    
+    --secondary: 217.2 32.6% 16%;
+    --secondary-foreground: 210 40% 98%; /* Light text on secondary */
+    
+    --muted: 217.2 32.6% 16%;
+    --muted-foreground: 215 20.2% 65.1%; /* Crisp readable light muted text (6.2:1 contrast) */
+    
+    --accent: 217.2 32.6% 16%;
+    --accent-foreground: 210 40% 98%;
+    
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 215 27.9% 16.9%;
-    --input: 215 27.9% 16.9%;
-    --ring: 188 55% 82%;
-    --chart-1: 188 55% 72%;
-    --chart-2: 140 44% 73%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+    
+    --chart-1: 217.2 91.2% 59.8%;
+    --chart-2: 160 84% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
 
-    --sidebar-background: 224 71.4% 6%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 188 55% 72%;
-    --sidebar-primary-foreground: 188 100% 10%;
-    --sidebar-accent: 215 27.9% 16.9%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 215 27.9% 16.9%;
-    --sidebar-ring: 188 55% 82%;
+    --sidebar-background: 222.2 84% 4.9%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 217.2 91.2% 59.8%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217.2 32.6% 14%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-ring: 224.3 76.3% 48%;
   }
 }
 
@@ -84,7 +106,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-200;
   }
 }
 
@@ -119,3 +141,56 @@
 .animate-fade-in {
   animation: fadeIn 1.5s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
+
+/* ── Google Maps Leaflet Enhancements ── */
+.leaflet-popup-content-wrapper {
+  padding: 0 !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.22), 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-tip-container {
+  overflow: visible !important;
+}
+
+.leaflet-popup-tip {
+  background-color: hsl(var(--card)) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+}
+
+.leaflet-container {
+  font-family: inherit !important;
+}
+
+/* Google drop-pin pulse animation */
+@keyframes googlePinPulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.15); opacity: 0.4; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.google-pin-pulse {
+  animation: googlePinPulse 2s infinite ease-in-out;
+}
+
+/* Geofence Radar Beacon animation */
+@keyframes geofenceBeaconPulse {
+  0% { transform: scale(0.9); opacity: 0.9; }
+  60% { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+.geofence-beacon-pulse {
+  animation: geofenceBeaconPulse 2.2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+

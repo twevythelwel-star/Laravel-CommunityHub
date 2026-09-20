@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -9,74 +8,194 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/context/auth-context";
 import type { ManagedUser, UserRole } from "@/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { MoreHorizontal, PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, Edit, Trash2, Search, MapPin, Mail, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CreateUserForm } from '@/components/dashboard/create-user-form';
 import { useToast } from '@/hooks/use-toast';
 
-
+// Enterprise sanitized user directory dataset
 const mockAllUsers: ManagedUser[] = [
     // System Admins
     {
         id: 'usr_sys_1',
-        name: 'Root Sysadmin',
-        email: 'user-sysadmin@example.com',
+        name: 'Alexander Wright',
+        email: 'alexander.wright@communityhub.org',
         role: 'System Admin',
         status: 'Active',
         createdAt: new Date('2023-01-10T09:00:00Z'),
+        lotNumber: 'HQ-01',
+        streetName: 'Executive Pavilion',
     },
-     {
+    {
         id: 'usr_sys_2',
-        name: 'Secondary Sysadmin',
-        email: 'user-sysadmin2@example.com',
+        name: 'Jonathan Bailey',
+        email: 'jonathan.bailey@communityhub.org',
         role: 'System Admin',
         status: 'Active',
         createdAt: new Date('2023-01-11T09:00:00Z'),
+        lotNumber: 'HQ-02',
+        streetName: 'Executive Pavilion',
     },
     // Admins
     {
         id: 'usr_adm_1',
-        name: 'Lead Admin',
-        email: 'user-admin@example.com',
+        name: 'Elena Rostova',
+        email: 'elena.rostova@communityhub.org',
         role: 'Admin',
         status: 'Active',
         createdAt: new Date('2023-01-12T10:00:00Z'),
+        lotNumber: 'Suite A',
+        streetName: 'Central Clubhouse Way',
     },
-    { id: 'usr_adm_2', name: 'Operations Admin', email: 'user-admin2@example.com', role: 'Admin', status: 'Active', createdAt: new Date() },
-    { id: 'usr_adm_3', name: 'Community Admin', email: 'user-admin3@example.com', role: 'Admin', status: 'Inactive', createdAt: new Date() },
-    { id: 'usr_adm_4', name: 'Finance Admin', email: 'user-admin4@example.com', role: 'Admin', status: 'Active', createdAt: new Date() },
+    { 
+        id: 'usr_adm_2', 
+        name: 'David Sterling', 
+        email: 'david.sterling@communityhub.org', 
+        role: 'Admin', 
+        status: 'Active', 
+        createdAt: new Date('2023-02-01T10:00:00Z'),
+        lotNumber: 'Suite B',
+        streetName: 'Central Clubhouse Way',
+    },
+    { 
+        id: 'usr_adm_3', 
+        name: 'Maya Vance', 
+        email: 'maya.vance@communityhub.org', 
+        role: 'Admin', 
+        status: 'Active', 
+        createdAt: new Date('2023-03-15T10:00:00Z'),
+        lotNumber: 'Suite C',
+        streetName: 'Central Clubhouse Way',
+    },
 
     // Homeowners
-    { id: 'usr_ho_1', name: 'Olivia Davis', email: 'olivia.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2023-01-15T09:00:00Z'), lotNumber: '42', streetName: 'Main St' },
-    { id: 'usr_ho_2', name: 'John Smith', email: 'john.s@example.com', role: 'Homeowner', status: 'Inactive', createdAt: new Date('2023-02-20T11:00:00Z'), lotNumber: '12', streetName: 'Oak Ave' },
-    { id: 'usr_ho_3', name: 'Jane Doe', email: 'jane.d@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date('2022-11-05T14:20:00Z'), lotNumber: '3', streetName: 'Elm Circle' },
-    { id: 'usr_ho_4', name: 'Carlos Gomez', email: 'carlos.g@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date(), lotNumber: '21', streetName: 'Pine Ln' },
-    { id: 'usr_ho_5', name: 'Aisha Khan', email: 'aisha.k@example.com', role: 'Homeowner', status: 'Active', createdAt: new Date(), lotNumber: '88', streetName: 'Birch Rd' },
-    { id: 'usr_ho_6', name: 'Ben Carter', email: 'ben.c@example.com', role: 'Homeowner', status: 'Inactive', createdAt: new Date(), lotNumber: '5', streetName: 'Willow Way' },
+    { 
+        id: 'usr_ho_1', 
+        name: 'Marcus Vance', 
+        email: 'marcus.vance@residence.net', 
+        role: 'Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2023-01-15T09:00:00Z'), 
+        lotNumber: '42', 
+        streetName: 'Royal Palm Drive' 
+    },
+    { 
+        id: 'usr_ho_2', 
+        name: 'Olivia Davis', 
+        email: 'olivia.davis@residence.net', 
+        role: 'Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2023-02-20T11:00:00Z'), 
+        lotNumber: '12', 
+        streetName: 'Bougainvillea Way' 
+    },
+    { 
+        id: 'usr_ho_3', 
+        name: 'Carlos Gomez', 
+        email: 'carlos.gomez@residence.net', 
+        role: 'Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2022-11-05T14:20:00Z'), 
+        lotNumber: '21', 
+        streetName: 'Pine Lane' 
+    },
+    { 
+        id: 'usr_ho_4', 
+        name: 'Aisha Khan', 
+        email: 'aisha.khan@residence.net', 
+        role: 'Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2023-04-10T14:00:00Z'), 
+        lotNumber: '88', 
+        streetName: 'Birch Road' 
+    },
+    { 
+        id: 'usr_ho_5', 
+        name: 'Gregory Campbell', 
+        email: 'gregory.campbell@residence.net', 
+        role: 'Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2023-05-18T16:00:00Z'), 
+        lotNumber: '5', 
+        streetName: 'Willow Way' 
+    },
 
+    // Temporary Homeowners (Renters)
+    { 
+        id: 'usr_th_1', 
+        name: 'Sophia Taylor', 
+        email: 'sophia.taylor@residence.net', 
+        role: 'Temporary Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2024-06-01T14:00:00Z'), 
+        lotNumber: '15B', 
+        streetName: 'Hibiscus Crescent' 
+    },
+    { 
+        id: 'usr_th_2', 
+        name: 'Samuel Wilson', 
+        email: 'samuel.wilson@residence.net', 
+        role: 'Temporary Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2024-06-15T12:00:00Z'), 
+        lotNumber: '3C', 
+        streetName: 'Maple Court' 
+    },
+    { 
+        id: 'usr_th_3', 
+        name: 'Leo Martinez', 
+        email: 'leo.martinez@residence.net', 
+        role: 'Temporary Homeowner', 
+        status: 'Active', 
+        createdAt: new Date('2024-07-01T10:00:00Z'), 
+        lotNumber: '22A', 
+        streetName: 'Spruce Avenue' 
+    },
 
-    // Renters (Temporary Homeowners)
-    { id: 'usr_th_1', name: 'Sam Wilson', email: 'sam.w@example.com', role: 'Temporary Homeowner', status: 'Active', createdAt: new Date('2024-06-01T14:00:00Z'), lotNumber: '15B', streetName: 'Pine Ln' },
-    { id: 'usr_th_2', name: 'Mia Wong', email: 'mia.w@example.com', role: 'Temporary Homeowner', status: 'Active', createdAt: new Date(), lotNumber: '3C', streetName: 'Maple Court' },
-    { id: 'usr_th_3', name: 'Leo Martinez', email: 'leo.m@example.com', role: 'Temporary Homeowner', status: 'Inactive', createdAt: new Date(), lotNumber: '22A', streetName: 'Spruce Ave' },
-
-    // Security
-    { id: 'usr_sec_1', name: 'Guard McSecurity', email: 'guard.m@example.com', role: 'Security', status: 'Active', createdAt: new Date('2023-03-10T18:00:00Z') },
-    { id: 'usr_sec_2', name: 'Officer Barbrady', email: 'officer.b@example.com', role: 'Security', status: 'Active', createdAt: new Date() },
-    { id: 'usr_sec_3', name: 'Patrol Person', email: 'patrol.p@example.com', role: 'Security', status: 'Inactive', createdAt: new Date() },
+    // Security Personnel
+    { 
+        id: 'usr_sec_1', 
+        name: 'Apex Security Command', 
+        email: 'dispatch@apexguard.com', 
+        role: 'Security', 
+        status: 'Active', 
+        createdAt: new Date('2023-03-10T18:00:00Z'),
+        lotNumber: 'Gatehouse 1',
+        streetName: 'Main Perimeter Entrance'
+    },
+    { 
+        id: 'usr_sec_2', 
+        name: 'Roland Sterling', 
+        email: 'r.sterling@apexguard.com', 
+        role: 'Security', 
+        status: 'Active', 
+        createdAt: new Date('2023-04-01T08:00:00Z'),
+        lotNumber: 'Gatehouse 2',
+        streetName: 'Service Gate'
+    },
+    { 
+        id: 'usr_sec_3', 
+        name: 'Kenneth Ward', 
+        email: 'k.ward@apexguard.com', 
+        role: 'Security', 
+        status: 'Active', 
+        createdAt: new Date('2023-05-12T08:00:00Z'),
+        lotNumber: 'Mobile Patrol',
+        streetName: 'Perimeter Ring Road'
+    },
 ];
 
 const roleOrder: UserRole[] = ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'];
 const adminVisibleRoles: UserRole[] = ['Homeowner', 'Temporary Homeowner', 'Security', 'Staff'];
-const ROOT_SYS_ADMIN_EMAIL = 'user-sysadmin@example.com';
-
+const ROOT_SYS_ADMIN_EMAILS = ['alexander.wright@communityhub.org', 'user-sysadmin@example.com'];
 
 export default function DirectoryPage() {
   const { user } = useAuth();
@@ -84,11 +203,12 @@ export default function DirectoryPage() {
   const [users, setUsers] = useState<ManagedUser[]>(mockAllUsers);
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ManagedUser | undefined>(undefined);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const canManageDirectory = user?.role === 'System Admin' || user?.role === 'Admin';
 
-  const handleOpenForm = (user?: ManagedUser) => {
-    setSelectedUser(user);
+  const handleOpenForm = (targetUser?: ManagedUser) => {
+    setSelectedUser(targetUser);
     setFormOpen(true);
   };
   
@@ -130,126 +250,207 @@ export default function DirectoryPage() {
     ));
   };
 
-  const visibleRoles = (user?.role === 'System Admin' 
-    ? roleOrder.filter(r => r !== 'Staff')
-    : user?.role === 'Admin'
-      ? adminVisibleRoles.filter(r => r !== 'Staff')
-      : []) as UserRole[];
+  const visibleRoles = useMemo(() => {
+    return (user?.role === 'System Admin' 
+      ? roleOrder.filter(r => r !== 'Staff')
+      : user?.role === 'Admin'
+        ? adminVisibleRoles.filter(r => r !== 'Staff')
+        : []) as UserRole[];
+  }, [user?.role]);
 
-  const groupedUsers = users.reduce((acc, currentUser) => {
-    if (visibleRoles.includes(currentUser.role)) {
-        (acc[currentUser.role] = acc[currentUser.role] || []).push(currentUser);
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users;
+    const query = searchQuery.toLowerCase().trim();
+    return users.filter(u => 
+      u.name.toLowerCase().includes(query) ||
+      u.email.toLowerCase().includes(query) ||
+      (u.lotNumber && u.lotNumber.toLowerCase().includes(query)) ||
+      (u.streetName && u.streetName.toLowerCase().includes(query))
+    );
+  }, [users, searchQuery]);
+
+  const groupedUsers = useMemo(() => {
+    return filteredUsers.reduce((acc, currentUser) => {
+      if (visibleRoles.includes(currentUser.role)) {
+          (acc[currentUser.role] = acc[currentUser.role] || []).push(currentUser);
+      }
+      return acc;
+    }, {} as Record<UserRole, ManagedUser[]>);
+  }, [filteredUsers, visibleRoles]);
+
+  const getInitials = (name: string) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
     }
-    return acc;
-  }, {} as Record<UserRole, ManagedUser[]>);
+    return name.slice(0, 2).toUpperCase();
+  };
 
+  const getRoleAccent = (role: UserRole) => {
+    switch (role) {
+      case 'System Admin':
+        return 'border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/10';
+      case 'Admin':
+        return 'border-sky-500/30 text-sky-600 dark:text-sky-400 bg-sky-500/10';
+      case 'Security':
+        return 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10';
+      case 'Homeowner':
+        return 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10';
+      case 'Temporary Homeowner':
+        return 'border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10';
+      default:
+        return 'border-muted text-muted-foreground bg-muted/40';
+    }
+  };
 
   if (!canManageDirectory) {
     return (
-      <Card>
+      <Card className="max-w-2xl mx-auto border-border/80">
         <CardHeader>
-          <CardTitle>Access Denied</CardTitle>
+          <div className="flex items-center gap-2 text-destructive">
+            <ShieldAlert className="h-5 w-5" />
+            <CardTitle>Access Denied</CardTitle>
+          </div>
           <CardDescription>You do not have permission to view this page.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p>Only administrators can view the community directory.</p>
+          <p className="text-sm text-muted-foreground">
+            Only authorized community administrators can view and manage the resident directory.
+          </p>
         </CardContent>
       </Card>
     );
   }
   
   return (
-    <div className="grid gap-8">
-      <div className="flex items-center justify-between">
+    <div className="grid gap-8 max-w-7xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-            <h1 className="font-headline text-3xl font-bold">Community Directory</h1>
-            <p className="text-muted-foreground">View and manage all registered users in the community.</p>
+            <h1 className="font-headline text-3xl font-bold tracking-tight">Community Directory</h1>
+            <p className="text-muted-foreground">View, search, and manage registered profiles across the community.</p>
         </div>
-        <CreateUserForm
-            open={isFormOpen}
-            onOpenChange={handleCloseForm}
-            onSaveUser={handleSaveUser}
-            userToEdit={selectedUser}
-        >
-            <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
-                <PlusCircle className="h-3.5 w-3.5" />
-                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                    Add User
-                </span>
-            </Button>
-        </CreateUserForm>
+        <div className="flex items-center gap-3">
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, email, lot..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-9 text-xs"
+            />
+          </div>
+          <CreateUserForm
+              open={isFormOpen}
+              onOpenChange={handleCloseForm}
+              onSaveUser={handleSaveUser}
+              userToEdit={selectedUser}
+          >
+              <Button size="sm" className="gap-1.5 h-9" onClick={() => handleOpenForm()}>
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Add Member</span>
+              </Button>
+          </CreateUserForm>
+        </div>
       </div>
 
-       <Card>
-        <CardHeader>
-          <CardTitle>User Directory</CardTitle>
-          <CardDescription>
-            Browse users by role. Admins can create, edit, delete, and manage user accounts.
-          </CardDescription>
+      <Card className="border-border/80 shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Registered Member Profiles</CardTitle>
+              <CardDescription>
+                Profiles categorized by administrative and residential role.
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {filteredUsers.length} {filteredUsers.length === 1 ? 'Profile' : 'Profiles'} Listed
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent>
             <Accordion type="multiple" defaultValue={visibleRoles} className="w-full space-y-4">
                 {visibleRoles.map(role => (
                     groupedUsers[role] && groupedUsers[role].length > 0 && (
-                         <AccordionItem value={role} key={role} className="border-none">
-                            <AccordionTrigger className="bg-muted hover:bg-muted/80 px-4 py-2 rounded-md text-lg font-semibold">
-                                {role}s ({groupedUsers[role].length})
+                         <AccordionItem value={role} key={role} className="border border-border/50 rounded-lg overflow-hidden">
+                            <AccordionTrigger className="bg-muted/40 hover:bg-muted/70 px-4 py-3 text-base font-semibold transition-colors">
+                                <div className="flex items-center gap-2">
+                                  <span>{role}s</span>
+                                  <Badge variant="secondary" className="text-xs px-2 py-0 h-5">
+                                    {groupedUsers[role].length}
+                                  </Badge>
+                                </div>
                             </AccordionTrigger>
-                            <AccordionContent className="pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            <AccordionContent className="p-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                 {groupedUsers[role].map(person => {
-                                    const isRootSysAdmin = person.email === ROOT_SYS_ADMIN_EMAIL;
+                                    const isRootSysAdmin = ROOT_SYS_ADMIN_EMAILS.includes(person.email);
                                     const isSelf = person.email === user?.email;
                                     const canManageUser = !isRootSysAdmin && !isSelf && (user?.role === 'System Admin' || (user?.role === 'Admin' && person.role !== 'Admin' && person.role !== 'System Admin'));
 
                                     return (
-                                    <Card key={person.id}>
-                                        <CardHeader className="flex-row gap-4 items-center !pb-2">
-                                             <Avatar className="h-12 w-12">
-                                                <AvatarImage src={`https://picsum.photos/200?q=${person.id}`} data-ai-hint="person avatar" />
-                                                <AvatarFallback>{person.name.charAt(0)}</AvatarFallback>
+                                    <Card key={person.id} className="border-border/70 shadow-none hover:border-primary/40 transition-colors">
+                                        <CardHeader className="flex-row gap-3.5 items-center !pb-2">
+                                             <Avatar className={`h-11 w-11 border-2 ${getRoleAccent(person.role)}`}>
+                                                <AvatarFallback className="font-bold text-xs">
+                                                  {getInitials(person.name)}
+                                                </AvatarFallback>
                                             </Avatar>
-                                            <div>
-                                                <p className="font-semibold">{person.name}</p>
-                                                <p className="text-sm text-muted-foreground">{person.email}</p>
-                                                <Badge className="mt-2" variant={person.status === 'Active' ? 'secondary' : 'outline'}>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-sm truncate">{person.name}</p>
+                                                <div className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                                                  <Mail className="w-3 h-3 shrink-0" />
+                                                  <span className="truncate">{person.email}</span>
+                                                </div>
+                                                <Badge className="mt-1.5 text-[10px] py-0 h-4" variant={person.status === 'Active' ? 'secondary' : 'outline'}>
                                                     {person.status}
                                                 </Badge>
                                             </div>
                                         </CardHeader>
-                                        <CardContent className="pt-2">
+                                        <CardContent className="pt-2 text-xs">
+                                            {(person.lotNumber || person.streetName) && (
+                                              <div className="flex items-center gap-1.5 text-muted-foreground mb-3 bg-muted/30 p-1.5 rounded text-[11px]">
+                                                <MapPin className="w-3.5 h-3.5 shrink-0 text-primary/70" />
+                                                <span className="truncate">
+                                                  {[person.lotNumber, person.streetName].filter(Boolean).join(', ')}
+                                                </span>
+                                              </div>
+                                            )}
+
                                             {canManageUser ? (
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
-                                                        <Button variant="outline" size="sm" className="w-full">
-                                                            <MoreHorizontal className="h-4 w-4 mr-2" />
-                                                            Manage User
+                                                        <Button variant="outline" size="sm" className="w-full text-xs h-8">
+                                                            <MoreHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                                                            Manage Account
                                                         </Button>
                                                     </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-40">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuItem onClick={() => handleOpenForm(person)}>
-                                                            <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    <DropdownMenuContent align="end" className="w-44">
+                                                        <DropdownMenuLabel className="text-xs">Profile Actions</DropdownMenuLabel>
+                                                        <DropdownMenuItem onClick={() => handleOpenForm(person)} className="text-xs">
+                                                            <Edit className="mr-2 h-3.5 w-3.5" /> Edit Details
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => toggleStatus(person.id)}>
+                                                        <DropdownMenuItem onClick={() => toggleStatus(person.id)} className="text-xs">
                                                             {person.status === 'Active' ? 'Set as Inactive' : 'Set as Active'}
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         <AlertDialog>
                                                             <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">
-                                                                     <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                                <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive text-xs">
+                                                                     <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete Member
                                                                 </DropdownMenuItem>
                                                             </AlertDialogTrigger>
                                                             <AlertDialogContent>
                                                                 <AlertDialogHeader>
                                                                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                                     <AlertDialogDescription>
-                                                                        This will permanently delete the user &ldquo;{person.name}&rdquo;. This action cannot be undone.
+                                                                        This will permanently delete &ldquo;{person.name}&rdquo; from the community directory.
                                                                     </AlertDialogDescription>
                                                                 </AlertDialogHeader>
                                                                 <AlertDialogFooter>
                                                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDeleteUser(person.id)}>Yes, delete</AlertDialogAction>
+                                                                    <AlertDialogAction onClick={() => handleDeleteUser(person.id)}>
+                                                                      Confirm Delete
+                                                                    </AlertDialogAction>
                                                                 </AlertDialogFooter>
                                                             </AlertDialogContent>
                                                         </AlertDialog>
@@ -259,15 +460,15 @@ export default function DirectoryPage() {
                                                 <Button 
                                                     variant="outline"
                                                     size="sm"
-                                                    className="w-full"
+                                                    className="w-full text-xs h-8 text-muted-foreground opacity-70"
                                                     disabled
                                                     title={
-                                                        isRootSysAdmin ? "The root System Admin cannot be managed." :
-                                                        isSelf ? "You cannot manage your own account." :
-                                                        "You do not have permission to manage this user."
+                                                        isRootSysAdmin ? "The root System Admin cannot be modified." :
+                                                        isSelf ? "You cannot manage your own profile here." :
+                                                        "You do not have permission to manage this member."
                                                     }
                                                 >
-                                                    Manage User
+                                                    {isSelf ? "Your Account" : isRootSysAdmin ? "System Protected" : "Protected"}
                                                 </Button>
                                             )}
                                         </CardContent>

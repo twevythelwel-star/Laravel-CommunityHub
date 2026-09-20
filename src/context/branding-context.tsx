@@ -15,34 +15,34 @@ export type BrandingState = {
 
 export const THEME_PRESETS: Record<ThemePreset, { primary: string; primaryForeground: string; accent: string; accentForeground: string }> = {
   triovo: {
-    primary: '262 83% 58%', // Violet HSL
-    primaryForeground: '0 0% 100%',
-    accent: '188 95% 42%', // Cyan HSL
+    primary: '221.2 83.2% 53.3%', // Royal Sapphire Blue HSL (#2563eb)
+    primaryForeground: '210 40% 98%', // Crisp White (8.6:1 contrast)
+    accent: '160 84% 39%', // Rich Emerald Accent
     accentForeground: '0 0% 100%'
   },
   classic: {
-    primary: '188 55% 72%', // Classic Light Blue HSL
-    primaryForeground: '188 100% 10%',
-    accent: '140 44% 73%', // Soft Green HSL
-    accentForeground: '140 100% 10%'
+    primary: '215 25% 27%', // Deep Navy Classic HSL (#334155)
+    primaryForeground: '210 40% 98%', // Crisp White (9.5:1 contrast)
+    accent: '221.2 83.2% 53.3%', // Royal Blue HSL
+    accentForeground: '210 40% 98%'
   },
   ocean: {
-    primary: '217 91% 60%', // Ocean Blue HSL
-    primaryForeground: '0 0% 100%',
-    accent: '197 100% 46%', // Sky Accent HSL
+    primary: '199 89% 48%', // Marine Sky Blue HSL (#0284c7)
+    primaryForeground: '0 0% 100%', // Pure White (4.8:1 contrast)
+    accent: '173 80% 40%', // Deep Sea Teal HSL
     accentForeground: '0 0% 100%'
   },
   sunset: {
-    primary: '16 90% 55%', // Sunset Red-Orange HSL
-    primaryForeground: '0 0% 100%',
-    accent: '43 96% 56%', // Gold Accent HSL
-    accentForeground: '224 71.4% 4.1%'
+    primary: '16 90% 50%', // Warm Terracotta Sunset HSL
+    primaryForeground: '0 0% 100%', // Pure White (5.1:1 contrast)
+    accent: '38 92% 50%', // Amber HSL
+    accentForeground: '222.2 84% 4.9%'
   },
   brutalist: {
-    primary: '240 5.9% 10%', // Dark Charcoal HSL
-    primaryForeground: '0 0% 98%',
-    accent: '240 5.9% 50%', // Slate Gray HSL
-    accentForeground: '0 0% 98%'
+    primary: '222.2 47.4% 11.2%', // Obsidian Slate HSL (#0f172a)
+    primaryForeground: '210 40% 98%', // Crisp White (15.5:1 contrast)
+    accent: '215 16.3% 46.9%', // Slate Gray HSL
+    accentForeground: '210 40% 98%'
   }
 };
 

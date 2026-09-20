@@ -23,6 +23,7 @@ This directory indexes the **33 specialized AI agent personas** configured to as
 - **Ai Engineer** (`.github/agents/ai-engineer.agent.md` / `.agents/skills/ai-engineer/SKILL.md`)
 
 ### Group 2: Design & Testing Specialists
+- **Continuous Visual Improvement Specialist** (.github/agents/continuous-visual-improvement.agent.md / .agents/skills/continuous-visual-improvement/SKILL.md)
 - **Brand Guardian** (`.github/agents/brand-guardian.agent.md` / `.agents/skills/brand-guardian/SKILL.md`) — *Customized for the Triovo Brand*
 - **UX Architect** (`.github/agents/ux-architect.agent.md` / `.agents/skills/ux-architect/SKILL.md`)
 - **UX Researcher** (`.github/agents/ux-researcher.agent.md` / `.agents/skills/ux-researcher/SKILL.md`)
@@ -47,3 +48,41 @@ This directory indexes the **33 specialized AI agent personas** configured to as
 *Created and registered automatically under the Triovo ecosystem rules.*
 
 <!-- TRIOVO-AGENTS-END -->
+
+
+
+# ANTIGRAVITY ENTERPRISE VISUAL & CONTINUOUS IMPROVEMENT SUITE
+
+This project is governed by the permanent Antigravity Universal Enterprise Visual Standard, Continuous Improvement Engine, Enterprise Visual Scorecard, Incremental Improvement Standard, and Regression Protection Gate.
+
+### 1. Universal Enterprise Visual Standard (30-Section Production Standard)
+- Full standard defined in [.agents/rules/antigravity-universal-enterprise-visual-standard.md](.agents/rules/antigravity-universal-enterprise-visual-standard.md).
+- Applies to all imagery, 3D assets, cartographic/map data, motion/animation, typography, icons, and UI components.
+- Classify all assets: RETAIN, ENHANCE, CLEAN, RESTORE, UPSCALE, EDIT, ANIMATE, CONVERT TO 3D, OPTIMIZE, REPLACE, CREATE.
+
+### 2. Continuous Visual Improvement Engine
+- Automated 7-stage loop: Discover ? Audit ? Prioritize ? Improve ? Validate ? Monitor ? Repeat.
+- Systematically audits the **14 Defect Detection Pillars**: Poor/old images, cleanable images, missing imagery, weak animations, outdated 3D, poor maps, inconsistent icons, visual inconsistencies, accessibility issues, slow-loading media, mobile problems, broken/unused assets, generic placeholders, and non-conforming components.
+- Defined in [.agents/rules/continuous-visual-improvement-engine.md](.agents/rules/continuous-visual-improvement-engine.md).
+
+### 3. Enterprise Visual Scorecard (Zero-Defect Rule)
+- Categorical evaluation only: **Pass** or **Needs Improvement** (arbitrary numerical scores strictly forbidden).
+- 11 Key Areas: Images, Image Quality, Animation, 3D, Maps, Video, Accessibility, Performance, Responsive Design, Brand Consistency, Enterprise UI.
+- All 11 areas must achieve Pass (or N/A - Pass) for a task to be approved.
+- Defined in [.agents/rules/enterprise-visual-scorecard.md](.agents/rules/enterprise-visual-scorecard.md).
+
+### 4. Incremental Improvement Standard
+- Mandate: **Never "Redesign everything"**.
+- Standing Directive: *"Inspect the project, identify the highest-impact visual and UX improvements, implement them without breaking existing functionality, then re-audit."*
+- Defined in [.agents/rules/incremental-improvements.md](.agents/rules/incremental-improvements.md).
+
+### 5. Regression Protection Gate (7 Invariants)
+Before concluding any modification, verify:
+1. Existing functionality still works
+2. Existing routes still work
+3. Existing data is preserved
+4. Existing permissions remain intact
+5. Existing integrations remain intact
+6. Existing responsive behavior isn't broken
+7. Performance hasn't materially degraded
+- Defined in [.agents/rules/regression-protection-gate.md](.agents/rules/regression-protection-gate.md).
