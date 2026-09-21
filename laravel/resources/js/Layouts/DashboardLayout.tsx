@@ -70,9 +70,9 @@ import {
 import { Plus } from "lucide-react";
 
 const allMenuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
   { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/map?tab=boundary', label: 'Boundary Manager', icon: ShieldCheck, roles: ['System Admin'] },
+  { href: '/dashboard/map?tab=boundary', label: 'Boundary Manager', icon: ShieldCheck, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/deals', label: 'Perks & Savings', icon: Gift, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
@@ -100,9 +100,9 @@ const allMenuItems = [
   { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
   { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin'] },
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner'] },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['Staff', 'Security'] },
+  { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner', 'Temporary Homeowner'] },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
+  { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
 ];
 
 export default function DashboardLayout({
@@ -145,29 +145,22 @@ export default function DashboardLayout({
    */
 
 
-  const menuItems = useMemo(() => {
-    if (!user) return [];
-    
-    // Always show profile link for Staff
-    if (user.role === 'Staff') {
-        return allMenuItems.filter(item => item.href === '/dashboard/profile' || item.href === '/dashboard/gate-pass');
-    }
-
-    const filteredItems = allMenuItems.filter(item => item.roles.includes(user.role));
-
-    if (user.role === 'Security') {
-      // Show profile link explicitly for security
-      const securityItems = allMenuItems.filter(item => item.roles.includes(user.role));
-      const profileItem = allMenuItems.find(item => item.href === '/dashboard/profile');
-      if (profileItem && !securityItems.some(i => i.href === '/dashboard/profile')) {
-        return [...securityItems, profileItem];
-      }
-      return securityItems;
-    }
-
-    return filteredItems;
-
-  }, [user]);
+  /*
+   * `roles` above is the only thing that decides what a user sees.
+   *
+   * Two special cases used to sit here and both were wrong. The Staff branch
+   * returned a hardcoded [Profile, Gate Pass] and discarded the `roles` arrays
+   * entirely — so the deliberate additions of Staff to Notifications and to
+   * Safety Alert, each with a comment above it explaining why Staff needed
+   * them, were dead configuration that never reached a screen. The Security
+   * branch recomputed the same filter under a second name and then appended
+   * Profile "if missing", which it never was, because Profile's roles already
+   * list Security. It was a no-op guarding against nothing.
+   */
+  const menuItems = useMemo(
+    () => (user ? allMenuItems.filter((item) => item.roles.includes(user.role)) : []),
+    [user],
+  );
 
   if (!isClient || loading || !user) {
     return <div className="flex h-screen w-full items-center justify-center">Loading...</div>;

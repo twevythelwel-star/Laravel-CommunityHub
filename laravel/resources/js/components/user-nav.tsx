@@ -90,7 +90,7 @@ export function UserNav() {
               </DropdownMenuItem>
             </Link>
           )}
-          {(user.role === 'Homeowner' || user.role === 'Admin' || user.role === 'System Admin') && (
+          {(user.role === 'Homeowner' || user.role === 'Temporary Homeowner' || user.role === 'Admin' || user.role === 'System Admin') && (
             <Link href="/dashboard/billing">
               <DropdownMenuItem className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
