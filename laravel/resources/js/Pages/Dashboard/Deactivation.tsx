@@ -17,7 +17,8 @@ import { add, differenceInSeconds, format } from 'date-fns';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ShieldAlert, Timer } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { router } from '@inertiajs/react';
+import { router, Head } from '@inertiajs/react';
+import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -147,23 +148,28 @@ export default function DeactivationPage() {
 
   if (user?.role !== 'Homeowner') {
      return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Access Denied</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p>This feature is only available for Homeowners.</p>
-            </CardContent>
-        </Card>
+        <DashboardLayout>
+            <Head title="Account Deactivation" />
+            <Card className="max-w-md mx-auto mt-8">
+                <CardHeader>
+                    <CardTitle>Access Denied</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p>This feature is only available for Homeowners.</p>
+                </CardContent>
+            </Card>
+        </DashboardLayout>
      )
   }
 
   return (
-    <div className="grid gap-8">
-      <div>
-        <h1 className="font-headline text-3xl font-bold">Account Deactivation</h1>
-        <p className="text-muted-foreground">Request to deactivate your account on a future date, or delete it immediately.</p>
-      </div>
+    <DashboardLayout>
+      <Head title="Account Deactivation" />
+      <div className="grid gap-8 max-w-4xl mx-auto pb-12">
+        <div>
+          <h1 className="font-headline text-3xl font-bold">Account Deactivation</h1>
+          <p className="text-muted-foreground">Request to deactivate your account on a future date, or delete it immediately.</p>
+        </div>
 
       {/* Immediate Deletion */}
       <Card className="border-destructive">
@@ -270,6 +276,7 @@ export default function DeactivationPage() {
             </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

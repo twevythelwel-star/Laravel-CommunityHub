@@ -1,6 +1,8 @@
 
 
 import { useState } from 'react';
+import { Head } from '@inertiajs/react';
+import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   Card,
   CardContent,
@@ -84,7 +86,9 @@ export default function GuidelinesPage() {
     const categories = Object.keys(groupedGuidelines).sort();
 
   return (
-    <div className="grid gap-8">
+    <DashboardLayout>
+      <Head title="Community Guidelines" />
+      <div className="grid gap-8 max-w-7xl mx-auto pb-12">
         <div className="flex items-center justify-between">
             <div>
                 <h1 className="font-headline text-3xl font-bold">Community Guidelines</h1>
@@ -106,17 +110,18 @@ export default function GuidelinesPage() {
                 </GuidelineForm>
              )}
         </div>
+        
         <Card>
             <CardHeader>
-                <CardTitle>Rules & Regulations</CardTitle>
-                <CardDescription>Browse the community guidelines by category.</CardDescription>
+                <CardTitle>Rules by Category</CardTitle>
+                <CardDescription>Click on a category to view the guidelines.</CardDescription>
             </CardHeader>
             <CardContent>
-                <Accordion type="multiple" defaultValue={categories} className="w-full space-y-4">
+                <Accordion type="single" collapsible className="w-full">
                     {categories.map(category => (
-                        <AccordionItem value={category} key={category} className="border-none">
-                            <AccordionTrigger className="bg-muted hover:bg-muted/80 px-4 py-3 rounded-md text-lg font-semibold">
-                                {category} ({groupedGuidelines[category].length})
+                        <AccordionItem value={category} key={category}>
+                            <AccordionTrigger className="text-lg font-semibold">
+                               {category}
                             </AccordionTrigger>
                             <AccordionContent className="pt-4 space-y-4">
                                 {groupedGuidelines[category].map(guideline => (
@@ -142,21 +147,21 @@ export default function GuidelinesPage() {
                                                         </AlertDialogTrigger>
                                                         <AlertDialogContent>
                                                             <AlertDialogHeader>
-                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                This action cannot be undone. This will permanently delete the guideline titled &ldquo;{guideline.title}&rdquo;.
-                                                            </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDelete(guideline.id)}>
-                                                                Yes, delete
-                                                            </AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                             <AlertDialogDescription>
+                                                                 This action cannot be undone. This will permanently delete the guideline titled &ldquo;{guideline.title}&rdquo;.
+                                                             </AlertDialogDescription>
+                                                             </AlertDialogHeader>
+                                                             <AlertDialogFooter>
+                                                             <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                             <AlertDialogAction onClick={() => handleDelete(guideline.id)}>
+                                                                 Yes, delete
+                                                             </AlertDialogAction>
+                                                             </AlertDialogFooter>
+                                                         </AlertDialogContent>
+                                                     </AlertDialog>
+                                                 </DropdownMenuContent>
+                                             </DropdownMenu>
                                         )}
                                     </div>
                                 ))}
@@ -166,6 +171,7 @@ export default function GuidelinesPage() {
                 </Accordion>
             </CardContent>
         </Card>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

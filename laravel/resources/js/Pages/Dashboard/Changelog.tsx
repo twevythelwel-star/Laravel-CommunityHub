@@ -1,5 +1,7 @@
 
 
+import { Head } from '@inertiajs/react';
+import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   Card,
   CardContent,
@@ -77,61 +79,68 @@ export default function ChangelogPage() {
 
     if (user?.role !== 'System Admin') {
         return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Access Denied</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p>You do not have permission to view this page.</p>
-                </CardContent>
-            </Card>
+            <DashboardLayout>
+              <Head title="App Changelog" />
+              <Card className="max-w-md mx-auto mt-8">
+                  <CardHeader>
+                      <CardTitle>Access Denied</CardTitle>
+                      <CardDescription>This page is restricted to System Administrators.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <p>You do not have permission to view this page.</p>
+                  </CardContent>
+              </Card>
+            </DashboardLayout>
         )
     }
 
   return (
-    <div className="grid gap-8">
-      <div>
-        <h1 className="font-headline text-3xl font-bold">App Changelog</h1>
-        <p className="text-muted-foreground">A log of all major changes and feature additions to the application.</p>
+    <DashboardLayout>
+      <Head title="App Changelog" />
+      <div className="grid gap-8 max-w-7xl mx-auto pb-12">
+        <div>
+          <h1 className="font-headline text-3xl font-bold">App Changelog</h1>
+          <p className="text-muted-foreground">A log of all major changes and feature additions to the application.</p>
+        </div>
+         <Card className="mt-4">
+          <CardHeader>
+            <CardTitle>Development History</CardTitle>
+            <CardDescription>
+              This log is automatically updated as the AI makes changes to the app.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Author</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Tags</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {changelogData.map((item) => (
+                          <TableRow key={item.id}>
+                               <TableCell>
+                                 <ClientFormattedDate date={item.timestamp} formatString="MMM d, yyyy" />
+                              </TableCell>
+                               <TableCell>
+                                  <Badge variant="secondary">{item.author}</Badge>
+                              </TableCell>
+                              <TableCell>{item.description}</TableCell>
+                              <TableCell className="space-x-1">
+                                 {item.tags.map(tag => (
+                                      <Badge key={tag} variant="outline">{tag}</Badge>
+                                 ))}
+                              </TableCell>
+                          </TableRow>
+                      ))}
+                  </TableBody>
+              </Table>
+          </CardContent>
+        </Card>
       </div>
-       <Card className="mt-8">
-        <CardHeader>
-          <CardTitle>Development History</CardTitle>
-          <CardDescription>
-            This log is automatically updated as the AI makes changes to the app.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Author</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead>Tags</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {changelogData.map((item) => (
-                        <TableRow key={item.id}>
-                             <TableCell>
-                               <ClientFormattedDate date={item.timestamp} formatString="MMM d, yyyy" />
-                            </TableCell>
-                             <TableCell>
-                                <Badge variant="secondary">{item.author}</Badge>
-                            </TableCell>
-                            <TableCell>{item.description}</TableCell>
-                            <TableCell className="space-x-1">
-                               {item.tags.map(tag => (
-                                    <Badge key={tag} variant="outline">{tag}</Badge>
-                               ))}
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </CardContent>
-      </Card>
-    </div>
+    </DashboardLayout>
   );
 }

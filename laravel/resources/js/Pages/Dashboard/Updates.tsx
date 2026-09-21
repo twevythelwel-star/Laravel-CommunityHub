@@ -1,6 +1,8 @@
 
 
 import { useState } from 'react';
+import { Head } from '@inertiajs/react';
+import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   Card,
   CardContent,
@@ -52,7 +54,9 @@ export default function UpdatesPage() {
     };
 
   return (
-    <div className="grid gap-8">
+    <DashboardLayout>
+      <Head title="Community Updates" />
+      <div className="grid gap-8 max-w-7xl mx-auto pb-12">
         <div className="flex items-center justify-between">
             <div>
                 <h1 className="font-headline text-3xl font-bold">Community Updates</h1>
@@ -89,6 +93,7 @@ export default function UpdatesPage() {
                 </Card>
             ))}
         </div>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 }

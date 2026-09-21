@@ -229,8 +229,8 @@ export default function DashboardLayout({
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-          <SidebarTrigger className="sm:hidden" />
+        <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 sm:px-6 shadow-xs">
+          <SidebarTrigger />
           <div className="relative ml-auto flex-1 md:grow-0">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -309,7 +309,7 @@ export default function DashboardLayout({
             <UserNav />
           </div>
         </header>
-        <main key={pathname} className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-0 md:gap-8 animate-fade-in">
+        <main key={pathname} className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-6 md:gap-8 animate-fade-in">
           {children}
         </main>
       </SidebarInset>

@@ -1,6 +1,8 @@
 
 
 import { useState } from "react";
+import { Head } from "@inertiajs/react";
+import DashboardLayout from "@/Layouts/DashboardLayout";
 import {
   Card,
   CardContent,
@@ -94,69 +96,74 @@ export default function ReviewFeedbackPage() {
     }
 
   return (
-    <div>
-      <h1 className="font-headline text-3xl font-bold">Review Feedback</h1>
-      <p className="text-muted-foreground">Manage and review user-submitted issues and suggestions.</p>
-       <Card className="mt-8">
-        <CardHeader>
-          <CardTitle>Submitted Feedback</CardTitle>
-          <CardDescription>
-            Review and take action on feedback from all users.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Submitted By</TableHead>
-                        <TableHead>Subject</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>
-                            <span className="sr-only">Actions</span>
-                        </TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {feedbackList.map((item) => (
-                        <TableRow key={item.id}>
-                            <TableCell>
-                                <div className="font-medium">{item.submittedBy.split('@')[0]}</div>
-                                <div className="text-sm text-muted-foreground">{item.userRole}</div>
-                            </TableCell>
-                            <TableCell className="font-medium">{item.subject}</TableCell>
-                            <TableCell>{item.type}</TableCell>
-                            <TableCell>
-                                <Badge variant={getStatusVariant(item.status)}>{item.status}</Badge>
-                            </TableCell>
-                            <TableCell>
-                               <ClientFormattedDate date={item.timestamp} formatString="MMM d, yyyy" />
-                            </TableCell>
-                             <TableCell>
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button aria-haspopup="true" size="icon" variant="ghost">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                    <span className="sr-only">Toggle menu</span>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(item.id, 'New')}>Mark as New</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(item.id, 'In Progress')}>Mark as In Progress</DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleStatusChange(item.id, 'Resolved')}>Mark as Resolved</DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(item.id)}>Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </CardContent>
-      </Card>
-    </div>
+    <DashboardLayout>
+      <Head title="Review Feedback" />
+      <div className="grid gap-8 max-w-7xl mx-auto pb-12">
+        <div>
+          <h1 className="font-headline text-3xl font-bold">Review Feedback</h1>
+          <p className="text-muted-foreground">Manage and review user-submitted issues and suggestions.</p>
+        </div>
+         <Card className="mt-2">
+          <CardHeader>
+            <CardTitle>Submitted Feedback</CardTitle>
+            <CardDescription>
+              Review and take action on feedback from all users.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>Submitted By</TableHead>
+                          <TableHead>Subject</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Date</TableHead>
+                          <TableHead>
+                              <span className="sr-only">Actions</span>
+                          </TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {feedbackList.map((item) => (
+                          <TableRow key={item.id}>
+                              <TableCell>
+                                  <div className="font-medium">{item.submittedBy.split('@')[0]}</div>
+                                  <div className="text-sm text-muted-foreground">{item.userRole}</div>
+                              </TableCell>
+                              <TableCell className="font-medium">{item.subject}</TableCell>
+                              <TableCell>{item.type}</TableCell>
+                              <TableCell>
+                                  <Badge variant={getStatusVariant(item.status)}>{item.status}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                 <ClientFormattedDate date={item.timestamp} formatString="MMM d, yyyy" />
+                              </TableCell>
+                               <TableCell>
+                                  <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                      <Button aria-haspopup="true" size="icon" variant="ghost">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                      <span className="sr-only">Toggle menu</span>
+                                      </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(item.id, 'New')}>Mark as New</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(item.id, 'In Progress')}>Mark as In Progress</DropdownMenuItem>
+                                      <DropdownMenuItem onClick={() => handleStatusChange(item.id, 'Resolved')}>Mark as Resolved</DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(item.id)}>Delete</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                  </DropdownMenu>
+                              </TableCell>
+                          </TableRow>
+                      ))}
+                  </TableBody>
+              </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </DashboardLayout>
   );
 }
