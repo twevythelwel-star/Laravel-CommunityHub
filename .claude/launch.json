@@ -14,9 +14,11 @@
       "name": "laravel",
       "runtimeExecutable": "php",
       "runtimeArgs": [
-        "laravel/artisan",
-        "serve",
-        "--port=8123"
+        "-S",
+        "127.0.0.1:8123",
+        "-t",
+        "laravel/public",
+        "laravel/server.php"
       ],
       "port": 8123
     }
