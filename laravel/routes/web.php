@@ -28,6 +28,7 @@ use App\Http\Controllers\Dashboard\WarningController;
 use App\Http\Controllers\GuestPassController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PublicPageController;
+use App\Http\Controllers\UniversalPaymentLinkController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,8 +42,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [PublicPageController::class, 'landing'])->name('landing');
 Route::get('/privacy', [PublicPageController::class, 'privacy'])->name('privacy');
+Route::get('/terms', [PublicPageController::class, 'terms'])->name('terms');
+Route::get('/refunds', [PublicPageController::class, 'refunds'])->name('refunds');
+Route::get('/cookies', [PublicPageController::class, 'cookies'])->name('cookies');
 Route::get('/guest/pass/{token}', [GuestPassController::class, 'show'])->name('guest-pass.show');
-Route::get('/guest/pass/{visitor}/pdf', [PdfController::class, 'downloadVisitorPass'])->name('pdf.visitor-pass');
+Route::get('/guest/pass/{token}/pdf', [PdfController::class, 'downloadVisitorPass'])->name('pdf.visitor-pass');
+Route::get('/pay/{token}', [UniversalPaymentLinkController::class, 'show'])->name('pay.show');
+Route::get('/pay/{token}/poster', [UniversalPaymentLinkController::class, 'poster'])->name('pay.poster');
+Route::post('/pay/{token}/process', [UniversalPaymentLinkController::class, 'process'])->name('pay.process');
 
 /*
 |--------------------------------------------------------------------------
@@ -56,8 +63,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:6,1');
 });
 
-Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
-    ->middleware('auth')
+Route::match(['get', 'post'], '/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
 /*
@@ -99,7 +105,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     // ── Visitors & directory ──
     Route::get('/visitors', [VisitorController::class, 'index'])->name('visitors');
     Route::post('/visitors', [VisitorController::class, 'store'])->name('visitors.store');
-    Route::patch('/visitors/{visitor}', [VisitorController::class, 'update'])->name('visitors.update');
+    Route::match(['put', 'patch'], '/visitors/{visitor}', [VisitorController::class, 'update'])->name('visitors.update');
     Route::post('/visitors/{visitor}/check-in', [VisitorController::class, 'checkIn'])->name('visitors.check-in');
     Route::post('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOut'])->name('visitors.check-out');
     Route::delete('/visitors/{visitor}', [VisitorController::class, 'destroy'])->name('visitors.destroy');
@@ -128,7 +134,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
 
     Route::get('/renters', [RenterController::class, 'index'])->name('renters');
     Route::post('/renters', [RenterController::class, 'store'])->name('renters.store');
-    Route::patch('/renters/{renter}', [RenterController::class, 'update'])->name('renters.update');
+    Route::match(['put', 'patch'], '/renters/{renter}', [RenterController::class, 'update'])->name('renters.update');
     Route::delete('/renters/{renter}', [RenterController::class, 'destroy'])->name('renters.destroy');
 
     // ── Security ──
@@ -250,16 +256,53 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->middleware('can:manageFundraisers')
         ->name('fundraising.store');
     Route::post('/fundraising/{fundraiser}/donate', [FundraisingController::class, 'donate'])->name('fundraising.donate');
+    // Backs the card's "Enable Now", which had no handler and no endpoint.
+    Route::patch('/fundraising/{fundraiser}', [FundraisingController::class, 'update'])
+        ->middleware('can:manageFundraisers')
+        ->name('fundraising.update');
 
-    Route::get('/billing', [BillingController::class, 'index'])->name('billing');
-    Route::patch('/billing/settings', [BillingController::class, 'updateSettings'])
-        ->middleware('can:manageBilling')
-        ->name('billing.settings.update');
-    Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'markPaid'])
-        ->middleware('can:manageBilling')
-        ->name('billing.invoices.pay');
-    Route::get('/billing/invoices/{invoice}/pdf', [PdfController::class, 'downloadInvoice'])->name('billing.invoice.pdf');
-    Route::post('/billing/invoices/{invoice}/stripe-checkout', [StripeCheckoutController::class, 'checkout'])->name('billing.stripe.checkout');
-    Route::get('/billing/invoices/{invoice}/stripe-success', [StripeCheckoutController::class, 'success'])->name('billing.stripe.success');
-    Route::get('/billing/invoices/{invoice}/stripe-cancel', [StripeCheckoutController::class, 'cancel'])->name('billing.stripe.cancel');
+    /*
+     | Payments are for administrators, Homeowners and Temporary Homeowners.
+     |
+     | The whole area was previously ungated, so Security and Staff could reach
+     | it by URL — and `index()` calls Wallet::firstOrCreate(), so simply
+     | loading the page created a wallet against an account the estate never
+     | bills. The sidebar hid the link from them, which hid the entry point
+     | without closing it.
+     |
+     | The two `can:manageBilling` routes inside stay administrator-only: those
+     | change the estate's rates and settle other households' invoices.
+     */
+    Route::middleware('can:accessBilling')->group(function () {
+        Route::get('/billing', [BillingController::class, 'index'])->name('billing');
+        Route::post('/billing/pay', [BillingController::class, 'pay'])->name('billing.pay');
+        Route::match(['post', 'patch'], '/billing/autopay', [BillingController::class, 'updateAutoPay'])->name('billing.autopay');
+        Route::post('/billing/payment-links', [BillingController::class, 'storePaymentLink'])->name('billing.payment-links.store');
+        Route::post('/billing/wallet/topup', [BillingController::class, 'topUpWallet'])->name('billing.wallet.topup');
+        /*
+         | The master ledger is every household's name, lot, amount and notes
+         | in one CSV. It sat on `accessBilling`, so widening that gate to
+         | residents handed the estate's finances to any homeowner.
+         */
+        Route::middleware('can:manageBilling')->group(function () {
+            Route::get('/billing/export/transactions', [BillingController::class, 'exportTransactions'])->name('billing.transactions.export');
+            Route::get('/billing/export-transactions', [BillingController::class, 'exportTransactions'])->name('billing.transactions.export.alias');
+        });
+        Route::patch('/billing/settings', [BillingController::class, 'updateSettings'])
+            ->middleware('can:manageBilling')
+            ->name('billing.settings.update');
+        Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'markPaid'])
+            ->middleware('can:manageBilling')
+            ->name('billing.invoices.pay');
+        Route::get('/billing/invoices/{invoice}/pdf', [PdfController::class, 'downloadInvoice'])->name('billing.invoice.pdf');
+        Route::post('/billing/invoices/{invoice}/stripe-checkout', [StripeCheckoutController::class, 'checkout'])->name('billing.stripe.checkout');
+        Route::get('/billing/invoices/{invoice}/stripe-success', [StripeCheckoutController::class, 'success'])->name('billing.stripe.success');
+        Route::get('/billing/invoices/{invoice}/stripe-cancel', [StripeCheckoutController::class, 'cancel'])->name('billing.stripe.cancel');
+    });
+
+    Route::get('/fundraising/donations/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt');
+    Route::get('/fundraising/donation/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt.alias');
+    Route::post('/fundraising/{fundraiser}/updates', [FundraisingController::class, 'addUpdate'])
+        ->middleware('can:manageFundraisers')
+        ->name('fundraising.updates.store');
 });

@@ -28,7 +28,7 @@ export interface ProfileCustomQRCodeProps {
  * 1. Standardized Machine-Readable Base Layer:
  *    - Standard Level H (High) Error Correction (30% recovery threshold)
  *    - Standardized 3-finder-eye position detection patterns
- *    - Guaranteed readability with any commercial camera or scanner
+ *    - Readable by common camera and scanner apps in testing
  *
  * 2. Profile-Specific Visual Layer (Matching Reference Designs):
  *    - Circular dot modules with concentric duo-tone color halo (Image 1 style)

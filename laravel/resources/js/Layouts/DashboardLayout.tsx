@@ -2,6 +2,7 @@
 
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
+import { WelcomeAnimation } from '@/components/welcome-animation';
 
 import {
   Sidebar,
@@ -43,6 +44,7 @@ import {
   BadgeCheck,
   ListTree,
   ShieldCheck,
+  LogOut,
 } from 'lucide-react';
 import { useDarkMode } from '@/hooks/use-dark-mode';
 import { Logo } from '@/components/logo';
@@ -75,7 +77,7 @@ const allMenuItems = [
   { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin'] },
-  { href: '/dashboard/renters', label: 'My Renters', icon: KeyRound, roles: ['Homeowner'] },
+  { href: '/dashboard/renters', label: 'Renters', icon: KeyRound, roles: ['Homeowner', 'Admin', 'System Admin'] },
   { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/gate-pass', label: 'Gate Pass', icon: BadgeCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
@@ -92,7 +94,9 @@ const allMenuItems = [
   // Security too: they operate the gate this log records, and the route's
   // `manageSecurity` gate already included them.
   { href: '/dashboard/access-log', label: 'Access Log', icon: ListTree, roles: ['System Admin', 'Admin', 'Security'] },
-  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner'] },
+  // Temporary Homeowners are billed like any other resident, so they get the
+  // same entry. Matches the `accessBilling` gate on the routes.
+  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
   { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin'] },
   { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
@@ -111,10 +115,26 @@ export default function DashboardLayout({
   const { url } = usePage();
   const pathname = url.split('?')[0];
 
-  const { user, loading } = useAuth();
+  const { user, loading, logout, justSignedIn } = useAuth();
   const isClient = useIsClient();
   const [isPassOpen, setPassOpen] = useState(false);
   const { isDark, toggle: toggleDark } = useDarkMode();
+
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const sessionFlag = sessionStorage.getItem('play_community_splash') === 'true';
+    if (sessionFlag) {
+      sessionStorage.removeItem('play_community_splash');
+      return true;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (justSignedIn) {
+      setShowSplash(true);
+    }
+  }, [justSignedIn]);
 
   /*
    * The original redirected to "/" from the client whenever no user was in
@@ -168,10 +188,16 @@ export default function DashboardLayout({
      *   Toaster          — useToast() renders nothing without it (below).
      */
     <TooltipProvider delayDuration={200}>
+      {showSplash && user && (
+        <WelcomeAnimation
+          username={user.displayName || user.name}
+          onComplete={() => setShowSplash(false)}
+        />
+      )}
       <ThemeProvider>
-      <BrandingProvider>
-        <SidebarProvider>
-          <MyGatePassDialog open={isPassOpen} onOpenChange={setPassOpen} />
+        <BrandingProvider>
+          <SidebarProvider>
+            <MyGatePassDialog open={isPassOpen} onOpenChange={setPassOpen} />
       <Sidebar>
         <SidebarHeader>
           <Logo />
@@ -193,8 +219,20 @@ export default function DashboardLayout({
             ))}
           </SidebarMenu>
         </SidebarContent>
-        <SidebarFooter>
-          <UserNav />
+        <SidebarFooter className="p-3 border-t border-border/40">
+          <div className="flex items-center justify-between gap-2 w-full">
+            <UserNav />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 py-1 h-8 flex items-center gap-1.5 transition-colors"
+              title="Log out of Community Hub"
+            >
+              <LogOut className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+              <span className="hidden sm:inline font-medium">Log out</span>
+            </Button>
+          </div>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
@@ -261,6 +299,14 @@ export default function DashboardLayout({
                       <span>Register Visitor</span>
                     </Link>
                   </DropdownMenuItem>
+                  {(user?.role === 'Homeowner' || user?.role === 'Admin' || user?.role === 'System Admin') && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/renters" className="cursor-pointer">
+                        <KeyRound className="mr-2 h-4 w-4" />
+                        <span>Manage Renters</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 

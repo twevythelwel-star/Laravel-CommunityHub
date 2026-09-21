@@ -74,6 +74,16 @@ class User extends Authenticatable
         return $this->hasOne(Renter::class);
     }
 
+    public function temporaryOccupancies(): HasMany
+    {
+        return $this->hasMany(Renter::class, 'homeowner_id');
+    }
+
+    public function renters(): HasMany
+    {
+        return $this->temporaryOccupancies();
+    }
+
     public function activityLog(): HasMany
     {
         return $this->hasMany(ActivityLogEntry::class)->latest('occurred_at');
@@ -109,11 +119,64 @@ class User extends Authenticatable
         return $this->hasOne(UserPreference::class);
     }
 
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function autoPaySetting(): HasOne
+    {
+        return $this->hasOne(AutoPaySetting::class);
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    public function paymentPlans(): HasMany
+    {
+        return $this->hasMany(PaymentPlan::class);
+    }
+
+    public function paymentLinks(): HasMany
+    {
+        return $this->hasMany(PaymentLink::class, 'created_by');
+    }
+
     // ── Domain helpers ───────────────────────────────────────────────
 
     public function isActive(): bool
     {
-        return $this->status === 'Active' && $this->deactivated_at === null;
+        if ($this->status !== 'Active' || $this->deactivated_at !== null) {
+            return false;
+        }
+
+        if ($this->role === UserRole::TemporaryHomeowner) {
+            $renter = $this->relationLoaded('renter') ? $this->renter : $this->renter()->first();
+            if ($renter && $renter->lease_end && $renter->lease_end->isPast()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function temporaryStayExpirationMessage(): ?string
+    {
+        if ($this->role === UserRole::TemporaryHomeowner) {
+            $renter = $this->relationLoaded('renter') ? $this->renter : $this->renter()->first();
+            if ($renter && $renter->lease_end && $renter->lease_end->isPast()) {
+                return "Your temporary homeowner access expired on {$renter->lease_end->format('M d, Y')}. Contact the property owner to extend access.";
+            }
+        }
+
+        return null;
+    }
+
+    public function activeStay(): ?Renter
+    {
+        return $this->renter()->active()->first();
     }
 
     public function passCategory(): PassCategory

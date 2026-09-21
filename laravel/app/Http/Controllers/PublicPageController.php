@@ -32,7 +32,33 @@ class PublicPageController extends Controller
 
     public function privacy(): View
     {
-        return view('blade.privacy', [
+        return $this->policy('privacy');
+    }
+
+    public function terms(): View
+    {
+        return $this->policy('terms');
+    }
+
+    public function refunds(): View
+    {
+        return $this->policy('refunds');
+    }
+
+    public function cookies(): View
+    {
+        return $this->policy('cookies');
+    }
+
+    /**
+     * Policy pages share a shape: branded layout, no application state.
+     *
+     * Each renders a prominent notice while config('legal.complete') is false,
+     * so an unfinished template cannot be mistaken for a published policy.
+     */
+    protected function policy(string $name): View
+    {
+        return view("blade.{$name}", [
             'branding' => BrandingSetting::current(),
         ]);
     }

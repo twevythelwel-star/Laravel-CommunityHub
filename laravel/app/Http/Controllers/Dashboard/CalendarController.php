@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\CommunityEvent;
+use App\Models\Renter;
+use App\Models\Visitor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +17,65 @@ class CalendarController extends Controller
 {
     public function index(Request $request): Response
     {
+        $user = $request->user();
+
+        $userStay = null;
+        if ($user->role === UserRole::TemporaryHomeowner) {
+            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
+            if ($stay) {
+                $userStay = [
+                    'stayType' => $stay->stay_type ?? 'Long-term (Renter)',
+                    'leaseStart' => $stay->lease_start->toDateString(),
+                    'leaseEnd' => $stay->lease_end->toDateString(),
+                    'expired' => $stay->leaseHasExpired(),
+                ];
+            }
+        }
+
+        $myVisitors = Visitor::where('homeowner_id', $user->id)
+            ->whereDate('expected_at', '>=', now()->subDays(7))
+            ->orderBy('expected_at')
+            ->get()
+            ->map(fn (Visitor $v) => [
+                'id' => $v->id,
+                'name' => $v->name,
+                'type' => $v->type,
+                'status' => $v->status->value,
+                'expectedAt' => $v->expected_at->toIso8601String(),
+                'dateRange' => $v->date_range,
+            ]);
+
+        $entrySlots = [
+            [
+                'id' => 'slot-morning',
+                'name' => 'Morning Clearance',
+                'timeRange' => '06:00 AM – 12:00 PM',
+                'status' => 'Available',
+                'description' => 'Optimal for standard deliveries, service contractors, and day visitors.',
+            ],
+            [
+                'id' => 'slot-afternoon',
+                'name' => 'Afternoon Clearance',
+                'timeRange' => '12:00 PM – 06:00 PM',
+                'status' => 'Available',
+                'description' => 'Peak visitor hours, guest arrivals, and package drop-offs.',
+            ],
+            [
+                'id' => 'slot-evening',
+                'name' => 'Evening Clearance',
+                'timeRange' => '06:00 PM – 11:00 PM',
+                'status' => 'Available',
+                'description' => 'Dinner guests, social visits, and evening service arrivals.',
+            ],
+            [
+                'id' => 'slot-overnight',
+                'name' => 'Overnight Pass',
+                'timeRange' => '11:00 PM – 06:00 AM',
+                'status' => 'Available on Request',
+                'description' => 'Special overnight guest passes with automatic security check.',
+            ],
+        ];
+
         return Inertia::render('Dashboard/Calendar', [
             'events' => CommunityEvent::orderBy('start_date')
                 ->get()
@@ -25,7 +87,11 @@ class CalendarController extends Controller
                     'endDate' => $e->end_date?->toIso8601String(),
                     'imageUrl' => $e->image_url,
                 ]),
-            'canManage' => $request->user()->can('broadcastNotices'),
+            'entrySlots' => $entrySlots,
+            'myVisitors' => $myVisitors,
+            'userStay' => $userStay,
+            'canManage' => $user->can('broadcastNotices'),
+            'canRegisterVisitors' => $user->can('registerVisitors'),
         ]);
     }
 

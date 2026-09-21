@@ -44,7 +44,7 @@ laravel/
 ├── resources/
 │   ├── views/blade/            Sign-in + privacy (Blade)
 │   └── js/Pages/Dashboard/     23 Inertia pages
-└── tests/                     231 tests — engine, geofence, access control, pages
+└── tests/                     255 tests — engine, geofence, access control, pages
 ```
 
 ---
@@ -368,8 +368,12 @@ reaching the page with their reason, each filter including the end-of-day date
 bound, and a CSV export that honours the active filter and spans every page.
 
 `tests/Feature/BillingPageTest.php` covers invoice scoping, minor-unit sums,
-the collections aggregate, the fee/currency/due-day settings, double-payment
-refusal — and asserts the page never again claims to take card payments.
+the collections aggregate, the fee/currency/due-day settings and double-payment
+refusal.
+
+`tests/Feature/FundraisingPageTest.php` covers the page loading on SQLite at
+all, donation currency being taken from the fundraiser, minor-unit totals,
+anonymity, and opening an Upcoming fundraiser.
 
 `tests/Unit/GeofenceServiceTest.php` covers the polygon maths, including a
 horizontal-edge case that would divide by zero in PHP where JavaScript silently
@@ -391,17 +395,17 @@ Everything below has now been **executed** on Laravel 12.69.2 / PHP 8.4.25
 never run; that is no longer true.
 
 ```
-php artisan migrate:fresh --seed     11 migrations, 6 seeders          PASS
-php artisan test                     231 tests, 1,689 assertions       PASS
+php artisan migrate:fresh --seed     12 migrations, 6 seeders          PASS
+php artisan test                     255 tests, 1,815 assertions       PASS
 npm run typecheck                    0 errors                          PASS
 npm run build                        23 page chunks built              PASS
-php artisan route:list               99 routes resolve                 PASS
+php artisan route:list              107 routes resolve                 PASS
 composer audit                       no advisories                     PASS*
 ```
 
-(99 rather than the original 93: Boost registers `_boost/browser-logs`,
-Laravel 12 adds `storage.local.upload`, and the pages wired since then added
-their own.)
+(107 rather than the original 93: Boost registers `_boost/browser-logs`,
+Laravel 12 adds `storage.local.upload`, the pages wired since then added their
+own, and the Stripe checkout, guest-pass and PDF work added seven more.)
 
 \* `composer audit` returned *No security vulnerability advisories found* twice
 — at the end of `composer update` and on the first verification pass. A later
@@ -462,7 +466,7 @@ deploying anywhere real.
 
 ## Page wiring status
 
-**Wired to the server (11 of 23):**
+**Wired to the server (12 of 23):**
 
 | Page | What changed |
 |---|---|
@@ -477,6 +481,7 @@ deploying anywhere real.
 | `Dashboard/Directory` | Accounts come from the database; creating one now actually works; delete became deactivate; an Admin can no longer touch a System Admin |
 | `Dashboard/AccessLog` | Refused entries are visible for the first time; the filters and CSV export finally have controls, and the export matches the filtered view |
 | `Dashboard/Billing` | The fake card form and its Stripe claim are gone; invoices, totals and the collections chart are real; marking an invoice paid finally works |
+| `Dashboard/Fundraising` | Fundraisers and donations come from the database; donations are forced into the fundraiser's currency so the total means something; the page no longer throws on SQLite |
 
 Supporting pieces, reusable by the remaining pages:
 
@@ -767,29 +772,45 @@ picker, and this line:
 
 > 🔒 Card information is securely collected by Stripe (PCI-DSS Level 1 Compliant)
 
-**There is no Stripe integration in this codebase.** There never was — no SDK, no
-keys, no webhook, no payment intent, nothing. The line sat inside a static `div`
-with a padlock emoji, above a `<Button>Pay JMD 5,000.00</Button>` that had no
-`onClick`. "Save Payment Method", "Set Up Recurring Payment" and the checkbox had
-no handlers either.
+**No Stripe integration existed when that form was written** — no SDK, no keys,
+no webhook, no payment intent. The line sat inside a static `div` with a padlock
+emoji, above a `<Button>Pay JMD 5,000.00</Button>` that had no `onClick`. "Save
+Payment Method", "Set Up Recurring Payment" and the checkbox had no handlers
+either.
 
 A resident could read a specific compliance certification, type their details,
 click Pay, receive no error, and reasonably conclude their dues were settled. No
-money moves and no record is created. That is materially worse than having no
+money moved and no record was created. That is materially worse than having no
 payment feature at all.
 
-**The whole form is gone.** What replaces it is what is true: the monthly dues,
-what you owe, what you have paid this year, your full invoice history, and a
-plain statement that the application does not take card payments and that an
-administrator records payment against your invoice. That last part is not
-invented — `markPaid` is exactly what the server does.
+**The whole form is gone.** What replaces it is the monthly dues, what you owe,
+what you have paid this year, and your full invoice history.
 
-**If you want real payments**, that is a project rather than a wiring task:
-a processor account, the SDK, an intent or checkout session created server-side,
-a webhook endpoint that marks the invoice paid only on a verified event (never
-on a client callback), idempotency keys so a retried webhook does not double-pay,
-refund handling, and a decision about who is liable for card data. None of that
-should be implied by UI copy until it exists.
+### A Stripe integration has since been added — do not enable it yet
+
+A parallel workstream added real Stripe checkout (`StripeCheckoutController`,
+`StripePaymentService`), guest passes, PDF generation and broadcast events. It
+is in the repository and its tests pass. **It must not be exposed to residents
+as it stands.**
+
+`config/services.php` declares no `stripe` key. `config('services.stripe.secret')`
+is therefore `null`, and `StripePaymentService` always takes its demo branch:
+`createCheckoutSession()` fabricates a session id and returns the success URL
+directly, and `completePayment()` then sets the invoice to `Paid`. **Clicking Pay
+settles a real debt without taking any money.**
+`tests/Feature/StripeBillingTest.php` passes because of that branch, so a green
+suite is not evidence the flow works.
+
+Finishing it properly is a project rather than a wiring task: the config entry
+and key, a checkout session created server-side (that part exists), and then a
+webhook endpoint that marks the invoice paid only on a verified
+`checkout.session.completed` event — never on the browser reaching the success
+URL, which is what happens today. Plus idempotency keys so a retried webhook does
+not double-pay, refund handling, and a decision about who is liable for card
+data. The warning is repeated at the top of `BillingController`.
+
+Until that is done the resident page describes only the office-payment route,
+which is the part that actually works, and makes no claim about card handling.
 
 **The exchange rates went too.** The dues figure was shown next to four
 conversions — USD, CAD, GBP, EUR — from a hardcoded rate table. Those numbers
@@ -820,6 +841,52 @@ own invoices. `AdminBilling` is now lazy-loaded, taking the resident's Billing
 chunk to **6.8 kB** (2.75 kB gzipped). That matters more than usual here because
 the project also ships as a Capacitor mobile shell.
 
+### Fundraising totals were adding different currencies together
+
+The donate form offered JMD, USD, GBP, EUR and CAD, and **defaulted to USD**.
+`Fundraiser::raisedMinor()` is `$this->donations()->sum('amount_minor')` — a
+plain sum of minor units, with no conversion anywhere on the server.
+
+So a USD 50 donation against a JMD goal was stored as 5,000 minor units and
+counted as **JMD 50**: roughly 1/155th of what was actually given. Anyone who
+accepted the form's default made the progress bar and the "raised" figure wrong.
+
+The client was wrong differently. `fundraiser-progress-card.tsx` carried its own
+copy of the hardcoded rate table and converted each donation to JMD before
+summing — so the card and the server disagreed, and the card's answer came from
+rates nobody maintains.
+
+**Donations are now always in the fundraiser's own currency.** The picker is
+gone and `donate()` takes the currency from the fundraiser rather than the
+request, so a crafted POST cannot reintroduce the problem. Real multi-currency
+support means converting at the moment of the donation and storing the converted
+amount alongside the original with the rate used — not converting on read, and
+not from a hardcoded table. That needs a rates provider this application does
+not have.
+
+**The page threw on SQLite.** The listing ordered with
+`orderByRaw("FIELD(status, ...)")`. `FIELD()` is a MySQL function; SQLite has no
+such thing. The suite runs on SQLite and the setup notes above offer SQLite as
+the zero-setup path, so the quick-start route to this page was a 500. It uses a
+portable `CASE` expression now, and there is a test whose only job is to load the
+page.
+
+**Donations are pledges, not payments.** Nothing takes money here — `donate()`
+writes a row. The form used to toast "Donation Successful!"; it now says the
+pledge has been recorded and the dialog says plainly that payment is arranged
+with the community office. Totals are therefore self-reported, though every
+donation carries a `user_id`, so they are attributable. Making them
+payment-backed means the same work described under billing.
+
+**Three more dead controls.** "Share" had no handler and no per-fundraiser URL
+to share, so it is gone. "Goal Reached" was a disabled button used as a status
+label, which the badge already does. "Enable Now" had no handler *and* no
+endpoint — an administrator could schedule an Upcoming fundraiser and then had
+no way to open it. That one is now `dashboard.fundraising.update`, which also
+refuses to activate a fundraiser whose end date has passed; `isOpen()` checks
+both status and date, so activating an expired one produced a fundraiser that
+looked open and refused every donation.
+
 ### A judgement call worth reviewing
 
 A blocklist is personal data and the stated reasons are unflattering —
@@ -841,7 +908,7 @@ the two need to agree either way.
 ## Remaining work
 
 The backend, schema, routing, authorization and business logic are complete, and
-eleven pages are fully wired. The other **12 pages still hold their original
+twelve pages are fully wired. The other **11 pages still hold their original
 `useState` mock data** — they were moved and mechanically converted (directives
 stripped, Next imports rewritten) but do not yet read the props their controllers
 send.
@@ -856,9 +923,9 @@ pages need only their own props wiring. Use
 `resources/js/context/auth-context.tsx` as the pattern: read from `usePage()`,
 mutate with `router`.
 
-The twelve still on mock data: `Renters`,
+The eleven still on mock data: `Renters`,
 `Updates`, `Calendar`, `Guidelines`, `Changelog`,
-`Feedback`, `ReviewFeedback`, `Deals`, `Fundraising`, `Profile`,
+`Feedback`, `ReviewFeedback`, `Deals`, `Profile`,
 `Deactivation`, `Boundary`. Their controllers are all written and already send
 the props each one needs.
 

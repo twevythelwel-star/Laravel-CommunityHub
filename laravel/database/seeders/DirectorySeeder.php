@@ -125,12 +125,32 @@ class DirectorySeeder extends Seeder
             Renter::updateOrCreate(
                 ['user_id' => $sophia->id],
                 [
+                    'homeowner_id' => $marcus?->id,
                     'name' => $sophia->display_name,
+                    'stay_type' => 'Long-term (Renter)',
+                    'contact' => $sophia->phone ?? $sophia->email,
                     'status' => 'Active',
                     'lease_start' => now()->subMonths(4)->toDateString(),
                     'lease_end' => now()->addMonths(8)->toDateString(),
-                    'lot' => $sophia->lot,
-                    'street' => $sophia->street,
+                    'lot' => $sophia->lot ?: 'Lot 14',
+                    'street' => $sophia->street ?: 'Hibiscus Way',
+                    'notes' => 'Authorized long-term tenant under Marcus Vance property.',
+                ],
+            );
+        }
+
+        if ($marcus) {
+            Renter::updateOrCreate(
+                ['name' => 'Elena Rostova', 'homeowner_id' => $marcus->id],
+                [
+                    'stay_type' => 'Short-term (Airbnb)',
+                    'contact' => '+1 (555) 392-1084',
+                    'status' => 'Active',
+                    'lease_start' => now()->subDays(2)->toDateString(),
+                    'lease_end' => now()->addDays(5)->toDateString(),
+                    'lot' => $marcus->lot ?: 'Lot 14',
+                    'street' => $marcus->street ?: 'Hibiscus Way',
+                    'notes' => 'Weekend villa booking via Airbnb. 4 guests.',
                 ],
             );
         }

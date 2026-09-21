@@ -53,6 +53,7 @@ export type Permissions = {
 export type SharedAuth = {
     user: User | null;
     can: Partial<Permissions>;
+    justSignedIn?: boolean;
 };
 
 type SharedProps = {
@@ -81,10 +82,12 @@ export function useAuth() {
 
     const user = auth?.user ?? null;
     const can: Permissions = { ...NO_PERMISSIONS, ...(auth?.can ?? {}) };
+    const justSignedIn = Boolean(auth?.justSignedIn);
 
     return {
         user,
         can,
+        justSignedIn,
 
         /** Retained for call-site compatibility; Inertia resolves props before render. */
         loading: false,
@@ -92,7 +95,16 @@ export function useAuth() {
         /** True when the viewer holds any of the given roles. */
         hasRole: (...roles: UserRole[]) => (user ? roles.includes(user.role) : false),
 
-        logout: () => router.post('/logout'),
+        logout: () => {
+            router.post('/logout', {}, {
+                onFinish: () => {
+                    window.location.href = '/';
+                },
+                onError: () => {
+                    window.location.href = '/logout';
+                },
+            });
+        },
 
         /**
          * Persists a profile change. The original mutated React state and wrote

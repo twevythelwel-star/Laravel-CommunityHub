@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
 use App\Events\VisitorCheckedInEvent;
 use App\Http\Controllers\Controller;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
+use App\Models\Renter;
 use App\Models\Visitor;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -57,11 +60,25 @@ class VisitorController extends Controller
                 'guestPassUrl' => $v->share_token ? route('guest-pass.show', $v->share_token) : null,
             ]);
 
+        $userStay = null;
+        if ($user->role === UserRole::TemporaryHomeowner) {
+            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
+            if ($stay) {
+                $userStay = [
+                    'stayType' => $stay->stay_type ?? 'Long-term (Renter)',
+                    'leaseStart' => $stay->lease_start->toDateString(),
+                    'leaseEnd' => $stay->lease_end->toDateString(),
+                    'expired' => $stay->leaseHasExpired(),
+                ];
+            }
+        }
+
         return Inertia::render('Dashboard/Visitors', [
             'visitors' => $visitors,
             'filters' => $request->only('status', 'search'),
             'canManage' => $isStaff,
             'canRegister' => $user->can('registerVisitors'),
+            'userStay' => $userStay,
             'graceHours' => 12,
         ]);
     }
@@ -84,6 +101,28 @@ class VisitorController extends Controller
             'id_image_url' => ['nullable', 'url', 'max:2048'],
         ]);
 
+        $user = $request->user();
+
+        // Server-side stay timeframe enforcement for Temporary Homeowners
+        if ($user->role === UserRole::TemporaryHomeowner) {
+            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
+            if (! $stay || $stay->leaseHasExpired()) {
+                return back()->withErrors([
+                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot register visitors.',
+                ]);
+            }
+
+            $expectedDate = Carbon::parse($validated['expected_at'])->startOfDay();
+            $leaseStart = $stay->lease_start->startOfDay();
+            $leaseEnd = $stay->lease_end->endOfDay();
+
+            if ($expectedDate->lt($leaseStart) || $expectedDate->gt($leaseEnd)) {
+                return back()->withErrors([
+                    'expected_at' => "Visitors can only be registered within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
+                ]);
+            }
+        }
+
         // Server-side blocklist enforcement.
         $blocked = $this->isOnBlocklist($validated['name']);
 
@@ -92,8 +131,6 @@ class VisitorController extends Controller
                 'name' => 'This person is on the community blocklist and cannot be registered. Contact security.',
             ]);
         }
-
-        $user = $request->user();
 
         Visitor::create([
             ...$validated,
@@ -114,10 +151,45 @@ class VisitorController extends Controller
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:120'],
+            'contact' => ['nullable', 'string', 'max:120'],
+            'vehicle' => ['nullable', 'string', 'max:120'],
             'type' => ['sometimes', 'in:One-time,Recurring'],
             'expected_at' => ['sometimes', 'date'],
             'date_range' => ['nullable', 'string', 'max:120'],
         ]);
+
+        $user = $request->user();
+
+        // Server-side blocklist check if name was changed
+        if (isset($validated['name']) && $validated['name'] !== $visitor->name) {
+            if ($this->isOnBlocklist($validated['name'])) {
+                return back()->withErrors([
+                    'name' => 'This person is on the community blocklist and cannot be registered. Contact security.',
+                ]);
+            }
+        }
+
+        // Temporary Homeowners can only edit visitors within their approved timeframe
+        if ($user->role === UserRole::TemporaryHomeowner) {
+            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
+            if (! $stay || $stay->leaseHasExpired()) {
+                return back()->withErrors([
+                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot modify visitors.',
+                ]);
+            }
+
+            if (isset($validated['expected_at'])) {
+                $expectedDate = Carbon::parse($validated['expected_at'])->startOfDay();
+                $leaseStart = $stay->lease_start->startOfDay();
+                $leaseEnd = $stay->lease_end->endOfDay();
+
+                if ($expectedDate->lt($leaseStart) || $expectedDate->gt($leaseEnd)) {
+                    return back()->withErrors([
+                        'expected_at' => "Visitors can only be scheduled within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
+                    ]);
+                }
+            }
+        }
 
         $visitor->update($validated);
 
@@ -191,6 +263,16 @@ class VisitorController extends Controller
     public function destroy(Request $request, Visitor $visitor): RedirectResponse
     {
         $this->authorizeVisitor($request, $visitor);
+
+        $user = $request->user();
+        if ($user->role === UserRole::TemporaryHomeowner) {
+            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
+            if (! $stay || $stay->leaseHasExpired()) {
+                return back()->withErrors([
+                    'visitor' => 'Your temporary stay has expired. You cannot modify visitor entries.',
+                ]);
+            }
+        }
 
         $visitor->delete();
 

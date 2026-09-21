@@ -13,6 +13,7 @@ class Donation extends Model
     protected $fillable = [
         'fundraiser_id', 'user_id', 'amount_minor', 'currency',
         'donor_name', 'is_anonymous', 'donated_at',
+        'is_recurring', 'frequency', 'tax_deductible', 'receipt_number', 'payment_channel',
     ];
 
     protected function casts(): array
@@ -20,6 +21,8 @@ class Donation extends Model
         return [
             'donated_at' => 'datetime',
             'is_anonymous' => 'boolean',
+            'is_recurring' => 'boolean',
+            'tax_deductible' => 'boolean',
             'amount_minor' => 'integer',
         ];
     }

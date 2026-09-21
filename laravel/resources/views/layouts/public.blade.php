@@ -71,9 +71,32 @@
     </main>
 
     <footer class="mt-16 border-t border-border/60">
-        <div class="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div class="mx-auto max-w-6xl space-y-4 px-4 py-8 text-sm text-muted-foreground">
+            <nav aria-label="Policies" class="flex flex-wrap gap-x-5 gap-y-2">
+                <a href="{{ route('privacy') }}" class="hover:text-foreground">Privacy Policy</a>
+                <a href="{{ route('cookies') }}" class="hover:text-foreground">Cookie Policy</a>
+                <a href="{{ route('terms') }}" class="hover:text-foreground">Terms of Service</a>
+                <a href="{{ route('refunds') }}" class="hover:text-foreground">Refund Policy</a>
+            </nav>
+
+            {{--
+                Business identity. Required on a site that takes money, and the
+                thing a resident needs in order to know who they are dealing
+                with. Values come from config/legal.php.
+            --}}
+            <address class="not-italic leading-relaxed">
+                {{ config('legal.entity.name') }}
+                @if(config('legal.entity.registration_number'))
+                    &middot; Reg. {{ config('legal.entity.registration_number') }}
+                @endif
+                <br>
+                {{ config('legal.entity.registered_address') }}
+                <br>
+                <a href="mailto:{{ config('legal.contact.general_email') }}" class="hover:text-foreground">{{ config('legal.contact.general_email') }}</a>
+                &middot; {{ config('legal.contact.phone') }}
+            </address>
+
             <p>&copy; {{ date('Y') }} {{ $branding->app_name ?? 'Community Hub' }}. All rights reserved.</p>
-            <a href="{{ route('privacy') }}" class="hover:text-foreground">Privacy Policy</a>
         </div>
     </footer>
 

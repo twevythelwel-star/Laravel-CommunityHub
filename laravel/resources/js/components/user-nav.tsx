@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, LogOut, Settings, User } from "lucide-react";
+import { CreditCard, KeyRound, LogOut, Settings, User } from "lucide-react";
 import { Link } from "@inertiajs/react";
 import { useAuth } from "@/context/auth-context";
 
@@ -83,6 +83,14 @@ export function UserNav() {
             </DropdownMenuItem>
           </Link>
           {(user.role === 'Homeowner' || user.role === 'Admin' || user.role === 'System Admin') && (
+            <Link href="/dashboard/renters">
+              <DropdownMenuItem className="cursor-pointer">
+                <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                <span>My Renters</span>
+              </DropdownMenuItem>
+            </Link>
+          )}
+          {(user.role === 'Homeowner' || user.role === 'Admin' || user.role === 'System Admin') && (
             <Link href="/dashboard/billing">
               <DropdownMenuItem className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -98,7 +106,17 @@ export function UserNav() {
           </Link>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={logout} className="text-destructive cursor-pointer focus:text-destructive">
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault();
+            logout();
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            logout();
+          }}
+          className="text-destructive cursor-pointer focus:text-destructive flex items-center w-full font-medium"
+        >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>

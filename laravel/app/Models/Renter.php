@@ -10,7 +10,19 @@ class Renter extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['user_id', 'name', 'status', 'lease_start', 'lease_end', 'lot', 'street'];
+    protected $fillable = [
+        'homeowner_id',
+        'user_id',
+        'name',
+        'stay_type',
+        'contact',
+        'notes',
+        'status',
+        'lease_start',
+        'lease_end',
+        'lot',
+        'street',
+    ];
 
     protected function casts(): array
     {
@@ -25,6 +37,11 @@ class Renter extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function homeowner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'homeowner_id');
+    }
+
     public function leaseHasExpired(): bool
     {
         return $this->lease_end->isPast();
@@ -32,6 +49,6 @@ class Renter extends Model
 
     public function scopeActive($query)
     {
-        return $query->where('status', 'Active')->whereDate('lease_end', '>=', now());
+        return $query->where('status', 'Active')->whereDate('lease_end', '>=', now()->toDateString());
     }
 }

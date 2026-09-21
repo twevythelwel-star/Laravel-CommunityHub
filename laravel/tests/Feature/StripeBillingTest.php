@@ -4,19 +4,33 @@ namespace Tests\Feature;
 
 use App\Models\Invoice;
 use App\Models\User;
+use App\Services\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery\MockInterface;
 use Tests\TestCase;
 
+/**
+ * Stripe Checkout.
+ *
+ * The flow previously ran in a "demo" mode whenever no secret key was
+ * configured — which was always, because config/services.php had no `stripe`
+ * block at all. In that mode createCheckoutSession() redirected straight to
+ * the success URL and completePayment() marked the invoice Paid. `success()`
+ * was additionally a GET with no ownership check, so
+ *
+ *     GET /dashboard/billing/invoices/{any}/stripe-success?session_id=x
+ *
+ * settled any invoice in the estate. These tests pin both halves shut.
+ */
 class StripeBillingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_resident_can_initiate_stripe_checkout_for_own_invoice(): void
+    private function invoiceFor(User $user, string $reference = 'INV-TEST-001'): Invoice
     {
-        $user = User::factory()->create();
-        $invoice = Invoice::create([
+        return Invoice::create([
             'user_id' => $user->id,
-            'reference' => 'INV-TEST-001',
+            'reference' => $reference,
             'amount_minor' => 25000,
             'currency' => 'USD',
             'period_start' => now()->startOfMonth(),
@@ -24,78 +38,167 @@ class StripeBillingTest extends TestCase
             'due_on' => now()->addDays(15),
             'status' => 'Unpaid',
         ]);
-
-        $response = $this->actingAs($user)
-            ->post(route('dashboard.billing.stripe.checkout', ['invoice' => $invoice->id]));
-
-        $response->assertRedirect();
-        $invoice->refresh();
-        $this->assertNotNull($invoice->stripe_session_id);
     }
 
-    public function test_user_cannot_checkout_another_users_invoice(): void
+    /** Pretend a real key is configured without letting anything reach Stripe. */
+    private function stripeConfigured(?callable $expectations = null): MockInterface
     {
-        $owner = User::factory()->create();
-        $intruder = User::factory()->create();
+        return $this->mock(StripePaymentService::class, function (MockInterface $mock) use ($expectations) {
+            $mock->shouldReceive('isLive')->andReturn(true);
 
-        $invoice = Invoice::create([
-            'user_id' => $owner->id,
-            'reference' => 'INV-TEST-002',
-            'amount_minor' => 25000,
-            'currency' => 'USD',
-            'period_start' => now()->startOfMonth(),
-            'period_end' => now()->endOfMonth(),
-            'due_on' => now()->addDays(15),
-            'status' => 'Unpaid',
-        ]);
-
-        $response = $this->actingAs($intruder)
-            ->post(route('dashboard.billing.stripe.checkout', ['invoice' => $invoice->id]));
-
-        $response->assertForbidden();
+            if ($expectations) {
+                $expectations($mock);
+            }
+        });
     }
 
-    public function test_stripe_success_settles_invoice_and_marks_paid(): void
+    // ── Containment: with no processor configured, the flow does not exist ──
+
+    public function test_checkout_is_not_reachable_when_stripe_is_not_configured(): void
     {
         $user = User::factory()->create();
-        $invoice = Invoice::create([
-            'user_id' => $user->id,
-            'reference' => 'INV-TEST-003',
-            'amount_minor' => 25000,
-            'currency' => 'USD',
-            'period_start' => now()->startOfMonth(),
-            'period_end' => now()->endOfMonth(),
-            'due_on' => now()->addDays(15),
-            'status' => 'Unpaid',
-            'stripe_session_id' => 'cs_demo_12345',
-        ]);
+        $invoice = $this->invoiceFor($user);
 
-        $response = $this->actingAs($user)
+        $this->actingAs($user)
+            ->post(route('dashboard.billing.stripe.checkout', ['invoice' => $invoice->id]))
+            ->assertNotFound();
+    }
+
+    public function test_success_cannot_settle_an_invoice_when_stripe_is_not_configured(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user);
+
+        $this->actingAs($user)
             ->get(route('dashboard.billing.stripe.success', [
                 'invoice' => $invoice->id,
                 'session_id' => 'cs_demo_12345',
-            ]));
+            ]))
+            ->assertNotFound();
 
-        $response->assertRedirect(route('dashboard.billing'));
-        $invoice->refresh();
-        $this->assertEquals('Paid', $invoice->status);
-        $this->assertNotNull($invoice->paid_at);
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertNull($invoice->fresh()->paid_at);
+    }
+
+    // ── Ownership, on every leg of the flow ──
+
+    public function test_user_cannot_checkout_another_users_invoice(): void
+    {
+        $this->stripeConfigured();
+
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $invoice = $this->invoiceFor($owner, 'INV-TEST-002');
+
+        $this->actingAs($intruder)
+            ->post(route('dashboard.billing.stripe.checkout', ['invoice' => $invoice->id]))
+            ->assertForbidden();
+    }
+
+    public function test_user_cannot_settle_another_users_invoice_through_the_success_url(): void
+    {
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldNotReceive('completePayment');
+        });
+
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $invoice = $this->invoiceFor($owner, 'INV-TEST-003');
+
+        $this->actingAs($intruder)
+            ->get(route('dashboard.billing.stripe.success', [
+                'invoice' => $invoice->id,
+                'session_id' => 'cs_live_whatever',
+            ]))
+            ->assertForbidden();
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+    }
+
+    public function test_user_cannot_read_another_users_invoice_reference_through_cancel(): void
+    {
+        $this->stripeConfigured();
+
+        $owner = User::factory()->create();
+        $intruder = User::factory()->create();
+        $invoice = $this->invoiceFor($owner, 'INV-TEST-004');
+
+        $this->actingAs($intruder)
+            ->get(route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]))
+            ->assertForbidden();
+    }
+
+    // ── Settlement follows Stripe, not the browser ──
+
+    public function test_success_leaves_the_invoice_unpaid_when_stripe_does_not_confirm(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-005');
+
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldReceive('completePayment')->once()->andReturn(false);
+        });
+
+        $this->actingAs($user)
+            ->get(route('dashboard.billing.stripe.success', [
+                'invoice' => $invoice->id,
+                'session_id' => 'cs_live_unconfirmed',
+            ]))
+            ->assertRedirect(route('dashboard.billing'))
+            ->assertSessionHas('error');
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertNull($invoice->fresh()->paid_at);
+    }
+
+    public function test_success_settles_the_invoice_when_stripe_confirms(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-006');
+
+        $this->stripeConfigured(function (MockInterface $mock) use ($invoice) {
+            $mock->shouldReceive('completePayment')
+                ->once()
+                ->andReturnUsing(function (Invoice $i) use ($invoice) {
+                    $this->assertSame($invoice->id, $i->id);
+                    $i->update(['status' => 'Paid', 'paid_at' => now()]);
+
+                    return true;
+                });
+        });
+
+        $this->actingAs($user)
+            ->get(route('dashboard.billing.stripe.success', [
+                'invoice' => $invoice->id,
+                'session_id' => 'cs_live_confirmed',
+            ]))
+            ->assertRedirect(route('dashboard.billing'))
+            ->assertSessionHas('success');
+
+        $this->assertSame('Paid', $invoice->fresh()->status);
+    }
+
+    public function test_success_requires_a_session_id(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-007');
+
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldNotReceive('completePayment');
+        });
+
+        $this->actingAs($user)
+            ->get(route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]))
+            ->assertSessionHasErrors('session_id');
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
     }
 
     public function test_invoice_pdf_download_streams_pdf(): void
     {
         $user = User::factory()->create();
-        $invoice = Invoice::create([
-            'user_id' => $user->id,
-            'reference' => 'INV-TEST-004',
-            'amount_minor' => 25000,
-            'currency' => 'USD',
-            'period_start' => now()->startOfMonth(),
-            'period_end' => now()->endOfMonth(),
-            'due_on' => now()->addDays(15),
-            'status' => 'Paid',
-            'paid_at' => now(),
-        ]);
+        $invoice = $this->invoiceFor($user, 'INV-TEST-008');
+        $invoice->update(['status' => 'Paid', 'paid_at' => now()]);
 
         $response = $this->actingAs($user)
             ->get(route('dashboard.billing.invoice.pdf', ['invoice' => $invoice->id]));

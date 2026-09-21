@@ -1,0 +1,715 @@
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  CheckCircle2,
+  CreditCard,
+  QrCode,
+  Smartphone,
+  Landmark,
+  Wallet as WalletIcon,
+  Banknote,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  Calendar,
+  Split,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import { channelSurcharge, type PaymentChannel } from '@/lib/payment-channels';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+export const CURRENCY_CONFIG: Record<string, { rate: number; symbol: string; name: string; flag: string }> = {
+  JMD: { rate: 1, symbol: 'J$', name: 'Jamaican Dollar', flag: '🇯🇲' },
+  USD: { rate: 0.0064, symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
+  CAD: { rate: 0.0088, symbol: 'CA$', name: 'Canadian Dollar', flag: '🇨🇦' },
+  GBP: { rate: 0.0051, symbol: '£', name: 'British Pound', flag: '🇬🇧' },
+  EUR: { rate: 0.0060, symbol: '€', name: 'Euro', flag: '🇪🇺' },
+};
+
+export type ItemizedCharge = {
+  id: number;
+  category: string;
+  title: string;
+  amount: number;
+  status: string;
+};
+
+export type PaymentCenterProps = {
+  amountDue: number;
+  currency: string;
+  itemizedCharges: ItemizedCharge[];
+  walletBalance: number;
+  onNavigateTab?: (tab: string) => void;
+  availableChannels?: any[];
+  autoPay?: any;
+};
+
+export function PaymentCenterHero({
+  amountDue,
+  currency,
+  itemizedCharges,
+  walletBalance,
+  onNavigateTab,
+  availableChannels,
+}: PaymentCenterProps) {
+  /*
+   * This component took `availableChannels` and then rendered every payment
+   * button unconditionally, so `payment_channel_settings` had no effect here:
+   * a disabled channel was still offered, a custom label never showed, and the
+   * per-channel surcharge was never put in front of the payer.
+   *
+   * `channelEnabled` now gates each button. When the server sends no list at
+   * all every button shows, which keeps older callers working.
+   */
+  const configuredChannels: PaymentChannel[] = availableChannels ?? [];
+
+  const channelEnabled = (key: string): boolean =>
+    configuredChannels.length === 0 || configuredChannels.some((c) => c.key === key);
+
+  /**
+   * The method the hero "Pay Now" button uses.
+   *
+   * It was hardcoded to `card`, so disabling card left the primary action
+   * posting a channel the estate does not accept.
+   */
+  const primaryChannelKey: string =
+    configuredChannels.find((c) => c.key === 'card')?.key ?? configuredChannels[0]?.key ?? 'card';
+
+  const surchargeFor = (key: string): number => {
+    const channel = configuredChannels.find((c) => c.key === key);
+
+    return channel ? channelSurcharge(channel) : 0;
+  };
+
+  /** Rendered on a channel button when that method adds a fee. */
+  const SurchargeNote = ({ channelKey }: { channelKey: string }) => {
+    const surcharge = surchargeFor(channelKey);
+
+    if (surcharge <= 0) {
+      return null;
+    }
+
+    return (
+      <span className="mt-1 block text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+        +{surcharge}% fee
+      </span>
+    );
+  };
+
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(currency || 'JMD');
+  const [showItemized, setShowItemized] = useState(false);
+  const [selectedChargeIds, setSelectedChargeIds] = useState<number[]>(
+    itemizedCharges.map((c) => c.id)
+  );
+  const [settlementMode, setSettlementMode] = useState<'full' | 'partial' | 'split' | 'plan'>('full');
+  
+  const toTarget = (amountInJmd: number, targetCur: string): number => {
+    if (targetCur === 'JMD') return amountInJmd;
+    const rate = CURRENCY_CONFIG[targetCur]?.rate ?? 1;
+    return Math.round(amountInJmd * rate * 100) / 100;
+  };
+
+  const curConfig = CURRENCY_CONFIG[selectedCurrency] ?? CURRENCY_CONFIG.JMD;
+
+  const [partialAmount, setPartialAmount] = useState<string>(
+    String(toTarget(25000, selectedCurrency))
+  );
+  const [splitWalletAmount, setSplitWalletAmount] = useState<string>(
+    walletBalance > 0 ? String(Math.min(walletBalance, 25000)) : '0'
+  );
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+  const [modalMethod, setModalMethod] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Compute selected total
+  const baseSelectedTotal = itemizedCharges.length > 0 && showItemized
+    ? itemizedCharges
+        .filter((c) => selectedChargeIds.includes(c.id))
+        .reduce((sum, c) => sum + c.amount, 0)
+    : amountDue;
+
+  const currentPayTotal = settlementMode === 'partial'
+    ? Number(partialAmount) || 0
+    : toTarget(baseSelectedTotal, selectedCurrency);
+
+  const toggleCharge = (id: number) => {
+    setSelectedChargeIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleTriggerPay = (channelKey: string, methodLabel: string) => {
+    setModalMethod(methodLabel);
+    setActiveModal(channelKey);
+  };
+
+  const handleConfirmPayment = (channelKey: string) => {
+    setIsProcessing(true);
+
+    router.post(
+      '/dashboard/billing/pay',
+      {
+        channel: channelKey,
+        amount: currentPayTotal,
+        currency: selectedCurrency,
+        item_ids: showItemized ? selectedChargeIds : undefined,
+        split_wallet_amount: settlementMode === 'split' ? Number(splitWalletAmount) : undefined,
+      },
+      {
+        onSuccess: () => {
+          setIsProcessing(false);
+          setActiveModal(null);
+        },
+        onError: () => {
+          setIsProcessing(false);
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="bg-card border border-border/80 rounded-2xl shadow-xl overflow-hidden">
+      {/* Top Header Gradient */}
+      <div className="bg-gradient-to-r from-primary via-primary/95 to-slate-900 text-primary-foreground p-6 sm:p-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-widest font-extrabold text-primary-foreground/80">
+                Resident Payment Center
+              </span>
+              {/*
+                This read "Zero Surcharges", which the data contradicts:
+                `payment_channel_settings.fee_surcharge_percent` is a per-channel
+                surcharge that an administrator can set, and it is passed to this
+                component in `availableChannels` — but never shown to the payer.
+                A fee that exists in the schema, is not displayed, and is denied
+                in a badge is the definition of a hidden fee. Removed rather than
+                restated, because until each channel renders its own surcharge
+                next to its button, no claim either way is safe to make.
+              */}
+            </div>
+            <p className="text-xs text-primary-foreground/70 mt-1">
+              Official community assessment & dues settlement portal
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Currency Switcher Pills */}
+            <div className="flex items-center gap-1 bg-black/35 backdrop-blur-md p-1 rounded-xl border border-white/10">
+              <span className="text-[10px] uppercase font-bold text-white/70 px-1.5 hidden sm:inline">
+                Currency:
+              </span>
+              {Object.entries(CURRENCY_CONFIG).map(([code, conf]) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCurrency(code);
+                    if (settlementMode === 'partial') {
+                      setPartialAmount(String(toTarget(25000, code)));
+                    }
+                  }}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    selectedCurrency === code
+                      ? 'bg-white text-slate-950 shadow-sm scale-105'
+                      : 'text-white/80 hover:text-white hover:bg-white/15'
+                  }`}
+                  title={conf.name}
+                >
+                  <span className="text-xs">{conf.flag}</span>
+                  <span>{code}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full self-start">
+              <Calendar className="w-3.5 h-3.5 text-primary-foreground/80" />
+              <span>Due: 1st of month</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Hero Amount Box */}
+        <div className="mt-6 flex flex-col sm:flex-row sm:items-end justify-between gap-6 border-t border-white/10 pt-6">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wider font-semibold text-primary-foreground/75">
+                Total Amount Due ({curConfig.name})
+              </span>
+              {selectedCurrency !== 'JMD' && (
+                <Badge variant="outline" className="text-[10px] text-white/90 border-white/30 bg-white/10">
+                  Converted from J$ {amountDue.toLocaleString()} JMD
+                </Badge>
+              )}
+            </div>
+            <div className="text-4xl sm:text-5xl font-black tracking-tight mt-1">
+              {curConfig.symbol}{Number(currentPayTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span className="text-lg font-bold opacity-80 ml-2">{selectedCurrency}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              size="lg"
+              className="bg-white text-slate-950 hover:bg-white/90 font-bold px-6 shadow-md transition-all group"
+              onClick={() => handleTriggerPay(primaryChannelKey, 'Full Payment')}
+            >
+              <span>Pay Now ({curConfig.symbol}{Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+              <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="border-white/30 bg-white/10 hover:bg-white/20 text-white font-semibold"
+              onClick={() => setShowItemized(!showItemized)}
+            >
+              <span>{showItemized ? 'Hide Breakdown' : 'Select Charges'}</span>
+              {showItemized ? <ChevronUp className="w-4 h-4 ml-1" /> : <ChevronDown className="w-4 h-4 ml-1" />}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 sm:p-8 space-y-8">
+        {/* Itemized Charges Breakdown (Expandable) */}
+        {showItemized && (
+          <div className="bg-muted/40 border border-border rounded-xl p-5 space-y-3 transition-all">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Layers className="w-4 h-4 text-primary" />
+                Select Individual Charges to Settle
+              </span>
+              <span className="text-xs font-semibold text-primary">
+                {selectedChargeIds.length} of {itemizedCharges.length} selected
+              </span>
+            </div>
+
+            <div className="divide-y divide-border/60">
+              {itemizedCharges.map((charge) => {
+                const isSelected = selectedChargeIds.includes(charge.id);
+                return (
+                  <label
+                    key={charge.id}
+                    className="flex items-center justify-between py-3 cursor-pointer hover:bg-muted/60 px-2 rounded-lg transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleCharge(charge.id)}
+                        className="w-4 h-4 rounded text-primary focus:ring-primary border-muted-foreground/30"
+                      />
+                      <div>
+                        <span className="text-sm font-semibold text-foreground block">
+                          {charge.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground capitalize">
+                          {charge.category.replace('_', ' ')} • Status: {charge.status}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-foreground">
+                      ${charge.amount.toLocaleString()} {currency}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Settlement Mode Selection */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <button
+            type="button"
+            onClick={() => setSettlementMode('full')}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              settlementMode === 'full'
+                ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+            }`}
+          >
+            <span className="text-xs block font-bold">Full Settlement</span>
+            <span className="text-[11px] opacity-80">Pay 100% of charges</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSettlementMode('partial')}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              settlementMode === 'partial'
+                ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+            }`}
+          >
+            <span className="text-xs block font-bold">Partial Payment</span>
+            <span className="text-[11px] opacity-80">Custom amount today</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSettlementMode('split')}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              settlementMode === 'split'
+                ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+            }`}
+          >
+            <span className="text-xs block font-bold flex items-center gap-1">
+              <Split className="w-3 h-3" /> Split Payment
+            </span>
+            <span className="text-[11px] opacity-80">Wallet + Card/Bank</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSettlementMode('plan')}
+            className={`p-3 rounded-xl border text-left transition-all ${
+              settlementMode === 'plan'
+                ? 'border-primary bg-primary/5 text-primary font-bold shadow-sm'
+                : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+            }`}
+          >
+            <span className="text-xs block font-bold">Installment Plan</span>
+            <span className="text-[11px] opacity-80">3 monthly payments</span>
+          </button>
+        </div>
+
+        {/* Dynamic Controls for Partial / Split / Plan */}
+        {settlementMode === 'partial' && (
+          <div className="p-4 bg-muted/40 rounded-xl border border-border space-y-2">
+            <label className="text-xs font-bold text-foreground">Enter Partial Amount to Pay Today</label>
+            <div className="flex gap-2 max-w-xs">
+              <Input
+                type="number"
+                value={partialAmount}
+                onChange={(e) => setPartialAmount(e.target.value)}
+                placeholder="25000"
+                className="font-bold text-sm"
+              />
+              <span className="self-center text-xs font-bold text-muted-foreground">{currency}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Remaining balance (${(baseSelectedTotal - (Number(partialAmount) || 0)).toLocaleString()}) will be marked Partially Paid on your ledger.
+            </p>
+          </div>
+        )}
+
+        {settlementMode === 'split' && (
+          <div className="p-4 bg-muted/40 rounded-xl border border-border space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-foreground">Community Wallet Portion:</span>
+              <span className="text-muted-foreground font-semibold">Usable: ${walletBalance.toLocaleString()} {currency}</span>
+            </div>
+            <div className="flex gap-2 max-w-xs">
+              <Input
+                type="number"
+                value={splitWalletAmount}
+                onChange={(e) => setSplitWalletAmount(e.target.value)}
+                max={walletBalance}
+                className="font-bold text-sm"
+              />
+              <span className="self-center text-xs font-bold text-muted-foreground">{currency}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Remaining ${(Math.max(0, currentPayTotal - (Number(splitWalletAmount) || 0))).toLocaleString()} will be charged to your selected card or bank transfer below.
+            </p>
+          </div>
+        )}
+
+        {settlementMode === 'plan' && (
+          <div className="p-4 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border border-blue-200 dark:border-blue-900 space-y-2">
+            <div className="text-xs font-bold text-blue-900 dark:text-blue-300">
+              3-Month Community Installment Plan
+            </div>
+            <p className="text-xs text-blue-800 dark:text-blue-400">
+              Spread your dues into 3 equal monthly payments of ${(currentPayTotal / 3).toLocaleString('en-US', { minimumFractionDigits: 2 })} {currency}. 0% interest, automated schedule.
+            </p>
+            <Button
+              size="sm"
+              className="mt-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs"
+              onClick={() => handleConfirmPayment('plan')}
+            >
+              Enroll in 3-Month Plan ($ {(currentPayTotal / 3).toLocaleString()}/mo)
+            </Button>
+          </div>
+        )}
+
+        {/* Fast 1-Tap Payment Grid */}
+        <div>
+          <span className="block text-xs font-extrabold uppercase tracking-wider text-muted-foreground mb-3.5">
+            Fast 1-Tap Checkout
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Apple Pay */}
+            {channelEnabled('apple_pay') && (
+              <button
+                type="button"
+                onClick={() => handleTriggerPay('apple_pay', 'Apple Pay')}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-slate-950 text-white hover:bg-black transition-all shadow hover:shadow-md group"
+              >
+                <span className="text-sm font-bold tracking-tight"> Apple Pay</span>
+                <span className="text-[10px] text-slate-400 mt-1">1-Tap Touch ID</span>
+                <SurchargeNote channelKey="apple_pay" />
+              </button>
+            )}
+
+            {/* Google Pay */}
+            {channelEnabled('google_pay') && (
+              <button
+                type="button"
+                onClick={() => handleTriggerPay('google_pay', 'Google Pay')}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-card text-foreground hover:bg-muted/70 transition-all shadow hover:shadow-md"
+              >
+                <span className="text-sm font-black text-blue-600 dark:text-blue-400">G Pay</span>
+                <span className="text-[10px] text-muted-foreground mt-1">Android / Web</span>
+                <SurchargeNote channelKey="google_pay" />
+              </button>
+            )}
+
+            {/* Samsung Wallet */}
+            {channelEnabled('samsung_wallet') && (
+              <button
+                type="button"
+                onClick={() => handleTriggerPay('samsung_wallet', 'Samsung Wallet')}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-blue-900 text-white hover:bg-blue-950 transition-all shadow hover:shadow-md"
+              >
+                <span className="text-sm font-bold">Samsung</span>
+                <span className="text-[10px] text-blue-200 mt-1">Wallet</span>
+                <SurchargeNote channelKey="samsung_wallet" />
+              </button>
+            )}
+
+            {/* Credit / Debit Card */}
+            {channelEnabled('card') && (
+              <button
+                type="button"
+                onClick={() => handleTriggerPay('card', 'Debit / Credit Card')}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-card hover:bg-muted/70 text-foreground transition-all shadow hover:shadow-md"
+              >
+                <CreditCard className="w-5 h-5 text-primary mb-1" />
+                <span className="text-xs font-bold">Card</span>
+                <span className="text-[10px] text-muted-foreground">Visa / MC</span>
+                <SurchargeNote channelKey="card" />
+              </button>
+            )}
+
+            {/* Direct Bank Wire */}
+            {channelEnabled('bank_wire') && (
+              <button
+                type="button"
+                onClick={() => handleTriggerPay('bank_wire', 'Direct Bank Transfer')}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-card hover:bg-muted/70 text-foreground transition-all shadow hover:shadow-md"
+              >
+                <Landmark className="w-5 h-5 text-emerald-600 mb-1" />
+                <span className="text-xs font-bold">Bank Wire</span>
+                <span className="text-[10px] text-muted-foreground">NCB Account</span>
+                <SurchargeNote channelKey="bank_wire" />
+              </button>
+            )}
+
+            {/* NFC Tap to Pay */}
+            {channelEnabled('nfc_pos') && (
+              <button
+                type="button"
+                onClick={() => handleTriggerPay('nfc_pos', 'NFC Tap to Pay')}
+                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-card hover:bg-muted/70 text-foreground transition-all shadow hover:shadow-md"
+              >
+                <Smartphone className="w-5 h-5 text-purple-600 mb-1" />
+                <span className="text-xs font-bold">NFC Tap</span>
+                <span className="text-[10px] text-muted-foreground">Contactless POS</span>
+                <SurchargeNote channelKey="nfc_pos" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Secondary Rails Tray */}
+        <div className="pt-4 border-t border-border/70">
+          <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+            Alternative Rails & Credits
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {channelEnabled('cash_app') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                onClick={() => handleTriggerPay('cash_app', 'Cash App')}
+              >
+                <Sparkles className="w-3.5 h-3.5 mr-1" /> Cash App ($CypressBayHOA)
+              </Button>
+            )}
+
+            {channelEnabled('zelle') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs font-semibold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                onClick={() => handleTriggerPay('zelle', 'Zelle')}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Zelle (payments@cypressbay.org)
+              </Button>
+            )}
+
+            {channelEnabled('cash_office') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+                onClick={() => handleTriggerPay('cash_office', 'Cash at Office')}
+              >
+                <Banknote className="w-3.5 h-3.5 mr-1" /> Cash at Office
+              </Button>
+            )}
+
+            {channelEnabled('qr_code') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs font-semibold text-blue-600"
+                onClick={() => handleTriggerPay('qr_code', 'QR Code Scan')}
+              >
+                <QrCode className="w-3.5 h-3.5 mr-1" /> QR Scan
+              </Button>
+            )}
+
+            {channelEnabled('wallet') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs font-semibold text-amber-600 dark:text-amber-400"
+                onClick={() => handleTriggerPay('wallet', 'Community Wallet')}
+              >
+                <WalletIcon className="w-3.5 h-3.5 mr-1" /> Wallet Balance (${walletBalance.toLocaleString()})
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Interactive Payment Execution Dialog */}
+      <Dialog open={activeModal !== null} onOpenChange={(open) => !open && setActiveModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-primary" />
+              <span>Complete Payment via {modalMethod}</span>
+            </DialogTitle>
+            <DialogDescription>
+              Authorizing payment of <strong>${Number(currentPayTotal).toLocaleString()} {currency}</strong> for Cypress Bay Community Dues.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4 text-sm">
+            {activeModal === 'apple_pay' && (
+              <div className="p-5 rounded-2xl bg-slate-950 text-white text-center space-y-3">
+                <span className="text-3xl"></span>
+                <div className="font-bold text-base">Double-Click Side Button</div>
+                <p className="text-xs text-slate-400">Confirm biometric Touch ID or Face ID on your Apple device.</p>
+              </div>
+            )}
+
+            {activeModal === 'google_pay' && (
+              <div className="p-5 rounded-2xl bg-card border border-border text-center space-y-3">
+                <span className="text-2xl font-black text-blue-600">G Pay</span>
+                <div className="font-bold text-sm">Confirm with your Google Account</div>
+                <p className="text-xs text-muted-foreground">Select saved Google Pay card ending in •••• 4242.</p>
+              </div>
+            )}
+
+            {activeModal === 'samsung_wallet' && (
+              <div className="p-5 rounded-2xl bg-blue-900 text-white text-center space-y-3">
+                <span className="text-2xl font-bold">Samsung Wallet</span>
+                <div className="font-bold text-sm">Swipe up from the bottom of your Samsung phone</div>
+                <p className="text-xs text-blue-200">Authenticate with iris or fingerprint scanner.</p>
+              </div>
+            )}
+
+            {activeModal === 'card' && (
+              <div className="space-y-3">
+                {/*
+                  This was a card number, expiry and CVC field under a
+                  "🔒 PCI-DSS Compliant" badge. Nothing was submitted — the
+                  inputs were prefilled with dummy values and read by no
+                  handler — and this application holds no PCI-DSS attestation.
+                  Card details must be entered on the processor's own page,
+                  never in a field this application renders.
+                */}
+                <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-2">
+                  <p className="font-semibold">Card checkout</p>
+                  <p className="text-muted-foreground">
+                    Card payment is not yet in service. When it is, you will be taken to the
+                    payment provider&apos;s own secure page to enter your card details — they are
+                    never typed into Community Hub.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {activeModal === 'bank_wire' && (
+              <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2 text-xs">
+                <div className="font-bold text-emerald-900 dark:text-emerald-300">National Commercial Bank (NCB)</div>
+                <div>Account Name: <strong>Cypress Bay Community HOA Ltd.</strong></div>
+                <div>Account Number: <strong>102938475</strong> (Checking)</div>
+                <div>Branch: <strong>Kingston 001</strong></div>
+                <div>Wire Reference: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded">WIRE-CB-LOT42</strong></div>
+              </div>
+            )}
+
+            {activeModal === 'nfc_pos' && (
+              <div className="p-6 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-2xl text-center space-y-3">
+                <Smartphone className="w-10 h-10 text-purple-600 mx-auto animate-pulse" />
+                <div className="font-bold text-purple-900 dark:text-purple-300 text-base">Ready for Tap</div>
+                <p className="text-xs text-purple-800 dark:text-purple-400">
+                  Hold your contactless card, iPhone, or Apple Watch near the terminal reader.
+                </p>
+              </div>
+            )}
+
+            {activeModal === 'qr_code' && (
+              <div className="text-center space-y-3">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent('https://communityhub.org/pay/qr-demo')}`}
+                  alt="QR Code"
+                  className="mx-auto rounded-lg border p-2 bg-white"
+                />
+                <p className="text-xs text-muted-foreground">Scan with your mobile camera or banking app to complete payment.</p>
+              </div>
+            )}
+
+            {activeModal === 'wallet' && (
+              <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2 text-xs">
+                <div className="font-bold text-amber-900 dark:text-amber-300">Community Digital Wallet Deduction</div>
+                <div>Available Credit Balance: <strong>${walletBalance.toLocaleString()} {currency}</strong></div>
+                <div>Amount to Deduct: <strong>${Number(currentPayTotal).toLocaleString()} {currency}</strong></div>
+                <p className="text-muted-foreground mt-1">Funds will be instantly debited from your closed-loop community ledger.</p>
+              </div>
+            )}
+
+            <Button
+              className="w-full font-bold py-3 mt-4"
+              disabled={isProcessing}
+              onClick={() => handleConfirmPayment(activeModal || 'card')}
+            >
+              {isProcessing
+                ? 'Processing Settlement...'
+                : `Confirm & Authorize Payment (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

@@ -16,8 +16,10 @@ class Fundraiser extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title', 'description', 'goal_minor', 'goal_currency',
-        'start_date', 'end_date', 'status', 'created_by',
+        'title', 'description', 'beneficiary', 'cover_image_url', 'goal_minor', 'goal_currency',
+        'start_date', 'end_date', 'status', 'created_by', 'allow_anonymous', 'allow_recurring',
+        'suggested_amounts', 'matching_sponsor', 'matching_multiplier', 'max_matching_minor',
+        'fund_allocation', 'show_leaderboard',
     ];
 
     protected function casts(): array
@@ -26,12 +28,24 @@ class Fundraiser extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'goal_minor' => 'integer',
+            'allow_anonymous' => 'boolean',
+            'allow_recurring' => 'boolean',
+            'suggested_amounts' => 'array',
+            'matching_multiplier' => 'integer',
+            'max_matching_minor' => 'integer',
+            'fund_allocation' => 'array',
+            'show_leaderboard' => 'boolean',
         ];
     }
 
     public function donations(): HasMany
     {
         return $this->hasMany(Donation::class);
+    }
+
+    public function updates(): HasMany
+    {
+        return $this->hasMany(FundraiserUpdate::class)->latest();
     }
 
     public function creator(): BelongsTo

@@ -24,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera, ShieldOff, Share2, FileDown, Copy } from 'lucide-react';
+import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera, ShieldOff, Share2, FileDown, Copy, Edit, ShieldAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -47,6 +47,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { VisitorIdModal } from '@/components/dashboard/visitor-id-modal';
+import { EditVisitorForm } from '@/components/dashboard/edit-visitor-form';
 import type { VisitorStatus } from '@/types';
 
 type VisitorRow = {
@@ -81,6 +82,12 @@ type Props = {
   canManage: boolean;
   canRegister: boolean;
   graceHours: number;
+  userStay?: {
+    stayType: string;
+    leaseStart: string;
+    leaseEnd: string;
+    expired?: boolean;
+  } | null;
 };
 
 function statusVariant(status: VisitorStatus) {
@@ -107,11 +114,12 @@ function toIsoDateTime(date: Date | undefined, hour: string, minute: string, mer
   return composed.toISOString();
 }
 
-export default function VisitorsPage({ visitors, filters, canManage, canRegister, graceHours }: Props) {
+export default function VisitorsPage({ visitors, filters, canManage, canRegister, graceHours, userStay }: Props) {
   const { toast } = useToast();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVisitor, setSelectedVisitor] = useState<VisitorRow | null>(null);
+  const [editingVisitor, setEditingVisitor] = useState<VisitorRow | null>(null);
   const [expectedDate, setExpectedDate] = useState<Date | undefined>(new Date());
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: new Date(),
@@ -257,6 +265,24 @@ export default function VisitorsPage({ visitors, filters, canManage, canRegister
             </p>
           </div>
 
+        {userStay && (
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 flex items-start gap-3">
+            <ShieldAlert className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+            <div className="text-xs sm:text-sm space-y-1">
+              <p className="font-semibold text-foreground flex items-center gap-2">
+                Temporary Homeowner Access ({userStay.stayType})
+                <Badge variant="outline" className="text-blue-600 border-blue-500/30 text-[11px]">
+                  Stay Active
+                </Badge>
+              </p>
+              <p className="text-muted-foreground">
+                Authorized stay timeframe: <strong>{format(parseISO(userStay.leaseStart), 'MMM d, yyyy')}</strong> to{' '}
+                <strong>{format(parseISO(userStay.leaseEnd), 'MMM d, yyyy')}</strong>. Registered visitors and edits are limited to dates within this timeframe.
+              </p>
+            </div>
+          </div>
+        )}
+
           {canRegister && (
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
@@ -389,6 +415,16 @@ export default function VisitorsPage({ visitors, filters, canManage, canRegister
                                 mode="single"
                                 selected={expectedDate}
                                 onSelect={setExpectedDate}
+                                disabled={(date) => {
+                                  if (userStay?.leaseStart && userStay?.leaseEnd) {
+                                    const s = parseISO(userStay.leaseStart);
+                                    s.setHours(0, 0, 0, 0);
+                                    const e = parseISO(userStay.leaseEnd);
+                                    e.setHours(23, 59, 59, 999);
+                                    return date < s || date > e;
+                                  }
+                                  return false;
+                                }}
                                 initialFocus
                               />
                             </PopoverContent>
@@ -618,6 +654,10 @@ export default function VisitorsPage({ visitors, filters, canManage, canRegister
                                 </DropdownMenuItem>
                               </>
                             )}
+                            <DropdownMenuItem onClick={() => setEditingVisitor(visitor)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Visitor
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setSelectedVisitor(visitor)}>
                               View ID
                             </DropdownMenuItem>
@@ -655,6 +695,13 @@ export default function VisitorsPage({ visitors, filters, canManage, canRegister
           </CardContent>
         </Card>
       </div>
+
+      <EditVisitorForm
+        visitor={editingVisitor}
+        open={Boolean(editingVisitor)}
+        onOpenChange={(open) => !open && setEditingVisitor(null)}
+        userStay={userStay}
+      />
     </DashboardLayout>
   );
 }

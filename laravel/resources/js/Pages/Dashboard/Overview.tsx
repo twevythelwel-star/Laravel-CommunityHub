@@ -30,6 +30,7 @@ import {
   Mountain,
   Settings2,
   ShieldOff,
+  KeyRound,
   Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,7 @@ type Stats = {
   entriesToday: number | null;
   deniedToday: number | null;
   myOutstandingBalance: number;
+  myRentersCount?: number | null;
 };
 
 type Announcement = {
@@ -828,30 +830,40 @@ export default function Overview({
                 </CardContent>
               </Card>
             )}
+
+            {stats.myRentersCount !== null && stats.myRentersCount !== undefined && (
+              <Card className="bg-card border-border text-card-foreground shadow-sm hover:border-primary/50 transition-colors">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    My Renters
+                  </CardTitle>
+                  <KeyRound className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline justify-between">
+                    <div className="text-2xl font-extrabold text-foreground">{stats.myRentersCount}</div>
+                    <Button asChild size="sm" variant="ghost" className="h-7 text-xs px-2 text-primary hover:text-primary">
+                      <Link href="/dashboard/renters">Manage →</Link>
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {stats.myRentersCount === 1 ? '1 active occupant / tenant' : `${stats.myRentersCount} active occupants / tenants`}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {permissions.viewFundraisers && activeFundraisers.length > 0 && (
             <div className="grid gap-6 md:grid-cols-2 mb-8">
               {activeFundraisers.map((fundraiser) => (
-                <FundraiserProgressCard
-                  key={fundraiser.id}
-                  fundraiser={{
-                    id: String(fundraiser.id),
-                    title: fundraiser.title,
-                    description: fundraiser.description,
-                    goal: fundraiser.goal,
-                    goalCurrency: 'JMD',
-                    startDate: new Date(fundraiser.startDate),
-                    endDate: new Date(fundraiser.endDate),
-                    status: fundraiser.status,
-                  }}
-                  // Totals come from SQL over integer minor units, so no
-                  // per-donation array is shipped and no float drift accumulates.
-                  donations={[]}
-                  raised={fundraiser.raised}
-                  progress={fundraiser.progress}
-                  donationCount={fundraiser.donorCount}
-                />
+                /*
+                 * Passed straight through: the card now takes the server's own
+                 * shape, so the adapter that rebuilt it into the legacy
+                 * `Fundraiser` type — and pinned the currency to JMD — is gone.
+                 * Totals come from SQL over integer minor units.
+                 */
+                <FundraiserProgressCard key={fundraiser.id} fundraiser={fundraiser} />
               ))}
             </div>
           )}

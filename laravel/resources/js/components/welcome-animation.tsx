@@ -5,15 +5,19 @@ import { Image } from "@/components/ui/image";
 
 interface WelcomeAnimationProps {
   username: string;
+  onComplete?: () => void;
 }
 
-export function WelcomeAnimation({ username }: WelcomeAnimationProps) {
+export function WelcomeAnimation({ username, onComplete }: WelcomeAnimationProps) {
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsDone(true), 1500);
+    const timer = setTimeout(() => {
+      setIsDone(true);
+      onComplete?.();
+    }, 2200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [onComplete]);
 
   if (isDone) return null;
 

@@ -64,7 +64,7 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 type EventFormProps = {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (data: Omit<CommunityEvent, 'id'>, id?: string) => void;

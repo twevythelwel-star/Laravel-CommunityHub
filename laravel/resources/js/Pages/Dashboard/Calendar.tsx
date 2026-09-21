@@ -1,6 +1,6 @@
-
-
 import { useState, useMemo } from "react";
+import { Head, router } from "@inertiajs/react";
+import DashboardLayout from "@/Layouts/DashboardLayout";
 import {
   Card,
   CardContent,
@@ -13,198 +13,381 @@ import { Button } from "@/components/ui/button";
 import { EventForm } from "@/components/dashboard/event-form";
 import type { CommunityEvent } from "@/types";
 import { useAuth } from "@/context/auth-context";
-import { isSameDay, isPast, format, isValid } from "date-fns";
+import { isSameDay, format, isValid, parseISO } from "date-fns";
 import { Image } from "@/components/ui/image";
-import { MoreHorizontal, PlusCircle, Trash2, Edit } from "lucide-react";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+  CalendarDays,
+  Clock,
+  PlusCircle,
+  ShieldCheck,
+  UserCheck,
+  ShieldAlert,
+  ArrowRight,
+  Sparkles,
+  CheckCircle2,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-const mockEvents: CommunityEvent[] = [
-    { id: 'evt_1', title: 'Community Pool Party', description: 'Join us for a fun day at the pool! Food and drinks will be provided.', startDate: new Date(new Date().getFullYear(), 6, 20, 12, 0), endDate: new Date(new Date().getFullYear(), 6, 20, 16, 0), imageUrl: 'https://picsum.photos/seed/pool-party/800/400' },
-    { id: 'evt_2', title: 'Annual HOA Meeting', description: 'Discussing the budget and plans for the upcoming year.', startDate: new Date(new Date().getFullYear(), 7, 5, 19, 0), endDate: new Date(new Date().getFullYear(), 7, 5, 21, 0) },
-    { id: 'evt_3', title: 'Movie Night Under the Stars', description: 'We\'ll be showing a family-friendly movie on a big screen in the park.', startDate: new Date(new Date().getFullYear(), 6, 25, 20, 0), imageUrl: 'https://picsum.photos/seed/movie-night/800/400' },
-    { id: 'evt_4', title: 'Yoga in the Park', description: 'Morning yoga session for all skill levels.', startDate: new Date(new Date().getFullYear(), 6, 20, 9, 0) },
-];
+type EntrySlot = {
+  id: string;
+  name: string;
+  timeRange: string;
+  status: string;
+  description: string;
+};
 
+type VisitorSummary = {
+  id: number | string;
+  name: string;
+  type: string;
+  status: string;
+  expectedAt: string;
+  dateRange: string | null;
+};
 
-export default function CalendarPage() {
-    const { user } = useAuth();
-    const [events, setEvents] = useState<CommunityEvent[]>(mockEvents);
-    const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
-    const [isFormOpen, setFormOpen] = useState(false);
-    const [selectedEvent, setSelectedEvent] = useState<CommunityEvent | undefined>(undefined);
+type UserStay = {
+  stayType: string;
+  leaseStart: string;
+  leaseEnd: string;
+  expired?: boolean;
+} | null;
 
-    const canManage = user?.role === 'System Admin' || user?.role === 'Admin';
+type Props = {
+  events: {
+    id: number | string;
+    title: string;
+    description: string;
+    startDate: string;
+    endDate?: string | null;
+    imageUrl?: string | null;
+  }[];
+  entrySlots?: EntrySlot[];
+  myVisitors?: VisitorSummary[];
+  userStay?: UserStay;
+  canManage?: boolean;
+  canRegisterVisitors?: boolean;
+};
 
-    const handleOpenForm = (event?: CommunityEvent) => {
-        setSelectedEvent(event);
-        setFormOpen(true);
-    };
+export default function CalendarPage({
+  events: initialEvents = [],
+  entrySlots = [],
+  myVisitors = [],
+  userStay,
+  canManage: serverCanManage,
+  canRegisterVisitors = true,
+}: Props) {
+  const { user } = useAuth();
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [isFormOpen, setFormOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CommunityEvent | undefined>(undefined);
 
-    const handleCloseForm = () => {
-        setSelectedEvent(undefined);
-        setFormOpen(false);
-    };
+  const canManage = serverCanManage ?? (user?.role === "System Admin" || user?.role === "Admin");
 
-    const handleSaveEvent = (data: Omit<CommunityEvent, 'id'>, id?: string) => {
-        if (id) {
-            setEvents(events.map(e => e.id === id ? { ...e, ...data } : e));
-        } else {
-            const newEvent: CommunityEvent = { id: `evt_${Date.now()}`, ...data };
-            setEvents([...events, newEvent]);
-        }
-    };
+  // Parse events into Date objects
+  const parsedEvents = useMemo(() => {
+    return initialEvents.map((e) => ({
+      ...e,
+      id: String(e.id),
+      startDate: parseISO(e.startDate),
+      endDate: e.endDate ? parseISO(e.endDate) : undefined,
+      imageUrl: e.imageUrl || undefined,
+    }));
+  }, [initialEvents]);
 
-    const handleDeleteEvent = (id: string) => {
-        setEvents(events.filter(e => e.id !== id));
-    };
+  const dateEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    return parsedEvents.filter((event) => isSameDay(event.startDate, selectedDate));
+  }, [parsedEvents, selectedDate]);
 
-    const todaysEvents = useMemo(() => {
-        const futureEvents = events.filter(e => !isPast(e.endDate || e.startDate));
-        if (!selectedDate) return [];
-        return futureEvents
-            .filter(event => isSameDay(event.startDate, selectedDate))
-            .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-    }, [events, selectedDate]);
-    
-    const formatEventTime = (event: CommunityEvent) => {
-        const { startDate, endDate } = event;
-        // Check if startTime and endTime are the same as the start of the day
-        const isAllDay = 
-            startDate.getHours() === 0 && startDate.getMinutes() === 0 &&
-            (!endDate || (endDate.getHours() === 0 && endDate.getMinutes() === 0));
+  const dateVisitors = useMemo(() => {
+    if (!selectedDate) return [];
+    return myVisitors.filter((v) => isSameDay(parseISO(v.expectedAt), selectedDate));
+  }, [myVisitors, selectedDate]);
 
-        if (isAllDay && !endDate) return "All-day event";
-        if (isAllDay && endDate && isSameDay(startDate, endDate)) return "All-day event";
+  const isWithinStay = useMemo(() => {
+    if (!userStay || !selectedDate) return true;
+    const start = parseISO(userStay.leaseStart);
+    start.setHours(0, 0, 0, 0);
+    const end = parseISO(userStay.leaseEnd);
+    end.setHours(23, 59, 59, 999);
+    const sel = new Date(selectedDate);
+    sel.setHours(12, 0, 0, 0);
+    return sel >= start && sel <= end;
+  }, [userStay, selectedDate]);
 
-        let timeString = '';
-        if (isValid(startDate)) {
-            timeString = format(startDate, 'h:mm a');
-        }
+  const formatEventTime = (event: { startDate: Date; endDate?: Date }) => {
+    const { startDate, endDate } = event;
+    const isAllDay =
+      startDate.getHours() === 0 &&
+      startDate.getMinutes() === 0 &&
+      (!endDate || (endDate.getHours() === 0 && endDate.getMinutes() === 0));
 
-        if (isValid(endDate) && endDate) {
-            timeString += ` - ${format(endDate, 'h:mm a')}`;
-        }
-        
-        return timeString;
+    if (isAllDay) return "All-day event";
+
+    let timeString = "";
+    if (isValid(startDate)) {
+      timeString = format(startDate, "h:mm a");
     }
+    if (isValid(endDate) && endDate) {
+      timeString += ` – ${format(endDate, "h:mm a")}`;
+    }
+    return timeString;
+  };
+
+  const handleRegisterVisitorForDate = () => {
+    const formatted = selectedDate ? format(selectedDate, "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd");
+    router.get(`/dashboard/visitors?date=${formatted}`);
+  };
 
   return (
-    <div className="grid gap-8">
-      <div className="flex justify-between items-center">
-        <div>
-            <h1 className="font-headline text-3xl font-bold">Community Calendar</h1>
-            <p className="text-muted-foreground">View community events and available visitor timeslots.</p>
+    <DashboardLayout>
+      <Head title="Calendar & Entry Slots" />
+
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold font-headline tracking-tight flex items-center gap-2">
+              <CalendarDays className="h-7 w-7 text-primary" />
+              Community &amp; Entry Calendar
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              View available gate entry slots, community events, and scheduled property visits.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {canRegisterVisitors && (
+              <Button
+                onClick={handleRegisterVisitorForDate}
+                disabled={!isWithinStay}
+                className="gap-2 shadow-sm"
+              >
+                <PlusCircle className="h-4 w-4" />
+                Register Visitor for {selectedDate ? format(selectedDate, "MMM d") : "Date"}
+              </Button>
+            )}
+
+            {canManage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  setSelectedEvent(undefined);
+                  setFormOpen(true);
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Add Event
+              </Button>
+            )}
+          </div>
         </div>
-         {canManage && (
-            <EventForm open={isFormOpen} onOpenChange={setFormOpen} onSave={handleSaveEvent} event={selectedEvent}>
-                <Button size="sm" className="gap-1" onClick={() => handleOpenForm()}>
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                        Add Event
-                    </span>
-                </Button>
-            </EventForm>
-        )}
-      </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
-        <Card>
-            <CardHeader>
-                <CardTitle>Events and Bookings</CardTitle>
-                <CardDescription>
-                    Select a date to see upcoming events.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="flex justify-center">
-                <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    className="rounded-md border"
-                />
-            </CardContent>
-        </Card>
-
-        <Card>
-            <CardHeader>
-                <CardTitle>
-                    Events for {selectedDate ? format(selectedDate, 'MMMM d, yyyy') : '...'}
-                </CardTitle>
-                <CardDescription>A list of scheduled events for the selected day.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 max-h-[400px] overflow-y-auto">
-                {todaysEvents.length > 0 ? (
-                    todaysEvents.map(event => (
-                        <Card key={event.id} className="overflow-hidden">
-                            {event.imageUrl && (
-                                <div className="relative h-32 w-full">
-                                    <Image src={event.imageUrl} alt={event.title} layout="fill" objectFit="cover" data-ai-hint="event image" />
-                                </div>
-                            )}
-                            <div className="p-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h4 className="font-semibold">{event.title}</h4>
-                                        <p className="text-sm text-muted-foreground">{formatEventTime(event)}</p>
-                                    </div>
-                                    {canManage && (
-                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => handleOpenForm(event)}>
-                                                    <Edit className="mr-2 h-4 w-4" />
-                                                    Edit
-                                                </DropdownMenuItem>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive">
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            This will permanently delete the event &ldquo;{event.title}&rdquo;.
-                                                        </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={() => handleDeleteEvent(event.id)}>Yes, delete</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    )}
-                                </div>
-                                <p className="text-sm text-muted-foreground mt-2">{event.description}</p>
-                            </div>
-                        </Card>
-                    ))
+        {/* Temporary Homeowner Stay Notice */}
+        {userStay && (
+          <div
+            className={`rounded-xl border p-4 flex items-start gap-3 ${
+              isWithinStay
+                ? "border-blue-500/20 bg-blue-500/5 text-foreground"
+                : "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+            }`}
+          >
+            <ShieldAlert
+              className={`h-5 w-5 mt-0.5 shrink-0 ${
+                isWithinStay ? "text-blue-600 dark:text-blue-400" : "text-amber-600 dark:text-amber-400"
+              }`}
+            />
+            <div className="text-xs sm:text-sm space-y-1">
+              <p className="font-semibold flex items-center gap-2">
+                Temporary Homeowner Stay ({userStay.stayType})
+                {isWithinStay ? (
+                  <Badge variant="outline" className="text-blue-600 border-blue-500/30 text-[10px]">
+                    Date Within Stay
+                  </Badge>
                 ) : (
-                    <p className="text-center text-muted-foreground py-10">No events scheduled for this day.</p>
+                  <Badge variant="outline" className="text-amber-600 border-amber-500/40 text-[10px]">
+                    Outside Stay Timeframe
+                  </Badge>
                 )}
+              </p>
+              <p className="text-muted-foreground">
+                Authorized stay: <strong>{format(parseISO(userStay.leaseStart), "MMM d, yyyy")}</strong> to{" "}
+                <strong>{format(parseISO(userStay.leaseEnd), "MMM d, yyyy")}</strong>. Visitor registrations are available on days within this window.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Main Grid: Calendar Picker + Details */}
+        <div className="grid lg:grid-cols-12 gap-6">
+          {/* Calendar Picker Card */}
+          <Card className="lg:col-span-5 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Select Date</CardTitle>
+              <CardDescription>
+                Choose a date to view gate clearance availability and events.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex justify-center pb-6">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={setSelectedDate}
+                className="rounded-lg border shadow-sm p-3 pointer-events-auto"
+              />
             </CardContent>
-        </Card>
+          </Card>
+
+          {/* Right Column: Entry Slots & Day Overview */}
+          <div className="lg:col-span-7 space-y-6">
+            {/* Entry Slots Card */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    Available Entry Clearance Slots
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedDate ? format(selectedDate, "EEEE, MMMM d, yyyy") : "Select a day"}
+                  </CardDescription>
+                </div>
+                {canRegisterVisitors && isWithinStay && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRegisterVisitorForDate}
+                    className="text-xs gap-1.5"
+                  >
+                    <span>Register</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {entrySlots.map((slot) => (
+                  <div
+                    key={slot.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors gap-2"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-foreground">{slot.name}</span>
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 flex items-center gap-1 font-medium"
+                        >
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          {slot.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{slot.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs font-mono font-medium px-2 py-1 rounded bg-muted text-muted-foreground">
+                        {slot.timeRange}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Scheduled Visitors for Selected Day */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                  Your Scheduled Visitors for this Day
+                </CardTitle>
+                <CardDescription>
+                  Visitor clearances pre-authorized by your profile for {selectedDate ? format(selectedDate, "MMM d") : ""}.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dateVisitors.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-2">
+                    No visitor arrivals currently scheduled for this date.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {dateVisitors.map((visitor) => (
+                      <div
+                        key={visitor.id}
+                        className="flex items-center justify-between p-2.5 rounded-lg border bg-muted/20 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <p className="font-semibold text-foreground">{visitor.name}</p>
+                          <p className="text-muted-foreground">
+                            {visitor.type} access · {format(parseISO(visitor.expectedAt), "h:mm a")}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{visitor.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Community Events on this Day */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold">Community Events</CardTitle>
+                <CardDescription>
+                  Events hosted in the community on {selectedDate ? format(selectedDate, "MMMM d, yyyy") : ""}.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {dateEvents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-3 text-center">
+                    No community events scheduled for this day.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {dateEvents.map((event) => (
+                      <div key={event.id} className="p-3 rounded-lg border bg-card space-y-1.5">
+                        {event.imageUrl && (
+                          <div className="relative h-28 w-full rounded overflow-hidden mb-2">
+                            <Image
+                              src={event.imageUrl}
+                              alt={event.title}
+                              layout="fill"
+                              objectFit="cover"
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between">
+                          <h4 className="font-semibold text-sm">{event.title}</h4>
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {formatEventTime(event)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{event.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {canManage && (
+        <EventForm
+          open={isFormOpen}
+          onOpenChange={setFormOpen}
+          onSave={() => {
+            setFormOpen(false);
+            router.reload();
+          }}
+          event={selectedEvent}
+        />
+      )}
+    </DashboardLayout>
   );
 }

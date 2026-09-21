@@ -10,26 +10,40 @@ export type Homeowner = {
 };
 
 export type Renter = {
-  id: string;
+  id: string | number;
   name: string;
-  status: 'Active' | 'Inactive';
-  leaseStart: Date;
-  leaseEnd: Date;
+  stayType?: 'Long-term (Renter)' | 'Short-term (Airbnb)';
+  contact?: string | null;
+  notes?: string | null;
+  status: 'Active' | 'Inactive' | 'Expired';
+  leaseStart: Date | string;
+  leaseEnd: Date | string;
+  lot?: string | null;
+  street?: string | null;
+  expired?: boolean;
+  homeownerName?: string | null;
+  homeownerId?: string | number | null;
 };
 
 export type VisitorStatus = "Expected" | "Checked In" | "Checked Out";
 export type EntryType = "onetime" | "recurring";
 
 export type Visitor = {
-  id: string;
+  id: string | number;
   name: string;
+  contact?: string | null;
+  vehicle?: string | null;
+  idType?: string | null;
   type: "One-time" | "Recurring";
   status: VisitorStatus;
-  expectedAt: Date;
-  dateRange: string;
-  homeowner: string;
-  idImageUrl?: string;
+  expectedAt: Date | string;
+  dateRange: string | null;
+  homeowner: string | null;
+  idImageUrl?: string | null;
   isBlocked: boolean;
+  expired?: boolean;
+  shareToken?: string | null;
+  guestPassUrl?: string | null;
 };
 
 export type Staff = {
@@ -147,26 +161,16 @@ export type FoodApp = {
   couponPercentage?: number;
 }
 
-export type Fundraiser = {
-  id: string;
-  title: string;
-  description: string;
-  goal: number;
-  goalCurrency: 'JMD';
-  startDate: Date;
-  endDate: Date;
-  status: 'Active' | 'Completed' | 'Upcoming' | 'Canceled';
-}
-
-export type Donation = {
-  id: string;
-  fundraiserId: string;
-  amount: number;
-  currency: 'JMD' | 'USD' | 'GBP' | 'EUR' | 'CAD';
-  donorName?: string;
-  isAnonymous: boolean;
-  timestamp: Date;
-}
+/*
+ * `Fundraiser` and `Donation` were removed with the fundraising wiring, for the
+ * same reason as `ManagedUser` and `AccessLogEntry`: they described something
+ * the server does not send. `Fundraiser` had no `raised`, `progress` or
+ * `donorCount`, pinned `goalCurrency` to the literal 'JMD', and typed `id` as a
+ * string. `Donation` allowed five currencies on a single fundraiser, which is
+ * precisely the shape that made the raised total wrong — the server sums minor
+ * units and converts nothing. The row type now lives with its component, in
+ * components/dashboard/fundraiser-progress-card.tsx, as `FundraiserRow`.
+ */
 
 export type Guideline = {
   id: string;

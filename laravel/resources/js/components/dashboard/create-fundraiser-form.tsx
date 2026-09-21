@@ -23,7 +23,8 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import type { Fundraiser } from '@/types';
+import { router } from '@inertiajs/react';
+import { useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '../ui/calendar';
@@ -43,15 +44,21 @@ const formSchema = z.object({
   path: ["endDate"],
 });
 
+/**
+ * Schedules a new fundraiser.
+ *
+ * `onSubmit` used to push onto a local array and toast "Fundraiser Created",
+ * so the fundraiser existed only in that browser until the next reload.
+ */
 type CreateFundraiserFormProps = {
   children: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreateFundraiser: (newFundraiser: Omit<Fundraiser, 'id'>) => void;
 };
 
-export function CreateFundraiserForm({ children, open, onOpenChange, onCreateFundraiser }: CreateFundraiserFormProps) {
+export function CreateFundraiserForm({ children, open, onOpenChange }: CreateFundraiserFormProps) {
   const { toast } = useToast();
+  const [submitting, setSubmitting] = useState(false);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -62,13 +69,38 @@ export function CreateFundraiserForm({ children, open, onOpenChange, onCreateFun
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    onCreateFundraiser({ ...values, status: 'Upcoming', goalCurrency: 'JMD' });
-    toast({
-      title: 'Fundraiser Created',
-      description: `The fundraiser "${values.title}" has been scheduled.`,
-    });
-    form.reset();
-    onOpenChange(false);
+    setSubmitting(true);
+
+    router.post(
+      '/dashboard/fundraising',
+      {
+        title: values.title,
+        description: values.description,
+        goal: values.goal,
+        // The server takes dates, not timestamps.
+        start_date: format(values.startDate, 'yyyy-MM-dd'),
+        end_date: format(values.endDate, 'yyyy-MM-dd'),
+        status: 'Upcoming',
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          form.reset();
+          onOpenChange(false);
+          toast({
+            title: 'Fundraiser created',
+            description: `"${values.title}" has been scheduled. Use Enable Now to open it for donations.`,
+          });
+        },
+        onError: (errors) =>
+          toast({
+            variant: 'destructive',
+            title: 'Could not create the fundraiser',
+            description: Object.values(errors)[0] ?? 'Please check the form and try again.',
+          }),
+        onFinish: () => setSubmitting(false),
+      },
+    );
   }
 
   return (
@@ -212,7 +244,9 @@ export function CreateFundraiserForm({ children, open, onOpenChange, onCreateFun
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Create Fundraiser</Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Creating..." : "Create Fundraiser"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

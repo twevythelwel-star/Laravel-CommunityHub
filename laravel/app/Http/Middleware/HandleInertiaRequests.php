@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
                     'avatarUrl' => $user->avatar_url,
                     'aiConsent' => $user->ai_consent,
                 ] : null,
+                'justSignedIn' => (bool) $request->session()->get('just_signed_in', false),
 
                 // Drives menu visibility; previously hardcoded role checks in JSX.
                 'can' => $user ? [

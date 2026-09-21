@@ -10,6 +10,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Replaces the mock login in src/context/auth-context.tsx, which matched a
@@ -43,10 +45,11 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
 
         if (! $user->isActive()) {
+            $expiredMessage = $user->temporaryStayExpirationMessage();
             Auth::logout();
 
             throw ValidationException::withMessages([
-                'email' => 'This account has been deactivated. Contact community administration.',
+                'email' => $expiredMessage ?: 'This account has been deactivated. Contact community administration.',
             ]);
         }
 
@@ -57,10 +60,12 @@ class AuthenticatedSessionController extends Controller
 
         $user->recordActivity('Signed in');
 
+        session()->flash('just_signed_in', true);
+
         return redirect()->intended(route('dashboard.index'));
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request): SymfonyResponse
     {
         $request->user()?->recordActivity('Signed out');
 
@@ -69,6 +74,6 @@ class AuthenticatedSessionController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('landing');
+        return Inertia::location(route('landing'));
     }
 }

@@ -10,7 +10,9 @@ use App\Models\User;
 use App\Models\Visitor;
 use App\Models\Warning;
 use App\Services\GatePassEngine;
+use Database\Seeders\UserSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Tests\TestCase;
 
 /**
@@ -67,6 +69,36 @@ class DashboardAccessTest extends TestCase
         $this->assertNotNull($user->fresh()->gatePasses()->first());
     }
 
+    public function test_all_seeded_demo_profiles_can_login_with_seed_password(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->seed(UserSeeder::class);
+
+        $demoEmails = [
+            'alexander.wright@communityhub.org',
+            'elena.rostova@communityhub.org',
+            'marcus.vance@residence.net',
+            'sophia.taylor@residence.net',
+            'dispatch@apexguard.com',
+            'maria.garcia@communitystaff.org',
+            'olivia.davis@residence.net',
+            'john.smith@residence.net',
+            'jane.doe@residence.net',
+        ];
+
+        foreach ($demoEmails as $email) {
+            $response = $this->post('/login', [
+                'email' => $email,
+                'password' => 'ChangeMe!2026',
+            ]);
+
+            $response->assertRedirect(route('dashboard.index'));
+            $this->assertAuthenticated();
+            $this->post('/logout');
+            $this->assertGuest();
+        }
+    }
+
     public function test_a_deactivated_account_cannot_sign_in(): void
     {
         $user = User::factory()->inactive()->create();
@@ -88,6 +120,39 @@ class DashboardAccessTest extends TestCase
         $user->update(['status' => 'Inactive', 'deactivated_at' => now()]);
 
         $this->actingAs($user)->get('/dashboard')->assertRedirect(route('login'));
+    }
+
+    public function test_user_can_log_out_via_post(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->post('/logout');
+
+        $response->assertRedirect(route('landing'));
+        $this->assertGuest();
+    }
+
+    public function test_user_can_log_out_via_get(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)->get('/logout');
+
+        $response->assertRedirect(route('landing'));
+        $this->assertGuest();
+    }
+
+    public function test_inertia_logout_returns_location_response_without_plain_text_error(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withHeaders(['X-Inertia' => 'true'])
+            ->post('/logout');
+
+        $response->assertStatus(409);
+        $response->assertHeader('X-Inertia-Location', route('landing'));
+        $this->assertGuest();
     }
 
     // ── Role gates ───────────────────────────────────────────────────

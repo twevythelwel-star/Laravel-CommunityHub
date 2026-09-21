@@ -40,6 +40,19 @@ class AuthServiceProvider extends ServiceProvider
 
         Gate::define('manageBoundary', fn (User $user) => $user->role->isAdministrative());
 
+        /*
+         | Who may open the payments area at all: administrators, Homeowners and
+         | Temporary Homeowners. Security and Staff are not billed by the estate
+         | and have no invoices, so the page held nothing for them — and merely
+         | loading it created a Wallet row against their account, because
+         | BillingController::index() calls Wallet::firstOrCreate().
+         |
+         | `manageBilling` below is the narrower right to change the estate's
+         | rates and mark other households' invoices paid.
+         */
+        Gate::define('accessBilling', fn (User $user) => $user->role->isAdministrative()
+            || $user->role->isResident());
+
         Gate::define('manageBilling', fn (User $user) => $user->role->isAdministrative());
 
         Gate::define('reviewFeedback', fn (User $user) => $user->role->isAdministrative());

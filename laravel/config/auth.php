@@ -31,5 +31,18 @@ return [
         ],
     ],
 
+    /*
+    |---------------------------------------------------------------------------
+    | Seed password
+    |---------------------------------------------------------------------------
+    |
+    | Default used by the local-only `users:set-passwords` helper. It lives in
+    | config rather than being read from env() at the call site, because env()
+    | returns null once config is cached.
+    |
+    */
+
+    'seed_password' => env('SEED_PASSWORD', 'ChangeMe!2026'),
+
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 ];

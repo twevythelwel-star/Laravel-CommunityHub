@@ -245,6 +245,9 @@ class OverviewController extends Controller
                 : null,
 
             'myOutstandingBalance' => (float) ((int) $user->invoices()->outstanding()->sum('amount_minor') / 100),
+            'myRentersCount' => $user->role === UserRole::Homeowner
+                ? $user->renters()->where('status', 'Active')->count()
+                : null,
         ];
     }
 

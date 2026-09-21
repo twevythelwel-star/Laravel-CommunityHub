@@ -18,13 +18,14 @@ class EnsureUserIsActive
         $user = $request->user();
 
         if ($user && ! $user->isActive()) {
+            $expiredMessage = $user->temporaryStayExpirationMessage();
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             return redirect()
                 ->route('login')
-                ->withErrors(['email' => 'This account has been deactivated. Contact community administration.']);
+                ->withErrors(['email' => $expiredMessage ?: 'This account has been deactivated. Contact community administration.']);
         }
 
         return $next($request);
