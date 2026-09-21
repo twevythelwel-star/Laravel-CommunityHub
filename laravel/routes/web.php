@@ -87,8 +87,10 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::patch('/settings', [SettingsController::class, 'update'])->name('settings.update');
 
-    Route::get('/deactivation', [DeactivationController::class, 'show'])->name('deactivation');
-    Route::post('/deactivation', [DeactivationController::class, 'store'])->name('deactivation.store');
+    Route::middleware('role:Homeowner,Temporary Homeowner')->group(function () {
+        Route::get('/deactivation', [DeactivationController::class, 'show'])->name('deactivation');
+        Route::post('/deactivation', [DeactivationController::class, 'store'])->name('deactivation.store');
+    });
 
     // ── Gate pass ──
     Route::get('/gate-pass', [GatePassController::class, 'index'])->name('gate-pass');
@@ -103,12 +105,14 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/gate-pass/pdf/{gatePass}', [PdfController::class, 'downloadGatePass'])->name('gate-pass.pdf');
 
     // ── Visitors & directory ──
-    Route::get('/visitors', [VisitorController::class, 'index'])->name('visitors');
-    Route::post('/visitors', [VisitorController::class, 'store'])->name('visitors.store');
-    Route::match(['put', 'patch'], '/visitors/{visitor}', [VisitorController::class, 'update'])->name('visitors.update');
-    Route::post('/visitors/{visitor}/check-in', [VisitorController::class, 'checkIn'])->name('visitors.check-in');
-    Route::post('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOut'])->name('visitors.check-out');
-    Route::delete('/visitors/{visitor}', [VisitorController::class, 'destroy'])->name('visitors.destroy');
+    Route::middleware('can:accessEstateInformation')->group(function () {
+        Route::get('/visitors', [VisitorController::class, 'index'])->name('visitors');
+        Route::post('/visitors', [VisitorController::class, 'store'])->name('visitors.store');
+        Route::match(['put', 'patch'], '/visitors/{visitor}', [VisitorController::class, 'update'])->name('visitors.update');
+        Route::post('/visitors/{visitor}/check-in', [VisitorController::class, 'checkIn'])->name('visitors.check-in');
+        Route::post('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOut'])->name('visitors.check-out');
+        Route::delete('/visitors/{visitor}', [VisitorController::class, 'destroy'])->name('visitors.destroy');
+    });
 
     /*
      | Admin-only, which is what the original always showed: the page rendered
@@ -159,9 +163,12 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
      | Residents now get a redacted list (name, status and date only; the reason,
      | photo and author are withheld by the controller).
      */
-    Route::get('/block-list', [BlocklistController::class, 'index'])->name('block-list');
+    Route::get('/block-list', [BlocklistController::class, 'index'])
+        ->middleware('can:accessEstateInformation')
+        ->name('block-list');
 
     Route::post('/block-list/{blocklistEntry}/request-removal', [BlocklistController::class, 'requestRemoval'])
+        ->middleware('can:accessEstateInformation')
         ->whereNumber('blocklistEntry')
         ->name('block-list.request-removal');
 
@@ -198,10 +205,12 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->name('warnings.destroy');
 
     // ── Map & boundary ──
-    Route::get('/map', [MapController::class, 'index'])->name('map');
-    Route::post('/map/landmarks', [MapController::class, 'storeLandmark'])->name('map.landmarks.store');
-    Route::delete('/map/landmarks/{landmark}', [MapController::class, 'destroyLandmark'])->name('map.landmarks.destroy');
-    Route::post('/map/locate', [MapController::class, 'locate'])->name('map.locate');
+    Route::middleware('can:accessEstateInformation')->group(function () {
+        Route::get('/map', [MapController::class, 'index'])->name('map');
+        Route::post('/map/landmarks', [MapController::class, 'storeLandmark'])->name('map.landmarks.store');
+        Route::delete('/map/landmarks/{landmark}', [MapController::class, 'destroyLandmark'])->name('map.landmarks.destroy');
+        Route::post('/map/locate', [MapController::class, 'locate'])->name('map.locate');
+    });
 
     Route::middleware('can:manageBoundary')->group(function () {
         Route::get('/map/boundary', [BoundaryController::class, 'edit'])->name('boundary');
@@ -219,18 +228,27 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->middleware('can:broadcastNotices')
         ->name('notifications.suggest-audience');
 
-    Route::get('/updates', [UpdateController::class, 'index'])->name('updates');
+    Route::get('/updates', [UpdateController::class, 'index'])
+        ->middleware('can:accessCommunityLife')
+        ->name('updates');
     Route::post('/updates', [UpdateController::class, 'store'])
         ->middleware('can:broadcastNotices')
         ->name('updates.store');
 
-    Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
-    Route::post('/calendar', [CalendarController::class, 'store'])->name('calendar.store');
-    Route::patch('/calendar/{communityEvent}', [CalendarController::class, 'update'])->name('calendar.update');
-    Route::delete('/calendar/{communityEvent}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+    Route::middleware('can:accessCommunityLife')->group(function () {
+        Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar');
+        Route::post('/calendar', [CalendarController::class, 'store'])->name('calendar.store');
+        Route::patch('/calendar/{communityEvent}', [CalendarController::class, 'update'])->name('calendar.update');
+        Route::delete('/calendar/{communityEvent}', [CalendarController::class, 'destroy'])->name('calendar.destroy');
+    });
 
-    Route::get('/guidelines', [GuidelinesController::class, 'index'])->name('guidelines');
-    Route::get('/changelog', [ChangelogController::class, 'index'])->name('changelog');
+    Route::get('/guidelines', [GuidelinesController::class, 'index'])
+        ->middleware('can:accessEstateInformation')
+        ->name('guidelines');
+
+    Route::get('/changelog', [ChangelogController::class, 'index'])
+        ->middleware('can:viewAppChangelog')
+        ->name('changelog');
 
     Route::get('/feedback', [FeedbackController::class, 'index'])->name('feedback');
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
@@ -243,7 +261,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->name('review-feedback.update');
 
     // ── Community life ──
-    Route::get('/deals', [DealsController::class, 'index'])->name('deals');
+    Route::get('/deals', [DealsController::class, 'index'])
+        ->middleware('can:accessEstateInformation')
+        ->name('deals');
     Route::post('/deals/businesses', [DealsController::class, 'storeBusiness'])
         ->middleware('can:manageUsers')
         ->name('deals.businesses.store');
@@ -251,15 +271,17 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->middleware('can:manageUsers')
         ->name('deals.food-apps.store');
 
-    Route::get('/fundraising', [FundraisingController::class, 'index'])->name('fundraising');
-    Route::post('/fundraising', [FundraisingController::class, 'store'])
-        ->middleware('can:manageFundraisers')
-        ->name('fundraising.store');
-    Route::post('/fundraising/{fundraiser}/donate', [FundraisingController::class, 'donate'])->name('fundraising.donate');
-    // Backs the card's "Enable Now", which had no handler and no endpoint.
-    Route::patch('/fundraising/{fundraiser}', [FundraisingController::class, 'update'])
-        ->middleware('can:manageFundraisers')
-        ->name('fundraising.update');
+    Route::middleware('can:accessCommunityLife')->group(function () {
+        Route::get('/fundraising', [FundraisingController::class, 'index'])->name('fundraising');
+        Route::post('/fundraising', [FundraisingController::class, 'store'])
+            ->middleware('can:manageFundraisers')
+            ->name('fundraising.store');
+        Route::post('/fundraising/{fundraiser}/donate', [FundraisingController::class, 'donate'])->name('fundraising.donate');
+        // Backs the card's "Enable Now", which had no handler and no endpoint.
+        Route::patch('/fundraising/{fundraiser}', [FundraisingController::class, 'update'])
+            ->middleware('can:manageFundraisers')
+            ->name('fundraising.update');
+    });
 
     /*
      | Payments are for administrators, Homeowners and Temporary Homeowners.
@@ -300,9 +322,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::get('/billing/invoices/{invoice}/stripe-cancel', [StripeCheckoutController::class, 'cancel'])->name('billing.stripe.cancel');
     });
 
-    Route::get('/fundraising/donations/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt');
-    Route::get('/fundraising/donation/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt.alias');
-    Route::post('/fundraising/{fundraiser}/updates', [FundraisingController::class, 'addUpdate'])
-        ->middleware('can:manageFundraisers')
-        ->name('fundraising.updates.store');
+    Route::middleware('can:accessCommunityLife')->group(function () {
+        Route::get('/fundraising/donations/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt');
+        Route::get('/fundraising/donation/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt.alias');
+        Route::post('/fundraising/{fundraiser}/updates', [FundraisingController::class, 'addUpdate'])
+            ->middleware('can:manageFundraisers')
+            ->name('fundraising.updates.store');
+    });
 });

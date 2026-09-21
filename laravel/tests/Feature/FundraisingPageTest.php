@@ -86,10 +86,28 @@ class FundraisingPageTest extends TestCase
                 ->assertInertia(fn (Assert $page) => $page->where('canManage', true));
         }
 
-        foreach ([UserRole::Homeowner, UserRole::Security] as $role) {
+        foreach ([UserRole::Homeowner, UserRole::TemporaryHomeowner] as $role) {
             $this->actingAs(User::factory()->role($role)->create())
                 ->get('/dashboard/fundraising')
                 ->assertInertia(fn (Assert $page) => $page->where('canManage', false));
+        }
+    }
+
+    /**
+     * Fundraising is resident community life. Security and Staff are employed
+     * by the estate rather than living in it, and the sidebar has never
+     * offered them the page — but the route was open, so both could reach it
+     * by URL and donate. `accessCommunityLife` now closes it.
+     *
+     * This previously asserted that Security saw the page with
+     * `canManage => false`, which described the hole rather than the rule.
+     */
+    public function test_the_estates_employees_are_not_admitted_to_fundraising(): void
+    {
+        foreach ([UserRole::Security, UserRole::Staff] as $role) {
+            $this->actingAs(User::factory()->role($role)->create())
+                ->get('/dashboard/fundraising')
+                ->assertForbidden();
         }
     }
 

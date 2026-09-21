@@ -98,8 +98,8 @@ const allMenuItems = [
   // same entry. Matches the `accessBilling` gate on the routes.
   { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
-  { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin'] },
-  { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
+  { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin', 'Admin'] },
+  { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
   { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
   { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },

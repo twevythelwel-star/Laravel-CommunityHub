@@ -32,6 +32,11 @@ class SidebarNavigationTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** @var array<int, string> */
+    private const ALL_ROLES = [
+        'System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff',
+    ];
+
     /**
      * Sidebar href => roles the menu offers it to.
      *
@@ -58,8 +63,8 @@ class SidebarNavigationTest extends TestCase
         '/dashboard/access-log' => ['System Admin', 'Admin', 'Security'],
         '/dashboard/billing' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'],
         '/dashboard/changelog' => ['System Admin'],
-        '/dashboard/review-feedback' => ['System Admin'],
-        '/dashboard/feedback' => ['Admin', 'Homeowner', 'Temporary Homeowner', 'Security'],
+        '/dashboard/review-feedback' => ['System Admin', 'Admin'],
+        '/dashboard/feedback' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'],
         '/dashboard/deactivation' => ['Homeowner', 'Temporary Homeowner'],
         '/dashboard/settings' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'],
         '/dashboard/profile' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'],
@@ -179,5 +184,43 @@ class SidebarNavigationTest extends TestCase
         $tenant = User::factory()->create(['role' => 'Temporary Homeowner', 'status' => 'Active']);
 
         $this->actingAs($tenant)->get('/dashboard/billing')->assertOk();
+    }
+
+    /**
+     * The other direction, and the one that matters for exposure: a page must
+     * not admit a role the menu never offers it to.
+     *
+     * Seventeen of the twenty-two dashboard pages were open to every signed-in
+     * user regardless of what the sidebar showed. Staff — who hold a gate pass
+     * and nothing else — could reach eleven pages by typing the URL, including
+     * the visitor book, the blocklist, the estate map and the app changelog.
+     *
+     * Route and menu are exactly equal now, so this asserts equality rather
+     * than a subset in either direction.
+     */
+    #[DataProvider('sidebarProvider')]
+    public function test_no_page_admits_a_role_its_menu_entry_withholds(string $href, array $roles): void
+    {
+        $withheld = array_values(array_diff(self::ALL_ROLES, $roles));
+
+        if ($withheld === []) {
+            // Offered to every role, so there is nothing for the route to be
+            // looser than. Asserted rather than skipped so the case is visible.
+            $this->assertCount(count(self::ALL_ROLES), $roles);
+
+            return;
+        }
+
+        foreach ($withheld as $role) {
+            $user = User::factory()->create(['role' => $role, 'status' => 'Active']);
+
+            $status = $this->actingAs($user)->get($href)->baseResponse->getStatusCode();
+
+            $this->assertNotSame(
+                200,
+                $status,
+                "The menu withholds {$href} from {$role}, but the route served it anyway.",
+            );
+        }
     }
 }

@@ -41,6 +41,31 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('manageBoundary', fn (User $user) => $user->role->isAdministrative());
 
         /*
+         | The estate's own information: the map, the perks directory, the
+         | rules, the visitor book and the blocklist.
+         |
+         | Staff hold a gate pass and nothing else. They are not resident here
+         | and they do not police the gate, and the sidebar has never offered
+         | them any of these pages — but every one of the routes was open, so
+         | the whole set was reachable by typing the URL.
+         */
+        Gate::define('accessEstateInformation', fn (User $user) => $user->role->isAdministrative()
+            || $user->role->isResident()
+            || $user->role === UserRole::Security);
+
+        /*
+         | Resident community life: fundraising, the events calendar and estate
+         | updates. Security and Staff are employed by the estate rather than
+         | living in it, which is what the menu has always said and what the
+         | routes now enforce.
+         */
+        Gate::define('accessCommunityLife', fn (User $user) => $user->role->isAdministrative()
+            || $user->role->isResident());
+
+        /* The application's own release history. */
+        Gate::define('viewAppChangelog', fn (User $user) => $user->role === UserRole::SystemAdmin);
+
+        /*
          | Who may open the payments area at all: administrators, Homeowners and
          | Temporary Homeowners. Security and Staff are not billed by the estate
          | and have no invoices, so the page held nothing for them — and merely
