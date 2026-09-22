@@ -53,9 +53,13 @@ class Invoice extends Model
         return (float) ($this->amount_minor / 100);
     }
 
+    /** Money received less money refunded, from the ledger. */
     public function amountPaidMinor(): int
     {
-        return (int) $this->transactions()->where('status', 'completed')->sum('amount_minor');
+        $received = (int) $this->transactions()->where('status', 'completed')->sum('amount_minor');
+        $refunded = (int) $this->transactions()->where('status', 'refunded')->sum('amount_minor');
+
+        return max(0, $received - $refunded);
     }
 
     public function balanceRemainingMinor(): int

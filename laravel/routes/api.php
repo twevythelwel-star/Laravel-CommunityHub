@@ -5,13 +5,14 @@ use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\GatePassApiController;
 use App\Http\Controllers\Api\MapApiController;
 use App\Http\Controllers\Api\VisitorApiController;
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
 | JSON API
 |--------------------------------------------------------------------------
-| Backs the Capacitor mobile build (capacitor.config.ts) and the handheld
+| Backs the Capacitor mobile build and the handheld
 | gate scanner. Same controllers-to-services path as the Inertia routes, so
 | validation rules and access policy are enforced identically on both.
 |
@@ -20,6 +21,10 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::post('/auth/login', [AuthApiController::class, 'login'])->middleware('throttle:6,1');
+
+// Stripe calls this, not a user: no session, no token. Authenticity comes from
+// the Stripe-Signature header, verified against STRIPE_WEBHOOK_SECRET.
+Route::post('/webhooks/stripe', StripeWebhookController::class)->name('webhooks.stripe');
 
 Route::middleware('auth:sanctum')->group(function () {
 

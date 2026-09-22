@@ -229,24 +229,37 @@ class BillingController extends Controller
          |
          | A resident now gets their own rows, which is what the tab is for.
          */
+        $stripe = app(StripePaymentService::class);
+        $canRefund = $isAdmin && $stripe->isLive();
+
         $transactions = Transaction::with('user:id,display_name,lot')
             ->unless($isAdmin, fn ($q) => $q->where('user_id', $user->id))
             ->latest()
             ->paginate(15)
             ->withQueryString()
-            ->through(fn ($t) => [
-                'id' => $t->id,
-                'reference' => $t->reference,
-                'receiptNumber' => $t->receipt_number,
-                'homeowner' => $t->user?->display_name,
-                'lot' => $t->user?->lot,
-                'amount' => (float) ($t->amount_minor / 100),
-                'currency' => $t->currency,
-                'channel' => $t->payment_channel,
-                'status' => $t->status,
-                'notes' => $t->notes,
-                'date' => $t->created_at->format('M d, Y h:i A'),
-            ]);
+            ->through(function (Transaction $t) use ($stripe, $canRefund) {
+                // Only a Stripe payment with money left to return, and only for
+                // an administrator on a live Stripe account.
+                $refundableMinor = $canRefund ? $stripe->refundableMinor($t) : 0;
+
+                return [
+                    'id' => $t->id,
+                    'reference' => $t->reference,
+                    'receiptNumber' => $t->receipt_number,
+                    'homeowner' => $t->user?->display_name,
+                    'lot' => $t->user?->lot,
+                    'amount' => (float) ($t->amount_minor / 100),
+                    'currency' => $t->currency,
+                    'channel' => $t->payment_channel,
+                    'status' => $t->status,
+                    'notes' => $t->notes,
+                    'date' => $t->created_at->format('M d, Y h:i A'),
+                    'refundableAmount' => $refundableMinor > 0 ? (float) ($refundableMinor / 100) : null,
+                    'refundUrl' => $refundableMinor > 0
+                        ? route('dashboard.billing.transactions.refund', $t->id)
+                        : null,
+                ];
+            });
 
         // Payouts & Reconciliations — estate treasury records, administrators only.
         $payouts = $isAdmin ? Payout::latest()->take(10)->get()->map(fn ($p) => [

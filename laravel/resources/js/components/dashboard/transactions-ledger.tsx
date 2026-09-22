@@ -38,6 +38,18 @@ import {
   AlertCircle,
   FileSpreadsheet,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { submit } from '@/lib/submit';
 import { money, type Paginated } from '@/components/dashboard/billing-summary';
 
 export type MasterTransaction = {
@@ -52,6 +64,9 @@ export type MasterTransaction = {
   status: 'completed' | 'pending' | 'refunded' | 'failed' | string;
   notes?: string | null;
   date: string;
+  /** Present only for an administrator, on a Stripe payment with money left to return. */
+  refundableAmount?: number | null;
+  refundUrl?: string | null;
 };
 
 type Props = {
@@ -64,6 +79,40 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
   const [channelFilter, setChannelFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currencyFilter, setCurrencyFilter] = useState('all');
+  const { toast } = useToast();
+  const [refunding, setRefunding] = useState<MasterTransaction | null>(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundNote, setRefundNote] = useState('');
+  const [refundError, setRefundError] = useState<string | null>(null);
+  const [refundSaving, setRefundSaving] = useState(false);
+
+  const openRefund = (tx: MasterTransaction) => {
+    setRefunding(tx);
+    setRefundAmount(String(tx.refundableAmount ?? ''));
+    setRefundNote('');
+    setRefundError(null);
+  };
+
+  const issueRefund = async () => {
+    if (!refunding?.refundUrl) return;
+    setRefundSaving(true);
+    setRefundError(null);
+    try {
+      await submit('post', refunding.refundUrl, {
+        amount: Number(refundAmount),
+        note: refundNote.trim() === '' ? null : refundNote,
+      });
+      toast({
+        title: 'Refund issued',
+        description: `${money(Number(refundAmount), refunding.currency || currency)} is on its way back through Stripe.`,
+      });
+      setRefunding(null);
+    } catch (message) {
+      setRefundError(typeof message === 'string' ? message : 'The refund could not be issued. Please try again.');
+    } finally {
+      setRefundSaving(false);
+    }
+  };
 
   const filteredData = transactions.data.filter((tx) => {
     const matchesSearch =
@@ -274,6 +323,17 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
                         <Download className="h-3.5 w-3.5" />
                         PDF
                       </Button>
+                      {tx.refundUrl && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs gap-1 text-destructive"
+                          onClick={() => openRefund(tx)}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Refund
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -282,6 +342,61 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
           </div>
         )}
       </CardContent>
+
+      <Dialog open={refunding !== null} onOpenChange={(open) => !open && setRefunding(null)}>
+        <DialogContent className="sm:max-w-md">
+          {refunding && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Refund Stripe payment</DialogTitle>
+                <DialogDescription>
+                  {refunding.reference} from {refunding.homeowner}. Up to{' '}
+                  {money(refunding.refundableAmount ?? 0, refunding.currency || currency)} can be returned to the card.
+                  If this payment settled the invoice, the invoice goes back to Unpaid or Partially Paid.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="refund-amount">Amount ({refunding.currency || currency})</Label>
+                  <Input
+                    id="refund-amount"
+                    type="number"
+                    inputMode="decimal"
+                    min={0.01}
+                    step={0.01}
+                    max={refunding.refundableAmount ?? undefined}
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    aria-invalid={refundError !== null}
+                  />
+                  {refundError && <p className="text-sm text-destructive">{refundError}</p>}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="refund-note">Note (optional)</Label>
+                  <Textarea
+                    id="refund-note"
+                    maxLength={500}
+                    placeholder="e.g., Duplicate payment; already paid at the office"
+                    value={refundNote}
+                    onChange={(e) => setRefundNote(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setRefunding(null)}>Cancel</Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={refundSaving || !(Number(refundAmount) > 0)}
+                  onClick={issueRefund}
+                >
+                  {refundSaving ? 'Refunding…' : 'Issue Refund'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

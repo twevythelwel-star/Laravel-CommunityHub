@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\StripePaymentService;
+use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Stripe\Exception\ApiErrorException;
 
 /**
  * Stripe Checkout.
@@ -89,6 +92,39 @@ class StripeCheckoutController extends Controller
 
         return redirect()->route('dashboard.billing')
             ->with('status', "Payment cancelled for invoice {$invoice->reference}. No charges were made.");
+    }
+
+    /**
+     * Refund some or all of a Stripe payment. Administrators only (route gate
+     * `manageBilling`).
+     *
+     * The ledger row and any change to the invoice are written from Stripe's
+     * own record of the charge, the same way the `charge.refunded` webhook
+     * does, so the two cannot both record the same refund.
+     */
+    public function refund(Request $request, Transaction $transaction): RedirectResponse
+    {
+        $this->ensureEnabled();
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $amountMinor = (int) round($validated['amount'] * 100);
+
+        try {
+            $this->stripe->refund($transaction, $amountMinor, $request->user(), $validated['note'] ?? null);
+        } catch (DomainException $e) {
+            return back()->withErrors(['amount' => $e->getMessage()]);
+        } catch (ApiErrorException $e) {
+            report($e);
+
+            return back()->withErrors(['amount' => 'Stripe refused the refund: '.$e->getMessage()]);
+        }
+
+        return back()->with('success', "Refund of {$transaction->currency} "
+            .number_format($amountMinor / 100, 2)." issued for {$transaction->reference}.");
     }
 
     /** No processor, no checkout. See StripePaymentService::isLive(). */

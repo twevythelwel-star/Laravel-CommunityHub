@@ -331,6 +331,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/billing/invoices/{invoice}/stripe-checkout', [StripeCheckoutController::class, 'checkout'])->name('billing.stripe.checkout');
         Route::get('/billing/invoices/{invoice}/stripe-success', [StripeCheckoutController::class, 'success'])->name('billing.stripe.success');
         Route::get('/billing/invoices/{invoice}/stripe-cancel', [StripeCheckoutController::class, 'cancel'])->name('billing.stripe.cancel');
+        Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])
+            ->middleware('can:manageBilling')
+            ->name('billing.transactions.refund');
     });
 
     Route::middleware('can:accessCommunityLife')->group(function () {
