@@ -1,0 +1,98 @@
+# Runs on every push and pull request. Branch protection on `main` should
+# require both jobs so a red build cannot be merged.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: laravel
+
+jobs:
+  backend:
+    name: PHP tests, style and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          # gd for dompdf and the visitor-pass QR images (QrCodePng);
+          # pdo_sqlite for the in-memory test database set in phpunit.xml.
+          extensions: mbstring, dom, gd, intl, bcmath, zip, pdo_sqlite, sqlite3
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('laravel/composer.lock') }}
+          restore-keys: composer-
+
+      # Fails if composer.json and composer.lock disagree, which is how a
+      # package gets added to one without the other.
+      - name: Validate composer.json and composer.lock
+        run: composer validate --no-check-publish --no-check-all
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Tests read their settings from phpunit.xml (SQLite in memory, sync
+      # queue, a throwaway GATE_ENGINE_SECRET) and TestCase calls
+      # withoutVite(), so no frontend build is needed here. The app still
+      # needs a key.
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+
+      - name: Run test suite
+        run: php artisan test
+
+      - name: Check code style (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Audit PHP dependencies
+        run: composer audit --no-interaction
+
+  frontend:
+    name: TypeScript, build and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Install JS dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
+
+      # Runtime dependencies only; dev tooling never reaches a browser.
+      - name: Audit JS dependencies
+        run: npm audit --omit=dev --audit-level=high
