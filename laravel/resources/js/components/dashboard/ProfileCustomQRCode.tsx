@@ -4,10 +4,7 @@ import type { PassCategory, QRShape } from '@/lib/gate-pass-engine/types';
 import { getCategoryConfig } from '@/lib/gate-pass-engine/config';
 import { getShapeClipPath, CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
 import { cn } from '@/lib/utils';
-// @ts-expect-error qr.js does not have standard typescript declaration
-import QRCodeImpl from 'qr.js/lib/QRCode';
-// @ts-expect-error qr.js ErrorCorrectLevel
-import ErrorCorrectLevel from 'qr.js/lib/ErrorCorrectLevel';
+import qrcode from 'qrcode-generator';
 
 export interface ProfileCustomQRCodeProps {
   value: string;
@@ -54,17 +51,30 @@ export function ProfileCustomQRCode({
 
   // Generate QR matrix with Level H (High: 30% error recovery)
   const qrData = useMemo(() => {
+    const generateMatrix = (ecLevel: 'H' | 'M'): boolean[][] => {
+      const qr = qrcode(0, ecLevel);
+      qr.addData(value || 'CH-GPE:v1.EMPTY');
+      qr.make();
+      const count = qr.getModuleCount();
+      const matrix: boolean[][] = [];
+      for (let r = 0; r < count; r++) {
+        const row: boolean[] = [];
+        for (let c = 0; c < count; c++) {
+          row.push(qr.isDark(r, c));
+        }
+        matrix.push(row);
+      }
+      return matrix;
+    };
+
     try {
-      const qrcode = new QRCodeImpl(-1, ErrorCorrectLevel.H);
-      qrcode.addData(value || 'CH-GPE:v1.EMPTY');
-      qrcode.make();
-      return qrcode.modules as boolean[][];
+      return generateMatrix('H');
     } catch {
-      // Fallback with lower density if value is unusually large
-      const qrcode = new QRCodeImpl(-1, ErrorCorrectLevel.M);
-      qrcode.addData(value || 'CH-GPE:v1.EMPTY');
-      qrcode.make();
-      return qrcode.modules as boolean[][];
+      try {
+        return generateMatrix('M');
+      } catch {
+        return [];
+      }
     }
   }, [value]);
 

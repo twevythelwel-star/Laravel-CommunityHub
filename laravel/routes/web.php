@@ -99,6 +99,12 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/gate-pass/scan', [GatePassController::class, 'scan'])
         ->middleware('can:scanPasses')
         ->name('gate-pass.scan');
+    Route::post('/gate-pass/confirm-action', [GatePassController::class, 'confirmAction'])
+        ->middleware('can:scanPasses')
+        ->name('gate-pass.confirm-action');
+    Route::get('/gate-pass/sample-tokens', [GatePassController::class, 'sampleTokens'])
+        ->middleware('can:manageSecurity')
+        ->name('gate-pass.sample-tokens');
     Route::post('/gate-pass/{gatePass}/revoke', [GatePassController::class, 'revoke'])
         ->middleware('can:manageSecurity')
         ->name('gate-pass.revoke');

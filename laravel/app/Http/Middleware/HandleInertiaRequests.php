@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\BillingSetting;
 use App\Models\BrandingSetting;
 use App\Models\Community;
+use App\Models\Warning;
 use App\Services\GeofenceService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -87,6 +88,8 @@ class HandleInertiaRequests extends Middleware
              */
             'billing' => fn () => $this->billing(),
 
+            'activeAlert' => fn () => $user ? $this->activeAlert() : null,
+
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
@@ -96,6 +99,30 @@ class HandleInertiaRequests extends Middleware
                 'location' => $request->url(),
             ],
         ]);
+    }
+
+    private function activeAlert(): ?array
+    {
+        $warning = Warning::query()
+            ->latest('issued_at')
+            ->where('issued_at', '>=', now()->subDays(7))
+            ->first();
+
+        if (! $warning) {
+            return null;
+        }
+
+        $titleLower = strtolower($warning->title);
+        $isCritical = str_contains($titleLower, 'emergency') || str_contains($titleLower, 'urgent') || str_contains($titleLower, 'danger');
+
+        return [
+            'id' => $warning->id,
+            'title' => $warning->title,
+            'description' => $warning->description,
+            'author_name' => $warning->author_name,
+            'issued_at' => $warning->issued_at?->toIso8601String(),
+            'severity' => $isCritical ? 'critical' : 'warning',
+        ];
     }
 
     private function billing(): array

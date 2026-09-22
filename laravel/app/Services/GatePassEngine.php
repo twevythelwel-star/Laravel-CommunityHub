@@ -121,6 +121,43 @@ class GatePassEngine
         ];
     }
 
+    /**
+     * Issues a token with custom claims or overrides, used for security simulation tests.
+     */
+    public function createCustomToken(GatePass $pass, array $overrides = []): string
+    {
+        $category = $pass->category;
+        $windowIndex = (int) floor(now()->getTimestamp() / (int) config('gatepass.temporal_window_seconds', 60));
+        $validFrom = $windowIndex * (int) config('gatepass.temporal_window_seconds', 60);
+        $validUntil = $validFrom + (int) config('gatepass.temporal_window_seconds', 60);
+        $variant = $this->assignedColorVariant($category, $pass->pass_id, $pass->rotation_seq);
+
+        $payload = array_merge([
+            'gpe' => config('gatepass.protocol.engine_id', 'GPE'),
+            'cid' => config('gatepass.default_community_id'),
+            'v' => (int) config('gatepass.protocol.version', 1),
+            'pid' => $pass->pass_id,
+            'cat' => $category->value,
+            'zone' => $pass->access_zone ?: $category->defaultZone(),
+            'uid' => (string) ($pass->user?->uid ?? ''),
+            'nam' => $pass->holder_name,
+            'prop' => $pass->property ?? 'Unassigned',
+            'gate' => ($pass->designated_gate ?? GateId::Any)->value,
+            'vf' => $validFrom,
+            'vu' => $validUntil,
+            'nonce' => sprintf('NONCE-%s-%s', substr((string) ($pass->user?->uid ?? $pass->pass_id), -4), strtoupper(bin2hex(random_bytes(4)))),
+            't' => now()->getTimestamp(),
+            'cvar' => $pass->color_variant ?: $variant['name'],
+            'seq' => $pass->rotation_seq,
+        ], $overrides);
+
+        $signature = $this->sign($payload);
+        $payload['sig'] = $signature;
+        $encodedPayload = $this->base64UrlEncode(json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        return config('gatepass.protocol.envelope_prefix').$encodedPayload.'.'.$signature;
+    }
+
     /** Creates (or returns) the registry row for a user, formatting the pass ID. */
     public function issuePassFor(User $user): GatePass
     {

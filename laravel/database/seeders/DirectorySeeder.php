@@ -71,6 +71,39 @@ class DirectorySeeder extends Seeder
                 // Flagged because the name is on the seeded blocklist.
                 'is_blocked' => true,
             ],
+            [
+                'name' => 'Maria Williams',
+                'type' => 'Homeowner Staff',
+                'status' => 'Checked In',
+                'expected_at' => $now->copy()->setTime(16, 32),
+                'checked_in_at' => $now->copy()->setTime(16, 32),
+                'date_range' => $now->format('Y-m-d'),
+                'homeowner_id' => $olivia?->id,
+                'homeowner_name' => 'Robert Sterling (#104)',
+                'is_blocked' => false,
+            ],
+            [
+                'name' => 'James Brown',
+                'type' => 'Visitor',
+                'status' => 'Expected',
+                'expected_at' => $now->copy()->setTime(18, 00),
+                'date_range' => $now->format('Y-m-d'),
+                'homeowner_id' => $john?->id,
+                'homeowner_name' => 'Eleanor Vance (#208)',
+                'is_blocked' => false,
+            ],
+            [
+                'name' => 'John Smith',
+                'type' => 'Contractor',
+                'status' => 'Checked Out',
+                'expected_at' => $now->copy()->setTime(14, 00),
+                'checked_in_at' => $now->copy()->setTime(14, 15),
+                'checked_out_at' => $now->copy()->setTime(15, 41),
+                'date_range' => $now->format('Y-m-d'),
+                'homeowner_id' => $marcus?->id,
+                'homeowner_name' => 'David Miller (#311)',
+                'is_blocked' => false,
+            ],
         ];
 
         foreach ($visitors as $visitor) {

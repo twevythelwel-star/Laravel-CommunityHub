@@ -58,6 +58,20 @@
 
             {{-- Action Buttons --}}
             <div class="space-y-2 pt-2">
+                @if ($visitor->status === \App\Enums\VisitorStatus::CheckedIn)
+                    <div class="p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl text-left space-y-1.5 shadow-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                                <span class="h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                Currently On-Site at {{ $community?->name ?? 'Community Hub' }}
+                            </span>
+                            <span class="text-[10px] font-mono text-muted-foreground">Since {{ $visitor->checked_in_at?->format('g:i A') ?? 'Arrival' }}</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            When departing the estate, present this QR code to the officer at the outbound gate or use the exit fast-lane terminal.
+                        </p>
+                    </div>
+                @endif
                 <a 
                     href="{{ route('pdf.visitor-pass', $visitor->share_token) }}" 
                     class="w-full flex items-center justify-center gap-2 rounded-lg bg-primary py-2.5 px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-95 transition"

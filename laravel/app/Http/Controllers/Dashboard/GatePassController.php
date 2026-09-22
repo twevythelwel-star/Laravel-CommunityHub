@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\GateId;
 use App\Enums\PassCategory;
+use App\Enums\UserRole;
 use App\Enums\ValidationStatus;
+use App\Enums\VisitorStatus;
 use App\Http\Controllers\Controller;
 use App\Models\AccessLogEntry;
 use App\Models\GatePass;
 use App\Models\Staff;
+use App\Models\User;
+use App\Models\Visitor;
 use App\Services\GatePassEngine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -260,9 +264,187 @@ class GatePassController extends Controller
             ]);
         }
 
+        // Determine if this holder/visitor is already inside
+        $pass = GatePass::where('pass_id', $report['passId'])->first();
+        $visitor = Visitor::where('name', $report['userName'])->first();
+
+        $isCurrentlyInside = false;
+        $checkedInAt = null;
+        $dwellTimeStr = null;
+
+        if ($visitor && $visitor->status === VisitorStatus::CheckedIn) {
+            $isCurrentlyInside = true;
+            $checkedInAt = $visitor->checked_in_at;
+        } else {
+            $latestEntry = AccessLogEntry::where('pass_id', $report['passId'])
+                ->whereDate('occurred_at', today())
+                ->whereIn('result', ['CHECK_IN', 'CHECK_OUT'])
+                ->latest('occurred_at')
+                ->first();
+            if ($latestEntry && $latestEntry->result === 'CHECK_IN') {
+                $isCurrentlyInside = true;
+                $checkedInAt = $latestEntry->occurred_at;
+            }
+        }
+
+        if ($isCurrentlyInside && $checkedInAt) {
+            $diffMinutes = max(0, $checkedInAt->diffInMinutes(now()));
+            $hours = intdiv($diffMinutes, 60);
+            $mins = $diffMinutes % 60;
+            $dwellTimeStr = $hours > 0 ? "{$hours}h {$mins}m" : "{$mins}m";
+        }
+
         return response()->json([
             'report' => $report,
             'accessLogId' => $entry->id,
+            'isCurrentlyInside' => $isCurrentlyInside,
+            'checkedInAtFormatted' => $checkedInAt ? $checkedInAt->format('g:i A') : null,
+            'dwellDuration' => $dwellTimeStr,
+            'visitorId' => $visitor?->id,
+        ]);
+    }
+
+    /**
+     * Confirms entry or checkout at the gate, updating visitor record and access log.
+     */
+    public function confirmAction(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'pass_id' => ['required', 'string'],
+            'action' => ['required', 'in:CHECK_IN,CHECK_OUT'],
+            'gate' => ['nullable', 'string'],
+            'user_name' => ['nullable', 'string'],
+            'category' => ['nullable', 'string'],
+        ]);
+
+        $gate = GateId::tryFrom($validated['gate'] ?? '') ?? GateId::Gate01;
+        $gateName = config('gatepass.gates.'.$gate->value, $gate->value);
+        $pass = GatePass::where('pass_id', $validated['pass_id'])->first();
+        $name = $validated['user_name'] ?? $pass?->holder_name ?? 'Visitor';
+        $visitor = Visitor::where('name', $name)->first();
+
+        $now = now();
+
+        if ($validated['action'] === 'CHECK_IN') {
+            if ($visitor) {
+                $visitor->checkIn();
+            }
+
+            AccessLogEntry::create([
+                'user_id' => $pass?->user_id ?? $visitor?->homeowner_id,
+                'user_name' => $name,
+                'user_role' => $validated['category'] ?? $pass?->category?->value ?? 'Visitor',
+                'method' => 'Digital Pass',
+                'gate' => $gateName,
+                'pass_id' => $validated['pass_id'],
+                'result' => 'CHECK_IN',
+                'scanned_by' => $request->user()->id,
+                'occurred_at' => $now,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'action' => 'CHECK_IN',
+                'time' => $now->format('g:i A'),
+                'message' => 'Checked in at '.$now->format('g:i A'),
+            ]);
+        } else {
+            if ($visitor) {
+                $visitor->checkOut();
+            }
+
+            AccessLogEntry::create([
+                'user_id' => $pass?->user_id ?? $visitor?->homeowner_id,
+                'user_name' => $name,
+                'user_role' => $validated['category'] ?? $pass?->category?->value ?? 'Visitor',
+                'method' => 'Digital Pass',
+                'gate' => $gateName,
+                'pass_id' => $validated['pass_id'],
+                'result' => 'CHECK_OUT',
+                'scanned_by' => $request->user()->id,
+                'occurred_at' => $now,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'action' => 'CHECK_OUT',
+                'time' => $now->format('g:i A'),
+                'message' => 'CHECKED OUT — '.$now->format('g:i A'),
+            ]);
+        }
+    }
+
+    /**
+     * Provides diagnostic sample tokens for testing different pass profiles.
+     */
+    public function sampleTokens(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $userPass = $this->engine->issuePassFor($user);
+        $userToken = $this->engine->issueToken($userPass);
+
+        // Find or create Homeowner Staff sample pass (Maria Williams)
+        $maria = User::firstOrCreate(
+            ['email' => 'maria.williams@residence.net'],
+            [
+                'name' => 'Maria Williams',
+                'display_name' => 'Maria Williams',
+                'role' => UserRole::Staff,
+                'lot' => '104',
+                'status' => 'Active',
+                'password' => bcrypt('password'),
+            ]
+        );
+        $mariaPass = $this->engine->issuePassFor($maria);
+        $mariaToken = $this->engine->issueToken($mariaPass);
+
+        // Find or create Resident sample pass
+        $resident = User::where('role', UserRole::Homeowner)->first() ?? $user;
+        $residentPass = $this->engine->issuePassFor($resident);
+        $residentToken = $this->engine->issueToken($residentPass);
+
+        return response()->json([
+            'homeownerStaff' => [
+                'name' => 'Maria Williams',
+                'role' => 'Homeowner Staff',
+                'property' => 'Property: 104',
+                'passId' => $mariaPass->pass_id,
+                'token' => $mariaToken['token'],
+            ],
+            'resident' => [
+                'name' => $resident->display_name,
+                'role' => 'Homeowner',
+                'property' => $resident->propertyLabel(),
+                'passId' => $residentPass->pass_id,
+                'token' => $residentToken['token'],
+            ],
+            'expired' => [
+                'name' => 'Expired Pass Holder',
+                'passId' => $mariaPass->pass_id,
+                'token' => $this->engine->createCustomToken($mariaPass, [
+                    'vf' => now()->subHours(2)->timestamp,
+                    'vu' => now()->subHour()->timestamp,
+                ]),
+            ],
+            'wrongCommunity' => [
+                'name' => 'Foreign Community Guest',
+                'passId' => $residentPass->pass_id,
+                'token' => $this->engine->createCustomToken($residentPass, [
+                    'cid' => 'EXTERNAL-COMMUNITY-999',
+                ]),
+            ],
+            'wrongGate' => [
+                'name' => 'Restricted Portal Pass',
+                'passId' => $mariaPass->pass_id,
+                'token' => $this->engine->createCustomToken($mariaPass, [
+                    'gate' => 'GATE-02',
+                ]),
+            ],
+            'currentUser' => [
+                'name' => $user->display_name,
+                'passId' => $userPass->pass_id,
+                'token' => $userToken['token'],
+            ],
         ]);
     }
 

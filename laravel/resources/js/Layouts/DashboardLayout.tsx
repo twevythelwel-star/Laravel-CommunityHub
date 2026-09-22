@@ -59,6 +59,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Toaster } from '@/components/ui/toaster';
 import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider } from '@/context/theme-context';
+import { EmergencyBroadcastBanner } from '@/components/dashboard/emergency-broadcast-banner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -310,6 +311,7 @@ export default function DashboardLayout({
           </div>
         </header>
         <main key={pathname} className="flex flex-1 flex-col gap-4 p-4 sm:px-6 sm:py-6 md:gap-8 animate-fade-in">
+          <EmergencyBroadcastBanner />
           {children}
         </main>
       </SidebarInset>

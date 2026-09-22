@@ -40,8 +40,11 @@ import {
   Settings2,
   MapPin,
   Trash2,
-  Filter
+  Filter,
+  Calendar,
+  Sparkles
 } from 'lucide-react';
+import { AmenityBookingDialog } from '@/components/dashboard/amenity-booking-dialog';
 import type { MapType } from '@/components/dashboard/LeafletMapFixed';
 import { 
   CommunityLandmark,
@@ -93,6 +96,8 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
   // the list. Previously it was read from localStorage on mount, so each browser
   // had a private set of pins.
   const [isAddPinOpen, setIsAddPinOpen] = useState<boolean>(false);
+  const [isBookingOpen, setIsBookingOpen] = useState<boolean>(false);
+  const [bookingAmenityName, setBookingAmenityName] = useState<string | undefined>(undefined);
   const [isClickToPlacePinActive, setIsClickToPlacePinActive] = useState<boolean>(false);
   const [pinFilterCategory, setPinFilterCategory] = useState<'all' | LandmarkCategory>('all');
   const [addPinCoords, setAddPinCoords] = useState<[number, number] | null>(null);
@@ -1126,12 +1131,18 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
             </Button>
 
             <div className="ml-auto flex items-center gap-1.5 pl-2">
-              {/*
-                The "Reset" button was removed with handleResetLandmarks. It
-                replaced the whole landmark list with a hardcoded fixture —
-                harmless against one browser's localStorage, but against shared
-                data it would delete every pin the community had added.
-              */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setBookingAmenityName(undefined);
+                  setIsBookingOpen(true);
+                }}
+                className="h-7 text-xs border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 px-2.5 rounded-lg"
+              >
+                <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                <span>Reserve Facility</span>
+              </Button>
               <Button
                 size="sm"
                 onClick={() => {
@@ -1196,6 +1207,20 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
                     </span>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {!isSecurity && (
+                        <button
+                          onClick={() => {
+                            setBookingAmenityName(lm.name);
+                            setIsBookingOpen(true);
+                          }}
+                          className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 hover:underline text-xs"
+                          title={`Reserve ${lm.name}`}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                          Reserve
+                        </button>
+                      )}
+
                       <button
                         onClick={() => {
                           if (mapInstance) {
@@ -1350,6 +1375,16 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
           onOpenChange={setIsGeofenceDialogOpen}
         />
       )}
+
+      {/* Amenity Booking Dialog */}
+      <AmenityBookingDialog
+        open={isBookingOpen}
+        onOpenChange={setIsBookingOpen}
+        initialAmenityName={bookingAmenityName}
+        availableAmenities={landmarks
+          .filter((l) => l.category !== 'Security Gate')
+          .map((l) => ({ id: l.id, name: l.name, category: l.category }))}
+      />
     </div>
   );
 }
