@@ -39,7 +39,11 @@ type GuidelineFormProps = {
   children: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (data: Omit<Guideline, 'id'>, id?: string) => void;
+  /**
+   * Persists the change. Resolves when the server accepted it and rejects when
+   * it refused, so the dialog only claims success for a save that happened.
+   */
+  onSave: (data: Omit<Guideline, 'id'>, id?: string) => Promise<void>;
   guideline?: Guideline;
 };
 
@@ -60,8 +64,18 @@ export function GuidelineForm({ children, open, onOpenChange, onSave, guideline 
     }
   }, [open, guideline, form]);
 
-  function onSubmit(values: FormValues) {
-    onSave(values, guideline?.id);
+  async function onSubmit(values: FormValues) {
+    try {
+      await onSave(values, guideline?.id);
+    } catch (message) {
+      toast({
+        variant: 'destructive',
+        title: 'Guideline not saved',
+        description: typeof message === 'string' ? message : 'The server refused the change. Please check the details and try again.',
+      });
+      return;
+    }
+
     toast({
       title: guideline ? 'Guideline Updated' : 'Guideline Added',
       description: `The guideline "${values.title}" has been saved.`,
@@ -126,7 +140,9 @@ export function GuidelineForm({ children, open, onOpenChange, onSave, guideline 
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Save Guideline</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : 'Save Guideline'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

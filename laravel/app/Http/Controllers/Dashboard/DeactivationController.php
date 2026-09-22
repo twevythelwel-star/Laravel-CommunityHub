@@ -3,12 +3,12 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * Backs src/app/dashboard/deactivation/page.tsx, which previously wrote a flag
@@ -27,7 +27,7 @@ class DeactivationController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): SymfonyResponse
     {
         $validated = $request->validate([
             'password' => ['required', 'current_password'],
@@ -61,8 +61,14 @@ class DeactivationController extends Controller
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+        $request->session()->flash('success', 'Your account has been deactivated.');
 
-        return redirect()->route('landing')
-            ->with('success', 'Your account has been deactivated.');
+        /*
+         | The landing page is Blade, not Inertia. A plain redirect answering an
+         | Inertia request would be rendered inside the SPA's error modal, so
+         | ask the client for a full page visit instead — the same thing
+         | AuthenticatedSessionController::destroy() does on sign-out.
+         */
+        return Inertia::location(route('landing'));
     }
 }

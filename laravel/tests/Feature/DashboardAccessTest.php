@@ -450,6 +450,53 @@ class DashboardAccessTest extends TestCase
         $this->assertSame('Active', $user->fresh()->status);
     }
 
+    public function test_inertia_deactivation_asks_for_a_full_page_visit_to_the_landing_page(): void
+    {
+        /*
+         | The page posts through Inertia and the landing page is Blade. A plain
+         | redirect would have been rendered inside Inertia's error modal
+         | instead of leaving the dashboard.
+         */
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->withHeaders(['X-Inertia' => 'true'])
+            ->post('/dashboard/deactivation', [
+                'password' => 'password',
+                'confirm' => true,
+            ]);
+
+        $response->assertStatus(409);
+        $response->assertHeader('X-Inertia-Location', route('landing'));
+        $response->assertSessionHas('success', 'Your account has been deactivated.');
+        $this->assertGuest();
+        $this->assertSame('Inactive', $user->fresh()->status);
+    }
+
+    public function test_deactivation_requires_explicit_confirmation(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/dashboard/deactivation', [
+            'password' => 'password',
+            'confirm' => false,
+        ])->assertSessionHasErrors('confirm');
+
+        $this->assertSame('Active', $user->fresh()->status);
+    }
+
+    public function test_a_temporary_homeowner_can_open_the_deactivation_page(): void
+    {
+        $user = User::factory()->role(UserRole::TemporaryHomeowner)->create();
+
+        $this->actingAs($user)->get('/dashboard/deactivation')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Dashboard/Deactivation')
+                ->where('user.email', $user->email)
+            );
+    }
+
     // ── Data exposure ────────────────────────────────────────────────
 
     public function test_the_directory_is_closed_to_non_admins(): void

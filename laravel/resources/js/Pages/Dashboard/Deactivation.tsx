@@ -1,6 +1,6 @@
-
-
-import { useState, useEffect } from 'react';
+import { useState, type FormEvent } from 'react';
+import { router, Head } from '@inertiajs/react';
+import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   Card,
   CardContent,
@@ -8,17 +8,14 @@ import {
   CardHeader,
   CardTitle,
   CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { useToast } from '@/hooks/use-toast';
-import { add, differenceInSeconds, format } from 'date-fns';
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ShieldAlert, Timer } from 'lucide-react';
-import { useAuth } from '@/context/auth-context';
-import { router, Head } from '@inertiajs/react';
-import DashboardLayout from '@/Layouts/DashboardLayout';
+import { ShieldAlert, Info } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,255 +25,170 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+/*
+ | This page used to offer "Delete My Account Now", which cleared localStorage,
+ | signed the user out and announced "Account Permanently Deleted" without
+ | calling the server — the account stayed active and its gate pass kept
+ | working. Its "Schedule Deactivation" countdown lived only in the open tab
+ | and promised email and SMS reminders that nothing sends.
+ |
+ | Both are gone. What remains is the one thing the server does:
+ | DeactivationController::store checks the password, marks the account
+ | Inactive, revokes the gate pass, ends the session and logs it. Nothing is
+ | deleted, so an administrator can reactivate the account from the directory.
+ */
 
-function Countdown({ targetDate }: { targetDate: Date }) {
-  const [timeLeft, setTimeLeft] = useState(0);
+type Props = {
+  user: {
+    displayName: string;
+    email: string;
+  };
+};
 
-  useEffect(() => {
-    const calculateTimeLeft = () => differenceInSeconds(targetDate, new Date());
-    setTimeLeft(calculateTimeLeft());
+type Errors = Partial<Record<'password' | 'reason' | 'confirm', string>>;
 
-    const interval = setInterval(() => {
-      const seconds = calculateTimeLeft();
-      if (seconds > 0) {
-        setTimeLeft(seconds);
-      } else {
-        setTimeLeft(0);
-        clearInterval(interval);
-      }
-    }, 1000);
+export default function DeactivationPage({ user }: Props) {
+  const [password, setPassword] = useState('');
+  const [reason, setReason] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
+  const [isConfirmOpen, setConfirmOpen] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-    return () => clearInterval(interval);
-  }, [targetDate]);
-
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = timeLeft % 60;
-
-  return (
-    <div className="font-mono text-lg text-destructive font-bold">
-      {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-    </div>
-  );
-}
-
-
-export default function DeactivationPage() {
-  const { user, logout } = useAuth();
-  const { toast } = useToast();
-  const [deactivationDate, setDeactivationDate] = useState<Date | null>(null);
-  const [dateString, setDateString] = useState('');
-  const [timeString, setTimeString] = useState('');
-  const [showCountdown, setShowCountdown] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isClient || !deactivationDate) return;
-
-    const interval = setInterval(() => {
-        const now = new Date();
-        const fifteenMinutes = 15 * 60;
-        const diff = differenceInSeconds(deactivationDate, now);
-        
-        setShowCountdown(diff <= fifteenMinutes && diff > 0);
-
-        if (diff <= 0) {
-            // In a real app, this would trigger the actual deactivation
-            toast({ title: "Account Deactivated", description: "Your account has been deactivated."});
-            setDeactivationDate(null);
-            setShowCountdown(false);
-            clearInterval(interval);
-        }
-    }, 1000);
-
-    return () => clearInterval(interval);
-    
-  }, [isClient, deactivationDate, toast]);
-
-
-  const handleSchedule = () => {
-    const combinedDateTimeString = `${dateString}T${timeString}:00`;
-    const scheduledDate = new Date(combinedDateTimeString);
-    const now = new Date();
-
-    if (isNaN(scheduledDate.getTime()) || scheduledDate <= now) {
-      toast({
-        variant: 'destructive',
-        title: 'Invalid Date/Time',
-        description: 'Please select a valid date and time in the future.',
-      });
-      return;
-    }
-
-    setDeactivationDate(scheduledDate);
-    toast({
-      title: 'Deactivation Scheduled',
-      description: `Your account is scheduled for deactivation on ${format(scheduledDate, 'PPP p')}.`,
-    });
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setConfirmOpen(true);
   };
 
-  const handleCancel = () => {
-    setDeactivationDate(null);
-    setShowCountdown(false);
-    setDateString('');
-    setTimeString('');
-    toast({
-      title: 'Deactivation Canceled',
-      description: "Your account's deactivation request has been canceled.",
-    });
-  }
-  
-  const handleImmediateDelete = () => {
-    localStorage.clear();
-    toast({
-      title: 'Account Permanently Deleted',
-      description: 'Your account and all associated data have been removed.',
-    });
-    logout();
-    router.visit('/');
+  const deactivate = () => {
+    setConfirmOpen(false);
+    router.post(
+      '/dashboard/deactivation',
+      { password, reason: reason || null, confirm: confirmed },
+      {
+        preserveScroll: true,
+        onStart: () => setProcessing(true),
+        onError: (serverErrors) => setErrors(serverErrors as Errors),
+        onFinish: () => setProcessing(false),
+      },
+    );
   };
-
-  if (!isClient) {
-    return null;
-  }
-
-  if (user?.role !== 'Homeowner') {
-     return (
-        <DashboardLayout>
-            <Head title="Account Deactivation" />
-            <Card className="max-w-md mx-auto mt-8">
-                <CardHeader>
-                    <CardTitle>Access Denied</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <p>This feature is only available for Homeowners.</p>
-                </CardContent>
-            </Card>
-        </DashboardLayout>
-     )
-  }
 
   return (
     <DashboardLayout>
       <Head title="Account Deactivation" />
-      <div className="grid gap-8 max-w-4xl mx-auto pb-12">
+      <div className="grid gap-8 max-w-3xl mx-auto pb-12">
         <div>
           <h1 className="font-headline text-3xl font-bold">Account Deactivation</h1>
-          <p className="text-muted-foreground">Request to deactivate your account on a future date, or delete it immediately.</p>
+          <p className="text-muted-foreground">
+            Deactivate the account for {user.displayName} ({user.email}).
+          </p>
         </div>
 
-      {/* Immediate Deletion */}
-      <Card className="border-destructive">
-        <CardHeader>
-          <CardTitle className="font-headline text-xl flex items-center gap-2 text-destructive">
-            <ShieldAlert className="w-5 h-5" />
-            Immediate Account Deletion
-          </CardTitle>
-          <CardDescription>
-            Permanently delete your account and all associated data right now. This cannot be undone.
-          </CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">Delete My Account Now</Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete your account, visitor records, billing history, and all personal data
-                  associated with your Community Hub profile. This action cannot be reversed.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleImmediateDelete} className="bg-destructive hover:bg-destructive/90">
-                  Yes, Delete Everything
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </CardFooter>
-      </Card>
-
-       {showCountdown && deactivationDate && (
-        <Alert variant="destructive">
-            <Timer className="h-4 w-4" />
-          <AlertTitle className="flex justify-between items-center">
-            <span>Deactivation Pending</span>
-             <Countdown targetDate={deactivationDate} />
-          </AlertTitle>
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>What deactivation does</AlertTitle>
           <AlertDescription>
-            Your account will be deactivated soon. You will be logged out automatically.
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>You are signed out immediately and cannot sign back in.</li>
+              <li>Your gate pass is revoked and will be refused at every gate.</li>
+              <li>
+                Your records (visitors, invoices, access history) are kept, not deleted. An estate
+                administrator can reactivate the account if you change your mind.
+              </li>
+            </ul>
           </AlertDescription>
         </Alert>
-      )}
 
-
-      {deactivationDate ? (
-        <Card>
+        <Card className="border-destructive">
+          <form onSubmit={handleSubmit}>
             <CardHeader>
-                <CardTitle>Deactivation Scheduled</CardTitle>
-                <CardDescription>
-                    Your account deactivation is currently scheduled. You can cancel it at any time before the scheduled date.
-                </CardDescription>
+              <CardTitle className="font-headline text-xl flex items-center gap-2 text-destructive">
+                <ShieldAlert className="w-5 h-5" />
+                Deactivate my account
+              </CardTitle>
+              <CardDescription>
+                Confirm with your current password. This takes effect as soon as you submit.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-                <p className="text-lg font-semibold">Your account will be deactivated on:</p>
-                <p className="text-xl font-bold text-primary">{format(deactivationDate, 'EEEE, MMMM d, yyyy \'at\' p')}</p>
-                <Alert className="mt-4">
-                    <AlertTitle>Reminders</AlertTitle>
-                    <AlertDescription>
-                        You will receive an email and text message reminder 1 hour and 15 minutes before your account is deactivated.
-                    </AlertDescription>
-                </Alert>
+            <CardContent className="space-y-5">
+              <div className="grid gap-2">
+                <Label htmlFor="deactivation-password">Current password</Label>
+                <Input
+                  id="deactivation-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? 'deactivation-password-error' : undefined}
+                  required
+                />
+                {errors.password && (
+                  <p id="deactivation-password-error" className="text-sm text-destructive">
+                    {errors.password}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="deactivation-reason">Reason (optional)</Label>
+                <Textarea
+                  id="deactivation-reason"
+                  maxLength={1000}
+                  placeholder="e.g., Moving out of the community"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                {errors.reason && <p className="text-sm text-destructive">{errors.reason}</p>}
+              </div>
+
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="deactivation-confirm"
+                  checked={confirmed}
+                  onCheckedChange={(checked) => setConfirmed(checked === true)}
+                />
+                <div className="grid gap-1">
+                  <Label htmlFor="deactivation-confirm" className="leading-snug">
+                    I understand I will be signed out and my gate pass will stop working.
+                  </Label>
+                  {errors.confirm && <p className="text-sm text-destructive">{errors.confirm}</p>}
+                </div>
+              </div>
             </CardContent>
             <CardFooter>
-                 <Button onClick={handleCancel} variant="outline">Cancel Deactivation</Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                disabled={!confirmed || password === '' || processing}
+              >
+                {processing ? 'Deactivating…' : 'Deactivate Account'}
+              </Button>
             </CardFooter>
+          </form>
         </Card>
-      ) : (
-        <Card>
-            <CardHeader>
-            <CardTitle>Schedule Deactivation</CardTitle>
-            <CardDescription>
-                Select a future date and time to deactivate your account. You will be automatically logged out and your access will be revoked at the specified time.
-            </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="deactivation-date">Date</Label>
-                        <Input 
-                            id="deactivation-date" 
-                            type="date" 
-                            min={format(add(new Date(), { days: 1 }), 'yyyy-MM-dd')}
-                            value={dateString}
-                            onChange={(e) => setDateString(e.target.value)}
-                        />
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="deactivation-time">Time</Label>
-                        <Input 
-                            id="deactivation-time" 
-                            type="time" 
-                            value={timeString}
-                            onChange={(e) => setTimeString(e.target.value)}
-                        />
-                    </div>
-                </div>
-                <Button onClick={handleSchedule}>Schedule Deactivation</Button>
-            </CardContent>
-        </Card>
-      )}
       </div>
+
+      <AlertDialog open={isConfirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate your account now?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will be signed out straight away and your gate pass will be revoked. Only an
+              estate administrator can reactivate the account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={deactivate} className="bg-destructive hover:bg-destructive/90">
+              Yes, deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

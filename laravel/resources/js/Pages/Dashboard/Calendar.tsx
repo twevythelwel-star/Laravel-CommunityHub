@@ -11,6 +11,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { EventForm } from "@/components/dashboard/event-form";
+import { submit } from "@/lib/submit";
 import type { CommunityEvent } from "@/types";
 import { useAuth } from "@/context/auth-context";
 import { isSameDay, format, isValid, parseISO } from "date-fns";
@@ -381,9 +382,18 @@ export default function CalendarPage({
         <EventForm
           open={isFormOpen}
           onOpenChange={setFormOpen}
-          onSave={() => {
-            setFormOpen(false);
-            router.reload();
+          onSave={(data, id) => {
+            const payload = {
+              title: data.title,
+              description: data.description,
+              start_date: data.startDate.toISOString(),
+              end_date: data.endDate ? data.endDate.toISOString() : null,
+              image_url: data.imageUrl ?? null,
+            };
+
+            return id
+              ? submit('patch', `/dashboard/calendar/${id}`, payload)
+              : submit('post', '/dashboard/calendar', payload);
           }}
           event={selectedEvent}
         />

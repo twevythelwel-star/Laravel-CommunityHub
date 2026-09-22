@@ -67,7 +67,11 @@ type EventFormProps = {
   children?: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (data: Omit<CommunityEvent, 'id'>, id?: string) => void;
+  /**
+   * Persists the event. Resolves when the server accepted it and rejects when
+   * it refused, so the dialog only claims success for a save that happened.
+   */
+  onSave: (data: Omit<CommunityEvent, 'id'>, id?: string) => Promise<void>;
   event?: CommunityEvent;
 };
 
@@ -107,7 +111,7 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
     }
   }, [open, event, form]);
 
-  function onSubmit(values: FormValues) {
+  async function onSubmit(values: FormValues) {
     const finalStartDate = values.startTime 
         ? setMinutes(setHours(values.startDate, parseInt(values.startTime.split(':')[0])), parseInt(values.startTime.split(':')[1]))
         : values.startDate;
@@ -128,7 +132,17 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
         imageUrl: values.imageUrl || undefined,
     }
 
-    onSave(finalData, event?.id);
+    try {
+      await onSave(finalData, event?.id);
+    } catch (message) {
+      toast({
+        variant: 'destructive',
+        title: 'Event not saved',
+        description: typeof message === 'string' ? message : 'The server refused the event. Please check the details and try again.',
+      });
+      return;
+    }
+
     toast({
       title: event ? 'Event Updated' : 'Event Created',
       description: `The event "${values.title}" has been saved.`,
@@ -323,7 +337,9 @@ export function EventForm({ children, open, onOpenChange, onSave, event }: Event
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Save Event</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : 'Save Event'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

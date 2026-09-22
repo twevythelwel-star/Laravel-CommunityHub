@@ -44,7 +44,11 @@ type CommunityUpdateFormProps = {
   children: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (data: Omit<CommunityUpdate, 'id'>) => void;
+  /**
+   * Persists the change. Resolves when the server accepted it and rejects when
+   * it refused, so the dialog only claims success for a save that happened.
+   */
+  onSave: (data: Omit<CommunityUpdate, 'id'>) => Promise<void>;
   update?: CommunityUpdate;
 };
 
@@ -65,8 +69,18 @@ export function CommunityUpdateForm({ children, open, onOpenChange, onSave, upda
     }
   }, [open, update, form]);
 
-  function onSubmit(values: FormValues) {
-    onSave(values);
+  async function onSubmit(values: FormValues) {
+    try {
+      await onSave(values);
+    } catch (message) {
+      toast({
+        variant: 'destructive',
+        title: 'Update not saved',
+        description: typeof message === 'string' ? message : 'The server refused the change. Please check the details and try again.',
+      });
+      return;
+    }
+
     toast({
       title: update ? 'Update Saved' : 'Update Added',
       description: `The summary for "${values.title}" has been saved.`,
@@ -157,7 +171,9 @@ export function CommunityUpdateForm({ children, open, onOpenChange, onSave, upda
             
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Save Update</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? 'Saving…' : 'Save Update'}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

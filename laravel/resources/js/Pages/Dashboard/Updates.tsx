@@ -1,7 +1,5 @@
-
-
 import { useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   Card,
@@ -12,46 +10,33 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
-import type { CommunityUpdate } from "@/types";
-import { useAuth } from '@/context/auth-context';
-import { ClientFormattedDate } from '@/components/client-formatted-date';
+import { format, parseISO } from 'date-fns';
 import { CommunityUpdateForm } from '@/components/dashboard/community-update-form';
+import { submit } from '@/lib/submit';
 
-const mockUpdates: CommunityUpdate[] = [
-    { 
-        id: 'cu_1', 
-        title: 'Q2 2024 HOA Board Meeting Summary', 
-        date: new Date('2024-06-25T00:00:00Z'),
-        summary: 'The board approved the budget for the new playground. Construction is set to begin in September. A new proposal for community garden expansion was discussed and will be voted on next quarter.'
-    },
-    { 
-        id: 'cu_2', 
-        title: 'Annual Summer BBQ Roundup', 
-        date: new Date('2024-08-15T00:00:00Z'),
-        summary: 'A fantastic turnout for our annual BBQ! Over 200 residents attended. A big thank you to the volunteers and everyone who brought a side dish. The new grill was a huge success!'
-    },
-     { 
-        id: 'cu_3', 
-        title: 'Security System Upgrade Town Hall', 
-        date: new Date('2024-05-10T00:00:00Z'),
-        summary: 'Discussion was held regarding the proposed upgrade to a new RFID entry system. Feedback from residents was collected, and the security committee will present a revised plan based on the input.'
-    },
-];
+type Paginated<T> = {
+  data: T[];
+  links: { url: string | null; label: string; active: boolean }[];
+  total: number;
+  from: number | null;
+  to: number | null;
+};
 
-export default function UpdatesPage() {
-    const { user } = useAuth();
-    const [updates, setUpdates] = useState<CommunityUpdate[]>(mockUpdates);
+type Update = {
+  id: number;
+  title: string;
+  /** A calendar date, `yyyy-MM-dd`, with no time or zone. */
+  date: string;
+  summary: string;
+};
+
+type Props = {
+  updates: Paginated<Update>;
+  canManage: boolean;
+};
+
+export default function UpdatesPage({ updates, canManage }: Props) {
     const [isFormOpen, setFormOpen] = useState(false);
-
-    const canManage = user?.role === 'System Admin' || user?.role === 'Admin';
-
-    const handleSave = (data: Omit<CommunityUpdate, 'id'>) => {
-        const newUpdate: CommunityUpdate = {
-            id: `cu_${Date.now()}`,
-            ...data,
-        };
-        setUpdates([newUpdate, ...updates]);
-    };
 
   return (
     <DashboardLayout>
@@ -66,7 +51,15 @@ export default function UpdatesPage() {
                 <CommunityUpdateForm
                     open={isFormOpen}
                     onOpenChange={setFormOpen}
-                    onSave={handleSave}
+                    onSave={(data) =>
+                        submit('post', '/dashboard/updates', {
+                            title: data.title,
+                            // Sent as a calendar date: toISOString() would shift
+                            // an evening pick to the next day for anyone west of UTC.
+                            date: format(data.date, 'yyyy-MM-dd'),
+                            summary: data.summary,
+                        })
+                    }
                 >
                     <Button size="sm" className="gap-1">
                         <PlusCircle className="h-3.5 w-3.5" />
@@ -77,22 +70,47 @@ export default function UpdatesPage() {
                 </CommunityUpdateForm>
              )}
         </div>
-        
-        <div className="space-y-6">
-            {updates.map(update => (
-                 <Card key={update.id}>
-                    <CardHeader>
-                        <CardTitle>{update.title}</CardTitle>
-                        <CardDescription>
-                           Meeting/Activity Date: <ClientFormattedDate date={update.date} formatString="MMMM d, yyyy" />
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{update.summary}</p>
-                    </CardContent>
-                </Card>
+
+        {updates.data.length === 0 ? (
+            <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                    No community updates have been posted yet.
+                </CardContent>
+            </Card>
+        ) : (
+            <div className="space-y-6">
+                {updates.data.map(update => (
+                     <Card key={update.id}>
+                        <CardHeader>
+                            <CardTitle>{update.title}</CardTitle>
+                            <CardDescription>
+                               {/* parseISO reads a bare date as local midnight; new Date() would read it as UTC. */}
+                               Meeting/Activity Date: {format(parseISO(update.date), 'MMMM d, yyyy')}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{update.summary}</p>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        )}
+
+        {updates.links.length > 3 && (
+          <nav className="flex flex-wrap items-center justify-center gap-1" aria-label="Pagination">
+            {updates.links.map((link, index) => (
+              <Button
+                key={index}
+                size="sm"
+                variant={link.active ? 'default' : 'outline'}
+                disabled={!link.url}
+                onClick={() => link.url && router.get(link.url, {}, { preserveScroll: true })}
+                className="h-8 min-w-8 px-2 text-xs"
+                dangerouslySetInnerHTML={{ __html: link.label }}
+              />
             ))}
-        </div>
+          </nav>
+        )}
       </div>
     </DashboardLayout>
   );

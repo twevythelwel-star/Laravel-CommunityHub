@@ -251,6 +251,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/guidelines', [GuidelinesController::class, 'index'])
         ->middleware('can:accessEstateInformation')
         ->name('guidelines');
+    Route::middleware('can:broadcastNotices')->group(function () {
+        Route::post('/guidelines', [GuidelinesController::class, 'store'])->name('guidelines.store');
+        Route::patch('/guidelines/{guideline}', [GuidelinesController::class, 'update'])->name('guidelines.update');
+        Route::delete('/guidelines/{guideline}', [GuidelinesController::class, 'destroy'])->name('guidelines.destroy');
+    });
 
     Route::get('/changelog', [ChangelogController::class, 'index'])
         ->middleware('can:viewAppChangelog')
