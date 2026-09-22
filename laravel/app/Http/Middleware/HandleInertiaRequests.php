@@ -7,6 +7,8 @@ use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Models\Warning;
 use App\Services\GeofenceService;
+use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -89,6 +91,16 @@ class HandleInertiaRequests extends Middleware
             'billing' => fn () => $this->billing(),
 
             'activeAlert' => fn () => $user ? $this->activeAlert() : null,
+
+            /*
+             | Which pass-delivery channels have a provider behind them. The
+             | visitor forms disable SMS and WhatsApp when these are false; they
+             | used to offer both and report success while nothing was sent.
+             */
+            'messaging' => fn () => $user ? [
+                'sms' => app(SmsService::class)->isConfigured(),
+                'whatsapp' => app(WhatsAppService::class)->isConfigured(),
+            ] : null,
 
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),

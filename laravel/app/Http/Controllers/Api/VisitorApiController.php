@@ -30,6 +30,9 @@ class VisitorApiController extends Controller
                 'expectedAt' => $v->expected_at->toIso8601String(),
                 'homeowner' => $v->homeowner_name,
                 'isBlocked' => $v->is_blocked,
+                'notify_email' => $v->notify_email,
+                'notify_sms' => $v->notify_sms,
+                'notify_whatsapp' => $v->notify_whatsapp,
             ]);
 
         return response()->json(['visitors' => $visitors]);
@@ -41,9 +44,13 @@ class VisitorApiController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
+            'contact' => ['nullable', 'string', 'max:120'],
             'type' => ['required', 'in:One-time,Recurring'],
             'expected_at' => ['required', 'date'],
             'date_range' => ['nullable', 'string', 'max:120'],
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_whatsapp' => ['nullable', 'boolean'],
         ]);
 
         if ($this->isOnBlocklist($validated['name'])) {
@@ -60,7 +67,17 @@ class VisitorApiController extends Controller
             'status' => 'Expected',
             'homeowner_id' => $user->id,
             'homeowner_name' => $user->display_name,
+            'notify_email' => $validated['notify_email'] ?? true,
+            'notify_sms' => $validated['notify_sms'] ?? false,
+            'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
         ]);
+
+        // Send the pass on whichever chosen channels can actually deliver it.
+        $channels = $visitor->passNotificationChannels();
+
+        if ($channels !== []) {
+            $visitor->sendPassNotification($channels);
+        }
 
         return response()->json(['visitor' => ['id' => $visitor->id]], 201);
     }

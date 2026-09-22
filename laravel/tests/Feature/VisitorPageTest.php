@@ -3,9 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Jobs\SendVisitorPassNotification;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -54,6 +56,109 @@ class VisitorPageTest extends TestCase
             'homeowner_id' => $resident->id,
             'homeowner_name' => $resident->display_name,
         ]);
+    }
+
+    public function test_visitor_registration_dispatches_notification_job(): void
+    {
+        Queue::fake();
+
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($resident)
+            ->post('/dashboard/visitors', $this->registrationPayload([
+                'notify_email' => true,
+                'notify_sms' => false,
+                'notify_whatsapp' => false,
+            ]))
+            ->assertSessionHasNoErrors();
+
+        Queue::assertPushed(SendVisitorPassNotification::class, function ($job) {
+            return $job->channels === ['email'];
+        });
+    }
+
+    public function test_visitor_registration_dispatches_sms_notification(): void
+    {
+        Queue::fake();
+        config([
+            'services.twilio.sid' => 'AC_test',
+            'services.twilio.token' => 'token',
+            'services.twilio.from' => '+18765550000',
+        ]);
+
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($resident)
+            ->post('/dashboard/visitors', $this->registrationPayload([
+                'contact' => '876-555-1234',
+                'notify_email' => false,
+                'notify_sms' => true,
+                'notify_whatsapp' => false,
+            ]))
+            ->assertSessionHasNoErrors();
+
+        Queue::assertPushed(SendVisitorPassNotification::class, function ($job) {
+            return $job->channels === ['sms'];
+        });
+    }
+
+    public function test_an_email_address_is_not_texted(): void
+    {
+        /*
+         | `contact` holds an email or a phone number. This used to queue an SMS
+         | to "liam@example.com", which the stub then reported as sent.
+         */
+        Queue::fake();
+        config([
+            'services.twilio.sid' => 'AC_test',
+            'services.twilio.token' => 'token',
+            'services.twilio.from' => '+18765550000',
+        ]);
+
+        $this->actingAs(User::factory()->role(UserRole::Homeowner)->create())
+            ->post('/dashboard/visitors', $this->registrationPayload([
+                'contact' => 'liam@example.com',
+                'notify_email' => false,
+                'notify_sms' => true,
+            ]))
+            ->assertSessionHasNoErrors();
+
+        Queue::assertNotPushed(SendVisitorPassNotification::class);
+    }
+
+    public function test_sms_is_not_queued_without_a_twilio_account(): void
+    {
+        Queue::fake();
+        config(['services.twilio.sid' => null, 'services.twilio.token' => null]);
+
+        $this->actingAs(User::factory()->role(UserRole::Homeowner)->create())
+            ->post('/dashboard/visitors', $this->registrationPayload([
+                'contact' => '876-555-1234',
+                'notify_email' => false,
+                'notify_sms' => true,
+                'notify_whatsapp' => true,
+            ]))
+            ->assertSessionHasNoErrors();
+
+        Queue::assertNotPushed(SendVisitorPassNotification::class);
+    }
+
+    public function test_visitor_registration_with_no_contact_does_not_dispatch_notifications(): void
+    {
+        Queue::fake();
+
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($resident)
+            ->post('/dashboard/visitors', $this->registrationPayload([
+                'contact' => null,
+                'notify_email' => true,
+                'notify_sms' => true,
+                'notify_whatsapp' => true,
+            ]))
+            ->assertSessionHasNoErrors();
+
+        Queue::assertNotPushed(SendVisitorPassNotification::class);
     }
 
     public function test_registration_requires_a_name_and_a_type(): void

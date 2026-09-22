@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
+import { useMessaging } from '@/lib/messaging';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,9 +27,12 @@ type VisitorItem = {
   name: string;
   contact?: string | null;
   vehicle?: string | null;
-  type: 'One-time' | 'Recurring';
+  type: string;
   expectedAt: string | Date;
   dateRange: string | null;
+  notify_email?: boolean;
+  notify_sms?: boolean;
+  notify_whatsapp?: boolean;
 };
 
 type UserStay = {
@@ -47,6 +51,7 @@ type EditVisitorFormProps = {
 
 export function EditVisitorForm({ visitor, open, onOpenChange, userStay }: EditVisitorFormProps) {
   const { toast } = useToast();
+  const messaging = useMessaging();
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -59,6 +64,9 @@ export function EditVisitorForm({ visitor, open, onOpenChange, userStay }: EditV
   const [minute, setMinute] = useState('00');
   const [meridiem, setMeridiem] = useState('AM');
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [notifyEmail, setNotifyEmail] = useState(true);
+  const [notifySms, setNotifySms] = useState(false);
+  const [notifyWhatsapp, setNotifyWhatsapp] = useState(false);
 
   const stayStart = userStay ? parseISO(userStay.leaseStart) : null;
   const stayEnd = userStay ? parseISO(userStay.leaseEnd) : null;
@@ -68,7 +76,7 @@ export function EditVisitorForm({ visitor, open, onOpenChange, userStay }: EditV
       setName(visitor.name);
       setContact(visitor.contact || '');
       setVehicle(visitor.vehicle || '');
-      setType(visitor.type || 'One-time');
+      setType(visitor.type === 'Recurring' ? 'Recurring' : 'One-time');
 
       const expDate = typeof visitor.expectedAt === 'string' ? parseISO(visitor.expectedAt) : visitor.expectedAt;
       setExpectedDate(expDate);
@@ -82,6 +90,11 @@ export function EditVisitorForm({ visitor, open, onOpenChange, userStay }: EditV
       setHour(`${h}`);
       setMinute(m < 10 ? `0${m}` : `${m}`);
       setMeridiem(isPm ? 'PM' : 'AM');
+
+      // Set notification preferences with defaults for existing visitors
+      setNotifyEmail(visitor.notify_email ?? true);
+      setNotifySms(visitor.notify_sms ?? false);
+      setNotifyWhatsapp(visitor.notify_whatsapp ?? false);
     }
   }, [visitor]);
 
@@ -145,6 +158,9 @@ export function EditVisitorForm({ visitor, open, onOpenChange, userStay }: EditV
           type === 'Recurring' && dateRange?.from && dateRange?.to
             ? `${format(dateRange.from, 'yyyy-MM-dd')} to ${format(dateRange.to, 'yyyy-MM-dd')}`
             : undefined,
+        notify_email: notifyEmail,
+        notify_sms: notifySms,
+        notify_whatsapp: notifyWhatsapp,
       },
       {
         preserveScroll: true,
@@ -220,6 +236,52 @@ export function EditVisitorForm({ visitor, open, onOpenChange, userStay }: EditV
                 value={vehicle}
                 onChange={(e) => setVehicle(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Send Pass Notifications</Label>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="edit-notify-email"
+                    checked={notifyEmail}
+                    onChange={(e) => setNotifyEmail(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <Label htmlFor="edit-notify-email" className="text-sm font-normal cursor-pointer">
+                    Email (QR code attached)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="edit-notify-sms"
+                    checked={messaging.sms && notifySms}
+                    disabled={!messaging.sms}
+                    onChange={(e) => setNotifySms(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <Label htmlFor="edit-notify-sms" className="text-sm font-normal cursor-pointer">
+                    SMS Text Message
+                    {!messaging.sms && <span className="text-muted-foreground"> (not set up)</span>}
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="edit-notify-whatsapp"
+                    checked={messaging.whatsapp && notifyWhatsapp}
+                    disabled={!messaging.whatsapp}
+                    onChange={(e) => setNotifyWhatsapp(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-50"
+                  />
+                  <Label htmlFor="edit-notify-whatsapp" className="text-sm font-normal cursor-pointer">
+                    WhatsApp
+                    {!messaging.whatsapp && <span className="text-muted-foreground"> (not set up)</span>}
+                  </Label>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1.5">

@@ -29,4 +29,32 @@ return [
         'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | SMS & WhatsApp (Twilio)
+    |--------------------------------------------------------------------------
+    |
+    | Used by App\Services\SmsService and WhatsAppService. With the account
+    | SID and token plus a sender, that channel is enabled; without them it is
+    | disabled in the UI and the services refuse rather than pretend to send.
+    |
+    | from                  SMS sender: a Twilio number or Messaging Service.
+    | whatsapp_from         WhatsApp sender, e.g. +14155238886 (the sandbox).
+    | whatsapp_content_sid  Approved template (HX...) for visitor passes. WhatsApp
+    |                       refuses free text to anyone who has not messaged
+    |                       the business in 24 hours; see WhatsAppService.
+    | default_country_code  Prefixed to 10-digit numbers written without one.
+    |                       1 is the North American plan, which covers Jamaica.
+    |
+    */
+
+    'twilio' => [
+        'sid' => env('TWILIO_SID'),
+        'token' => env('TWILIO_TOKEN'),
+        'from' => env('TWILIO_FROM'),
+        'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
+        'whatsapp_content_sid' => env('TWILIO_WHATSAPP_CONTENT_SID'),
+        'default_country_code' => env('SMS_DEFAULT_COUNTRY_CODE', '1'),
+    ],
 ];

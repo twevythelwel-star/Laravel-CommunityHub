@@ -29,36 +29,122 @@ class VisitorController extends Controller
     {
         $user = $request->user();
         $isStaff = $user->can('manageSecurity');
+        $tab = $request->string('tab')->toString() ?: 'all';
 
-        $visitors = Visitor::query()
+        // Calculate live counters for Security & Residents
+        $countsQuery = Visitor::query()->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id));
+
+        $expectedCount = (clone $countsQuery)
+            ->where('status', VisitorStatus::Expected->value)
+            ->whereNull('expired_at')
+            ->count();
+
+        $insideCount = (clone $countsQuery)
+            ->where('status', VisitorStatus::CheckedIn->value)
+            ->count();
+
+        $checkedOutCount = (clone $countsQuery)
+            ->where('status', VisitorStatus::CheckedOut->value)
+            ->count();
+
+        $rejectedCount = (clone $countsQuery)
+            ->where(function ($q) {
+                $q->where('is_blocked', true)->orWhereNotNull('expired_at');
+            })
+            ->count() + ($isStaff ? AccessLogEntry::where('result', 'DENY')->count() : 0);
+
+        $historyCount = (clone $countsQuery)->count();
+
+        $tabCounts = [
+            'expected' => $expectedCount,
+            'inside' => $insideCount,
+            'checkedOut' => $checkedOutCount,
+            'rejected' => $rejectedCount,
+            'history' => $historyCount,
+        ];
+
+        // Query visitors based on active sub-navigation tab
+        $query = Visitor::query()
+            ->with('homeowner:id,name,display_name,lot,street')
             ->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id))
-            ->when($request->string('status')->isNotEmpty(),
-                fn ($q) => $q->where('status', $request->string('status')))
             ->when($request->string('search')->isNotEmpty(),
-                fn ($q) => $q->where('name', 'like', '%'.$request->string('search').'%'))
-            // Security works today's gate queue; residents want their newest first.
-            ->when($isStaff && $request->boolean('today', true),
-                fn ($q) => $q->whereDate('expected_at', today()))
+                fn ($q) => $q->where('name', 'like', '%'.$request->string('search').'%'));
+
+        switch ($tab) {
+            case 'expected':
+                $query->where('status', VisitorStatus::Expected->value)->whereNull('expired_at');
+                break;
+            case 'inside':
+                $query->where('status', VisitorStatus::CheckedIn->value);
+                break;
+            case 'checked-out':
+                $query->where('status', VisitorStatus::CheckedOut->value);
+                break;
+            case 'rejected':
+                $query->where(function ($q) {
+                    $q->where('is_blocked', true)->orWhereNotNull('expired_at');
+                });
+                break;
+            case 'history':
+                // All records unconstrained
+                break;
+            default:
+                // 'all' or 'scan'
+                if ($isStaff && $request->boolean('today', true)) {
+                    $query->whereDate('expected_at', today());
+                }
+                if ($request->string('status')->isNotEmpty()) {
+                    $query->where('status', $request->string('status'));
+                }
+                break;
+        }
+
+        $visitors = $query
             ->latest('expected_at')
             ->paginate(25)
             ->withQueryString()
-            ->through(fn (Visitor $v) => [
-                'id' => $v->id,
-                'name' => $v->name,
-                'contact' => $v->contact,
-                'vehicle' => $v->vehicle,
-                'idType' => $v->id_type,
-                'type' => $v->type,
-                'status' => $v->status->value,
-                'expectedAt' => $v->expected_at->toIso8601String(),
-                'dateRange' => $v->date_range,
-                'homeowner' => $v->homeowner_name,
-                'idImageUrl' => $v->id_image_url,
-                'isBlocked' => $v->is_blocked,
-                'expired' => $v->expired_at !== null,
-                'shareToken' => $v->share_token,
-                'guestPassUrl' => $v->share_token ? route('guest-pass.show', $v->share_token) : null,
-            ]);
+            ->through(function (Visitor $v) {
+                $hostLot = null;
+                if ($v->homeowner && filled($v->homeowner->lot)) {
+                    $hostLot = '#'.ltrim($v->homeowner->lot, '#');
+                } elseif (preg_match('/Lot\s*(\d+)/i', $v->homeowner_name ?? '', $matches)) {
+                    $hostLot = '#'.$matches[1];
+                } else {
+                    $hostLot = $v->homeowner_name ?: '#Unassigned';
+                }
+
+                // Relevant timestamp based on state: Checked in time, checked out time, or expected time
+                $timeDisplay = match ($v->status) {
+                    VisitorStatus::CheckedIn => $v->checked_in_at ? $v->checked_in_at->format('g:i A') : $v->expected_at->format('g:i A'),
+                    VisitorStatus::CheckedOut => $v->checked_out_at ? $v->checked_out_at->format('g:i A') : $v->expected_at->format('g:i A'),
+                    default => $v->expected_at->format('g:i A'),
+                };
+
+                return [
+                    'id' => $v->id,
+                    'name' => $v->name,
+                    'contact' => $v->contact,
+                    'vehicle' => $v->vehicle,
+                    'idType' => $v->id_type,
+                    'type' => $v->type,
+                    'status' => $v->status->value,
+                    'expectedAt' => $v->expected_at->toIso8601String(),
+                    'dateRange' => $v->date_range,
+                    'homeowner' => $v->homeowner_name,
+                    'hostLot' => $hostLot,
+                    'timeDisplay' => $timeDisplay,
+                    'idImageUrl' => $v->id_image_url,
+                    'isBlocked' => $v->is_blocked,
+                    'expired' => $v->expired_at !== null,
+                    'checkedInAt' => $v->checked_in_at?->toIso8601String(),
+                    'checkedOutAt' => $v->checked_out_at?->toIso8601String(),
+                    'shareToken' => $v->share_token,
+                    'guestPassUrl' => $v->share_token ? route('guest-pass.show', $v->share_token) : null,
+                    'notify_email' => $v->notify_email,
+                    'notify_sms' => $v->notify_sms,
+                    'notify_whatsapp' => $v->notify_whatsapp,
+                ];
+            });
 
         $userStay = null;
         if ($user->role === UserRole::TemporaryHomeowner) {
@@ -75,7 +161,13 @@ class VisitorController extends Controller
 
         return Inertia::render('Dashboard/Visitors', [
             'visitors' => $visitors,
-            'filters' => $request->only('status', 'search'),
+            'filters' => [
+                'status' => $request->string('status')->toString(),
+                'search' => $request->string('search')->toString(),
+                'tab' => $tab,
+            ],
+            'tabCounts' => $tabCounts,
+            'activeTab' => $tab,
             'canManage' => $isStaff,
             'canRegister' => $user->can('registerVisitors'),
             'userStay' => $userStay,
@@ -99,6 +191,9 @@ class VisitorController extends Controller
             'expected_at' => ['required', 'date', 'after:-1 hour'],
             'date_range' => ['nullable', 'string', 'max:120'],
             'id_image_url' => ['nullable', 'url', 'max:2048'],
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_whatsapp' => ['nullable', 'boolean'],
         ]);
 
         $user = $request->user();
@@ -132,15 +227,25 @@ class VisitorController extends Controller
             ]);
         }
 
-        Visitor::create([
+        $visitor = Visitor::create([
             ...$validated,
             'status' => 'Expected',
             'homeowner_id' => $user->id,
             'homeowner_name' => $user->display_name,
             'is_blocked' => false,
+            'notify_email' => $validated['notify_email'] ?? true,
+            'notify_sms' => $validated['notify_sms'] ?? false,
+            'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
         ]);
 
         $user->recordActivity("Registered visitor {$validated['name']}");
+
+        // Send the pass on whichever chosen channels can actually deliver it.
+        $channels = $visitor->passNotificationChannels();
+
+        if ($channels !== []) {
+            $visitor->sendPassNotification($channels);
+        }
 
         return back()->with('success', 'Visitor registered.');
     }
@@ -156,6 +261,9 @@ class VisitorController extends Controller
             'type' => ['sometimes', 'in:One-time,Recurring'],
             'expected_at' => ['sometimes', 'date'],
             'date_range' => ['nullable', 'string', 'max:120'],
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_whatsapp' => ['nullable', 'boolean'],
         ]);
 
         $user = $request->user();

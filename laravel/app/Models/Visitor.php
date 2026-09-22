@@ -3,6 +3,10 @@
 namespace App\Models;
 
 use App\Enums\VisitorStatus;
+use App\Jobs\SendVisitorPassNotification;
+use App\Services\Messaging\PhoneNumber;
+use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,6 +19,7 @@ class Visitor extends Model
         'name', 'contact', 'vehicle', 'id_type', 'id_number', 'type', 'share_token', 'status',
         'expected_at', 'date_range', 'homeowner_id', 'homeowner_name',
         'id_image_url', 'is_blocked', 'checked_in_at', 'checked_out_at', 'expired_at',
+        'notify_email', 'notify_sms', 'notify_whatsapp', 'qr_code_path',
     ];
 
     protected static function booted(): void
@@ -39,6 +44,9 @@ class Visitor extends Model
             'checked_out_at' => 'datetime',
             'expired_at' => 'datetime',
             'is_blocked' => 'boolean',
+            'notify_email' => 'boolean',
+            'notify_sms' => 'boolean',
+            'notify_whatsapp' => 'boolean',
             'status' => VisitorStatus::class,
         ];
     }
@@ -79,5 +87,37 @@ class Visitor extends Model
     public function checkOut(): void
     {
         $this->update(['status' => VisitorStatus::CheckedOut, 'checked_out_at' => now()]);
+    }
+
+    /**
+     * The channels this visitor's pass can actually go out on: the ones they
+     * opted into, that suit the contact given, and that are configured. An
+     * email address is not texted, and SMS is not attempted with no Twilio
+     * account behind it.
+     *
+     * @return list<string>
+     */
+    public function passNotificationChannels(): array
+    {
+        $isEmail = is_string($this->contact) && filter_var($this->contact, FILTER_VALIDATE_EMAIL) !== false;
+        $isPhone = PhoneNumber::toE164($this->contact) !== null;
+
+        return array_values(array_filter([
+            $this->notify_email && $isEmail ? 'email' : null,
+            $this->notify_sms && $isPhone && app(SmsService::class)->isConfigured() ? 'sms' : null,
+            $this->notify_whatsapp && $isPhone && app(WhatsAppService::class)->isConfigured() ? 'whatsapp' : null,
+        ]));
+    }
+
+    public function sendPassNotification(array $channels = ['email']): void
+    {
+        SendVisitorPassNotification::dispatch($this, $channels);
+    }
+
+    public function resendPassNotification(array $channels = ['email']): void
+    {
+        // Generate new QR code and resend
+        $this->update(['qr_code_path' => null]);
+        SendVisitorPassNotification::dispatch($this, $channels);
     }
 }
