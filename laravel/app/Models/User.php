@@ -56,7 +56,7 @@ class User extends Authenticatable
 
     public function activePass(): HasOne
     {
-        return $this->hasOne(GatePass::class)->where('status', 'Active');
+        return $this->hasOne(GatePass::class)->active()->latestOfMany();
     }
 
     public function visitors(): HasMany

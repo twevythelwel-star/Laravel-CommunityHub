@@ -29,7 +29,7 @@ instead of reading module-level mock arrays.
 laravel/
 ├── app/
 │   ├── Enums/                  UserRole, PassCategory, QRShape, GateId, DenyReason…
-│   ├── Models/                 44 Eloquent models
+│   ├── Models/                 45 Eloquent models
 │   ├── Services/
 │   │   ├── GatePassEngine.php          ← port of src/lib/gate-pass-engine/engine.ts
 │   │   ├── GeofenceService.php         ← port of src/lib/geofence-utils.ts
@@ -45,7 +45,7 @@ laravel/
 ├── resources/
 │   ├── views/blade/            Sign-in + privacy (Blade)
 │   └── js/Pages/Dashboard/     23 Inertia pages
-└── tests/                     464 tests — engine, geofence, access control, pages, payments
+└── tests/                     534 tests — engine, geofence, access control, pages, payments
 ```
 
 ---
@@ -310,6 +310,125 @@ not enforced.
 
 ---
 
+## Digital Gate Pass Engine
+
+The pass system is split into four pieces:
+
+- `App\Services\GatePassEngine`: issues and validates.
+- `App\Services\GateScanner`: the guard's scan-and-confirm flow.
+- `App\Models\GatePass`: the registry and lifecycle.
+- `config/gatepass.php`: profiles, palettes, policies, gates and zones.
+
+### Visual identity is not authorization
+
+Every profile has one fixed frame shape. A pass also carries a colour, drawn
+at random from that profile's approved palette when it is issued, and stored
+on the pass.
+
+| Profile | Shape | | Profile | Shape |
+|---|---|---|---|---|
+| SysAdmin | 8-point star | | Staff | Diamond |
+| Admin | Octagon | | Security | Shield |
+| Homeowner | Hexagon (house) | | Homeowner Staff | House/hex variant |
+| Renter | Rounded square | | Visitor | Circle |
+| | | | Contractor | Pentagon |
+
+Shape and colour are for the guard's eyes only. Nothing is ever decided by
+them. Access comes from the HMAC-signed token and the registry row.
+Rotating a pass picks a new colour and advances its sequence number, which
+the token signs, so every code minted before the rotation is refused as
+superseded. Every palette colour is tested against WCAG AA (4.5:1 on white)
+using a ratio computed from its hex. That test found staff "Industrial
+Safety Orange" `#EA580C` at 3.56:1 despite a declared 5.1, so it is now
+`#C2410C`. Most other declared ratios were also off and now hold the real
+values.
+
+### Lifecycle
+
+```
+REQUESTED → APPROVED → ISSUED → ACTIVE → CHECKED_IN → CHECKED_OUT
+exits: REJECTED, CANCELLED, REVOKED, EXPIRED, SUSPENDED
+```
+
+- **The transition table is in `App\Enums\PassStatus`.** `GatePass::transitionTo()`
+  refuses any other move, takes a row lock, and records every step in
+  `gate_pass_transitions`: from, to, who, which gate, and why.
+- **Account passes** (residents, staff, security, admins) are issued ACTIVE,
+  multi-entry and open-ended.
+- **A resident's visitor** is REQUESTED, then APPROVED and ISSUED straight
+  away: registering the guest is the approval.
+- **A contractor** stays REQUESTED until security or an admin approves it,
+  and their pass is only sent after approval.
+- **Guest passes have a window.** One-time passes open an hour before the
+  expected arrival and close 12 hours after it, and are single-entry.
+  Recurring passes last 30 days and allow re-entry.
+- **Expiry.** `gatepass:expire` runs every 15 minutes and expires lapsed
+  passes. The no-show sweep expires a visitor's pass along with their
+  clearance. Someone CHECKED_IN is never expired: they have to be checked
+  out, so the log shows when they actually left.
+- **Revoked passes stay revoked.** `issuePassFor()` used to create a new pass
+  whenever a user had no *active* one, so a pass revoked by security came
+  back freshly issued on the holder's next page load. The token endpoints now
+  refuse to mint a code for a pass that can't be used (HTTP 423), and a new
+  pass after revocation comes only from `POST /dashboard/gate-pass/reissue/{user}`
+  (security).
+- **Manual moves** go through `POST /dashboard/gate-pass/{gatePass}/transition`:
+  approve, reject, suspend, reinstate, cancel and revoke. Security may make
+  any of them. A host may only cancel their own guest's pass. Reject, suspend
+  and revoke need a reason. Check-in and check-out cannot be set by hand.
+
+### Scanner (Security → Visitors → Scan QR)
+
+The scanner checks, in order:
+
+1. Signature, including the trailing signature segment, which used to be
+   ignored.
+2. Community.
+3. Pass ID on the registry.
+4. Rotation sequence.
+5. Profile, person, property and zone, each against the registry rather than
+   trusting the token.
+6. Revocation.
+7. Current status.
+8. The pass's start and end time.
+9. The holder: account active, visitor not blocklisted.
+10. Replay.
+11. Gate, and whether that gate admits into the pass's zone
+    (`config/gatepass.php` `gate_zones`: visitors use the main gate).
+12. Shift hours.
+
+It then answers **CHECK_IN**, **CHECK_OUT** or **REJECT** from the pass's
+state. Leaving skips the gate, zone, hours and validity checks, because an
+overstaying contractor still has to be let out.
+
+The decision is held on the server under a random scan ID for two minutes.
+The guard confirms or refuses it (`POST /dashboard/gate-pass/scans/{scan}/confirm`,
+and the same under `/api` for handheld scanners). The confirmation carries
+only the ID. It can be used once, only by the guard who scanned, and fails
+if the pass changed in between. It replaces `confirm-action`, which accepted
+any pass ID and "CHECK_IN"/"CHECK_OUT" from the browser with no token and no
+validation.
+
+`sample-tokens` is also gone. It minted live codes for other residents, used
+`createCustomToken()` to sign arbitrary claims with the real key, and
+created a `maria.williams` account with the password `password`. The manual
+Check In button on the Visitors list now goes through the same pass rules,
+minus the token checks.
+
+### Guest pass page
+
+The QR was drawn by `api.qrserver.com` from the guest-pass URL, which sent
+that bearer link to a third party, and the image was a link rather than a
+credential. The page now shows a live signed code, rendered on this server
+by `QrCodePng` and refreshed every 10 seconds from
+`GET /guest/pass/{token}/code`, so a screenshot stops working. A contractor
+awaiting approval sees a message instead of a code.
+
+**Not yet verified in a browser:** the camera scanner and the Visitors page
+changes are covered by the PHP tests and the type check only.
+
+---
+
 ## What each source file became
 
 | Original | Now |
@@ -403,7 +522,7 @@ blocklist enforcement at both registration and check-in, visitor ownership,
 single-vote warnings, scan logging, self-deactivation, and that contact details
 stay hidden from non-admins.
 
-The full suite is 464 tests across 34 files. See *Verification status* below
+The full suite is 534 tests across 37 files. See *Verification status* below
 for the current result and what the first real run found.
 
 ---
@@ -412,25 +531,26 @@ for the current result and what the first real run found.
 
 Everything below has been **executed** on Laravel 12.69.2 / PHP 8.4.25
 (Laravel Herd) against SQLite. Last re-run: **22 September 2026** (except the
-two rows marked † and *).
+row marked *).
 
 ```
-php artisan migrate:fresh --seed     16 migrations, 7 seeders          PASS†
-php artisan test                     464 tests, 2,678 assertions       PASS‡
+php artisan migrate:fresh --seed     17 migrations, 7 seeders          PASS
+php artisan test                     534 tests, 3,106 assertions       PASS‡
 npm run typecheck                    0 errors                          PASS
 npm run build                        23 pages built                    PASS
-php artisan route:list              129 routes resolve                 PASS
+php artisan route:list              132 routes resolve                 PASS
 npm audit --omit=dev                 0 vulnerabilities                 PASS
 composer audit                       no advisories                     PASS*
 ```
 
-(129 rather than the original 93: Boost registers `_boost/browser-logs`,
+(132 rather than the original 93: Boost registers `_boost/browser-logs`,
 Laravel 12 adds `storage.local.upload`, and the pages wired since then, the
 Stripe checkout, guest-pass, PDF, payment-channel and revenue-engine work added
 their own.)
 
-† Not re-run on 22 September, to avoid wiping the local database; last passed
-before the visitor-notification work. The counts are the current files.
+`migrate:fresh --seed` was run against a scratch SQLite file, not the local
+database, so nothing local was wiped. It seeds a gate pass for every account
+and every seeded visitor, in the state their visit is in.
 
 ‡ All pass. PHPUnit reports one *deprecated* notice: bacon-qr-code 2.0.8
 uses implicitly nullable parameters, which PHP 8.4 deprecates. It is a

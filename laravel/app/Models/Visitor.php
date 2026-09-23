@@ -10,6 +10,7 @@ use App\Services\WhatsAppService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Visitor extends Model
 {
@@ -107,6 +108,12 @@ class Visitor extends Model
             $this->notify_sms && $isPhone && app(SmsService::class)->isConfigured() ? 'sms' : null,
             $this->notify_whatsapp && $isPhone && app(WhatsAppService::class)->isConfigured() ? 'whatsapp' : null,
         ]));
+    }
+
+    /** The visitor's gate pass: the most recent, if the host re-registered them. */
+    public function gatePass(): HasOne
+    {
+        return $this->hasOne(GatePass::class)->latestOfMany();
     }
 
     public function sendPassNotification(array $channels = ['email']): void

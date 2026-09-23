@@ -4,21 +4,20 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\GateId;
 use App\Enums\PassCategory;
-use App\Enums\UserRole;
-use App\Enums\ValidationStatus;
-use App\Enums\VisitorStatus;
+use App\Enums\PassStatus;
+use App\Exceptions\InvalidPassTransition;
+use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
-use App\Models\AccessLogEntry;
 use App\Models\GatePass;
 use App\Models\Staff;
 use App\Models\User;
-use App\Models\Visitor;
 use App\Services\GatePassEngine;
+use App\Services\GateScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,7 +30,19 @@ use Inertia\Response;
  */
 class GatePassController extends Controller
 {
-    public function __construct(private readonly GatePassEngine $engine) {}
+    public function __construct(
+        private readonly GatePassEngine $engine,
+        private readonly GateScanner $scanner,
+    ) {}
+
+    /**
+     * States an operator may move a pass to by hand. Check-in and check-out
+     * are not here: they only happen through a confirmed scan.
+     */
+    private const MANUAL_TRANSITIONS = [
+        PassStatus::Approved, PassStatus::Rejected, PassStatus::Cancelled,
+        PassStatus::Suspended, PassStatus::Active, PassStatus::Revoked,
+    ];
 
     public function index(Request $request): Response
     {
@@ -52,11 +63,11 @@ class GatePassController extends Controller
                 'accessZone' => $pass->access_zone,
                 'gate' => $pass->designated_gate->value,
                 'rotationSeq' => $pass->rotation_seq,
-                'status' => $pass->status,
+                'status' => $pass->status->value,
             ],
 
             'visual' => [
-                'variant' => $this->engine->assignedColorVariant($category, $pass->pass_id, $pass->rotation_seq),
+                'variant' => $this->engine->variantFor($pass),
                 'shape' => $category->shape()->value,
             ],
 
@@ -131,32 +142,25 @@ class GatePassController extends Controller
         return $configs;
     }
 
-    /** @return array<int, array<string, mixed>> */
     private function directory(): array
     {
         return GatePass::with('user:id,role,display_name')
             ->orderBy('category')
             ->orderBy('holder_name')
             ->get()
-            ->map(function (GatePass $pass) {
-                $variant = $this->engine->assignedColorVariant(
-                    $pass->category,
-                    $pass->pass_id,
-                    $pass->rotation_seq,
-                );
-
-                return [
-                    'id' => $pass->id,
-                    'passId' => $pass->pass_id,
-                    'category' => $pass->category->value,
-                    'userName' => $pass->holder_name,
-                    'role' => $pass->user?->role->value ?? $pass->category->value,
-                    'property' => $pass->property,
-                    'gate' => $pass->designated_gate->value,
-                    'status' => $pass->isRevoked() ? 'REVOKED' : 'ACTIVE',
-                    'colorVariant' => $variant,
-                ];
-            })
+            ->map(fn (GatePass $pass) => [
+                'id' => $pass->id,
+                'passId' => $pass->pass_id,
+                'category' => $pass->category->value,
+                'userName' => $pass->holder_name,
+                'role' => $pass->user?->role->value ?? $pass->category->value,
+                'property' => $pass->property,
+                'gate' => $pass->designated_gate->value,
+                'status' => $pass->status->value,
+                'validFrom' => $pass->valid_from?->toIso8601String(),
+                'validUntil' => $pass->valid_until?->toIso8601String(),
+                'colorVariant' => $this->engine->variantFor($pass),
+            ])
             ->all();
     }
 
@@ -194,6 +198,15 @@ class GatePassController extends Controller
     {
         $pass = $this->engine->issuePassFor($request->user());
 
+        // A revoked, suspended or expired pass gets no code: a code the gate
+        // will refuse is worse than an honest message on the pass page.
+        if (! $pass->isActive()) {
+            return response()->json([
+                'message' => "Pass {$pass->pass_id} is {$pass->status->label()}. Contact estate security.",
+                'status' => $pass->status->value,
+            ], 423);
+        }
+
         $issued = $this->engine->issueToken($pass);
 
         return response()->json([
@@ -220,232 +233,42 @@ class GatePassController extends Controller
     }
 
     /**
-     * Validates a scanned token and writes the access-log entry atomically, so
-     * an entry can never be recorded without the validation that justified it.
+     * Validates a scanned code and returns the server's decision: CHECK_IN,
+     * CHECK_OUT or REJECT. A CHECK_IN or CHECK_OUT is not applied yet; the
+     * response carries a scanId for confirmScan().
      */
     public function scan(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'token' => ['required', 'string', 'max:4096'],
-            'gate' => ['nullable', 'string', 'in:GATE-01,GATE-02,GATE-ANY'],
+            'gate' => ['nullable', 'string', Rule::in(['GATE-01', 'GATE-02'])],
         ]);
 
         $gate = GateId::tryFrom($validated['gate'] ?? '') ?? GateId::Gate01;
+        $result = $this->scanner->scan($validated['token'], $gate, $request->user());
 
-        $report = $this->engine->validate($validated['token'], $gate);
-
-        $entry = DB::transaction(function () use ($report, $gate, $request) {
-            $pass = GatePass::where('pass_id', $report['passId'])->first();
-
-            return AccessLogEntry::create([
-                'user_id' => $pass?->user_id,
-                'user_name' => $report['userName'],
-                'user_role' => $pass?->user?->role->value ?? $report['category'],
-                'method' => 'Digital Pass',
-                'gate' => config('gatepass.gates.'.$gate->value, $gate->value),
-                'pass_id' => $report['passId'],
-                'result' => $report['status'],
-                'deny_reason' => $report['status'] === ValidationStatus::Deny->value
-                    ? $report['primaryReason']
-                    : null,
-                'validation_report' => $report,
-                'scanned_by' => $request->user()->id,
-                'occurred_at' => now(),
-            ]);
-        });
-
-        // Denials are worth a dedicated security trail, not just a table row.
-        if ($report['status'] === ValidationStatus::Deny->value) {
-            Log::channel('security')->warning('Gate pass denied', [
-                'pass_id' => $report['passId'],
-                'gate' => $gate->value,
-                'reason' => $report['primaryReason'],
-                'scanned_by' => $request->user()->uid,
-            ]);
-        }
-
-        // Determine if this holder/visitor is already inside
-        $pass = GatePass::where('pass_id', $report['passId'])->first();
-        $visitor = Visitor::where('name', $report['userName'])->first();
-
-        $isCurrentlyInside = false;
-        $checkedInAt = null;
-        $dwellTimeStr = null;
-
-        if ($visitor && $visitor->status === VisitorStatus::CheckedIn) {
-            $isCurrentlyInside = true;
-            $checkedInAt = $visitor->checked_in_at;
-        } else {
-            $latestEntry = AccessLogEntry::where('pass_id', $report['passId'])
-                ->whereDate('occurred_at', today())
-                ->whereIn('result', ['CHECK_IN', 'CHECK_OUT'])
-                ->latest('occurred_at')
-                ->first();
-            if ($latestEntry && $latestEntry->result === 'CHECK_IN') {
-                $isCurrentlyInside = true;
-                $checkedInAt = $latestEntry->occurred_at;
-            }
-        }
-
-        if ($isCurrentlyInside && $checkedInAt) {
-            $diffMinutes = max(0, $checkedInAt->diffInMinutes(now()));
-            $hours = intdiv($diffMinutes, 60);
-            $mins = $diffMinutes % 60;
-            $dwellTimeStr = $hours > 0 ? "{$hours}h {$mins}m" : "{$mins}m";
-        }
-
-        return response()->json([
-            'report' => $report,
-            'accessLogId' => $entry->id,
-            'isCurrentlyInside' => $isCurrentlyInside,
-            'checkedInAtFormatted' => $checkedInAt ? $checkedInAt->format('g:i A') : null,
-            'dwellDuration' => $dwellTimeStr,
-            'visitorId' => $visitor?->id,
-        ]);
+        return response()->json($result);
     }
 
     /**
-     * Confirms entry or checkout at the gate, updating visitor record and access log.
+     * Confirms (or refuses) a scanned decision. Takes only the scan ID: the
+     * action to apply is the one the server decided when it validated the
+     * code, so the browser cannot choose it.
      */
-    public function confirmAction(Request $request): JsonResponse
+    public function confirmScan(Request $request, string $scan): JsonResponse
     {
         $validated = $request->validate([
-            'pass_id' => ['required', 'string'],
-            'action' => ['required', 'in:CHECK_IN,CHECK_OUT'],
-            'gate' => ['nullable', 'string'],
-            'user_name' => ['nullable', 'string'],
-            'category' => ['nullable', 'string'],
+            'accept' => ['required', 'boolean'],
+            'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $gate = GateId::tryFrom($validated['gate'] ?? '') ?? GateId::Gate01;
-        $gateName = config('gatepass.gates.'.$gate->value, $gate->value);
-        $pass = GatePass::where('pass_id', $validated['pass_id'])->first();
-        $name = $validated['user_name'] ?? $pass?->holder_name ?? 'Visitor';
-        $visitor = Visitor::where('name', $name)->first();
-
-        $now = now();
-
-        if ($validated['action'] === 'CHECK_IN') {
-            if ($visitor) {
-                $visitor->checkIn();
-            }
-
-            AccessLogEntry::create([
-                'user_id' => $pass?->user_id ?? $visitor?->homeowner_id,
-                'user_name' => $name,
-                'user_role' => $validated['category'] ?? $pass?->category?->value ?? 'Visitor',
-                'method' => 'Digital Pass',
-                'gate' => $gateName,
-                'pass_id' => $validated['pass_id'],
-                'result' => 'CHECK_IN',
-                'scanned_by' => $request->user()->id,
-                'occurred_at' => $now,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'action' => 'CHECK_IN',
-                'time' => $now->format('g:i A'),
-                'message' => 'Checked in at '.$now->format('g:i A'),
-            ]);
-        } else {
-            if ($visitor) {
-                $visitor->checkOut();
-            }
-
-            AccessLogEntry::create([
-                'user_id' => $pass?->user_id ?? $visitor?->homeowner_id,
-                'user_name' => $name,
-                'user_role' => $validated['category'] ?? $pass?->category?->value ?? 'Visitor',
-                'method' => 'Digital Pass',
-                'gate' => $gateName,
-                'pass_id' => $validated['pass_id'],
-                'result' => 'CHECK_OUT',
-                'scanned_by' => $request->user()->id,
-                'occurred_at' => $now,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'action' => 'CHECK_OUT',
-                'time' => $now->format('g:i A'),
-                'message' => 'CHECKED OUT — '.$now->format('g:i A'),
-            ]);
+        try {
+            $result = $this->scanner->confirm($scan, $request->user(), $validated['accept'], $validated['reason'] ?? null);
+        } catch (ScanNotConfirmable $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
         }
-    }
 
-    /**
-     * Provides diagnostic sample tokens for testing different pass profiles.
-     */
-    public function sampleTokens(Request $request): JsonResponse
-    {
-        $user = $request->user();
-        $userPass = $this->engine->issuePassFor($user);
-        $userToken = $this->engine->issueToken($userPass);
-
-        // Find or create Homeowner Staff sample pass (Maria Williams)
-        $maria = User::firstOrCreate(
-            ['email' => 'maria.williams@residence.net'],
-            [
-                'name' => 'Maria Williams',
-                'display_name' => 'Maria Williams',
-                'role' => UserRole::Staff,
-                'lot' => '104',
-                'status' => 'Active',
-                'password' => bcrypt('password'),
-            ]
-        );
-        $mariaPass = $this->engine->issuePassFor($maria);
-        $mariaToken = $this->engine->issueToken($mariaPass);
-
-        // Find or create Resident sample pass
-        $resident = User::where('role', UserRole::Homeowner)->first() ?? $user;
-        $residentPass = $this->engine->issuePassFor($resident);
-        $residentToken = $this->engine->issueToken($residentPass);
-
-        return response()->json([
-            'homeownerStaff' => [
-                'name' => 'Maria Williams',
-                'role' => 'Homeowner Staff',
-                'property' => 'Property: 104',
-                'passId' => $mariaPass->pass_id,
-                'token' => $mariaToken['token'],
-            ],
-            'resident' => [
-                'name' => $resident->display_name,
-                'role' => 'Homeowner',
-                'property' => $resident->propertyLabel(),
-                'passId' => $residentPass->pass_id,
-                'token' => $residentToken['token'],
-            ],
-            'expired' => [
-                'name' => 'Expired Pass Holder',
-                'passId' => $mariaPass->pass_id,
-                'token' => $this->engine->createCustomToken($mariaPass, [
-                    'vf' => now()->subHours(2)->timestamp,
-                    'vu' => now()->subHour()->timestamp,
-                ]),
-            ],
-            'wrongCommunity' => [
-                'name' => 'Foreign Community Guest',
-                'passId' => $residentPass->pass_id,
-                'token' => $this->engine->createCustomToken($residentPass, [
-                    'cid' => 'EXTERNAL-COMMUNITY-999',
-                ]),
-            ],
-            'wrongGate' => [
-                'name' => 'Restricted Portal Pass',
-                'passId' => $mariaPass->pass_id,
-                'token' => $this->engine->createCustomToken($mariaPass, [
-                    'gate' => 'GATE-02',
-                ]),
-            ],
-            'currentUser' => [
-                'name' => $user->display_name,
-                'passId' => $userPass->pass_id,
-                'token' => $userToken['token'],
-            ],
-        ]);
+        return response()->json(['success' => true, ...$result]);
     }
 
     public function revoke(Request $request, GatePass $gatePass): RedirectResponse
@@ -454,7 +277,11 @@ class GatePassController extends Controller
             'reason' => ['required', 'string', 'max:500'],
         ]);
 
-        $gatePass->revoke($request->user(), $validated['reason']);
+        try {
+            $gatePass->revoke($request->user(), $validated['reason']);
+        } catch (InvalidPassTransition $e) {
+            return back()->withErrors(['reason' => $e->getMessage()]);
+        }
 
         Log::channel('security')->notice('Gate pass revoked', [
             'pass_id' => $gatePass->pass_id,
@@ -463,5 +290,72 @@ class GatePassController extends Controller
         ]);
 
         return back()->with('success', "Pass {$gatePass->pass_id} has been revoked.");
+    }
+
+    /** Issues a new pass to an account whose last one was revoked or expired. */
+    public function reissue(Request $request, User $user): RedirectResponse
+    {
+        try {
+            $pass = $this->engine->reissuePassFor($user, $request->user());
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
+        }
+
+        Log::channel('security')->notice('Gate pass reissued', [
+            'pass_id' => $pass->pass_id,
+            'holder' => $user->uid,
+            'by' => $request->user()->uid,
+        ]);
+
+        return back()->with('success', "Pass {$pass->pass_id} issued to {$user->display_name}.");
+    }
+
+    /**
+     * Moves a pass through its lifecycle by hand: approve or reject a request,
+     * suspend or reinstate, cancel, revoke.
+     *
+     * Security and administrators may make any of these moves. A resident may
+     * cancel the pass of a guest they registered, and nothing else.
+     */
+    public function transition(Request $request, GatePass $gatePass): RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(array_map(fn (PassStatus $s) => $s->value, self::MANUAL_TRANSITIONS))],
+            'reason' => [
+                Rule::requiredIf(fn () => in_array($request->input('status'), ['REJECTED', 'REVOKED', 'SUSPENDED'], true)),
+                'nullable', 'string', 'max:500',
+            ],
+        ]);
+
+        $user = $request->user();
+        $target = PassStatus::from($validated['status']);
+
+        $isHostCancelling = $target === PassStatus::Cancelled
+            && $gatePass->visitor?->homeowner_id === $user->id;
+
+        abort_unless($user->can('manageSecurity') || $isHostCancelling, 403);
+
+        try {
+            $target === PassStatus::Approved
+                ? $this->engine->approve($gatePass, $user, $validated['reason'] ?? null)
+                : $gatePass->transitionTo($target, $user, $validated['reason'] ?? null);
+        } catch (InvalidPassTransition $e) {
+            return back()->withErrors(['status' => $e->getMessage()]);
+        }
+
+        // A contractor's pass is only sent once it is approved.
+        $visitor = $gatePass->visitor;
+        if ($target === PassStatus::Approved && $visitor && ($channels = $visitor->passNotificationChannels()) !== []) {
+            $visitor->sendPassNotification($channels);
+        }
+
+        Log::channel('security')->notice('Gate pass status changed', [
+            'pass_id' => $gatePass->pass_id,
+            'status' => $gatePass->status->value,
+            'by' => $user->uid,
+            'reason' => $validated['reason'] ?? null,
+        ]);
+
+        return back()->with('success', "Pass {$gatePass->pass_id} is now {$gatePass->status->label()}.");
     }
 }

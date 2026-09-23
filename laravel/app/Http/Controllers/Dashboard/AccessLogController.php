@@ -71,7 +71,8 @@ class AccessLogController extends Controller
                 ->pluck('gate')
                 ->all(),
 
-            'results' => array_column(ValidationStatus::cases(), 'value'),
+            // ALLOW/DENY are scan outcomes; CHECK_IN/CHECK_OUT are confirmed movements.
+            'results' => [...array_column(ValidationStatus::cases(), 'value'), 'CHECK_IN', 'CHECK_OUT'],
 
             'canExport' => $request->user()->can('manageSecurity'),
         ]);

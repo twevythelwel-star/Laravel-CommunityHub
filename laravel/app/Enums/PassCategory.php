@@ -3,7 +3,12 @@
 namespace App\Enums;
 
 /**
- * Mirrors `PassCategory` from src/lib/gate-pass-engine/types.ts.
+ * The profile a pass is issued under. Each profile has one fixed frame shape,
+ * so a guard can tell a visitor from a resident at a glance. Shape and colour
+ * are visual identity only: authorization comes from the signed token and the
+ * pass registry, never from what the badge looks like.
+ *
+ * Mirrored in resources/js/lib/gate-pass-engine/types.ts.
  */
 enum PassCategory: string
 {
@@ -14,6 +19,8 @@ enum PassCategory: string
     case Staff = 'STAFF';
     case Security = 'SECURITY';
     case HomeownerStaff = 'HOMEOWNER_STAFF';
+    case Visitor = 'VISITOR';
+    case Contractor = 'CONTRACTOR';
 
     public function shape(): QRShape
     {
@@ -25,7 +32,24 @@ enum PassCategory: string
             self::Staff => QRShape::Diamond,
             self::Security => QRShape::Shield,
             self::HomeownerStaff => QRShape::HouseHex,
+            self::Visitor => QRShape::Circle,
+            self::Contractor => QRShape::Pentagon,
         };
+    }
+
+    /**
+     * Visitors and contractors are passes for a person without an account,
+     * issued for a stay with a start and an end.
+     */
+    public function isGuest(): bool
+    {
+        return $this === self::Visitor || $this === self::Contractor;
+    }
+
+    /** Contractors are let in to work, so security or an admin approves them first. */
+    public function requiresApproval(): bool
+    {
+        return $this === self::Contractor;
     }
 
     /** Pass ID prefix, per formatPassId() in the original engine. */
@@ -39,6 +63,8 @@ enum PassCategory: string
             self::Staff => 'GP-STF',
             self::Security => 'GP-SEC',
             self::HomeownerStaff => 'GP-HST',
+            self::Visitor => 'GP-VIS',
+            self::Contractor => 'GP-CON',
         };
     }
 
@@ -49,7 +75,8 @@ enum PassCategory: string
             self::SysAdmin => 'ZONE-ROOT-CORE',
             self::Security => 'ZONE-ALL-PERIMETER',
             self::Admin => 'ZONE-ADMIN-COMMON',
-            self::Staff => 'ZONE-FACILITIES-WORKSHOP',
+            self::Staff, self::Contractor => 'ZONE-FACILITIES-WORKSHOP',
+            self::Visitor => 'ZONE-HOST-RESIDENCE',
             default => 'ZONE-RESIDENTIAL-AMENITIES',
         };
     }

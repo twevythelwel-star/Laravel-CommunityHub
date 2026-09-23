@@ -2,10 +2,13 @@
 
 namespace Database\Seeders;
 
+use App\Enums\PassStatus;
+use App\Enums\VisitorStatus;
 use App\Models\Renter;
 use App\Models\Staff;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Services\GatePassEngine;
 use Illuminate\Database\Seeder;
 
 /**
@@ -106,11 +109,28 @@ class DirectorySeeder extends Seeder
             ],
         ];
 
+        $engine = app(GatePassEngine::class);
+
         foreach ($visitors as $visitor) {
-            Visitor::updateOrCreate(
+            $record = Visitor::updateOrCreate(
                 ['name' => $visitor['name'], 'homeowner_name' => $visitor['homeowner_name']],
                 $visitor,
             );
+
+            // Each seeded visitor gets a gate pass in the state their visit is in.
+            if ($record->homeowner && ! $record->gatePass) {
+                $pass = $engine->issueGuestPass($record, $record->homeowner);
+
+                $steps = match ($record->status) {
+                    VisitorStatus::CheckedIn => [PassStatus::Active, PassStatus::CheckedIn],
+                    VisitorStatus::CheckedOut => [PassStatus::Active, PassStatus::CheckedIn, PassStatus::CheckedOut],
+                    default => [],
+                };
+
+                foreach ($steps as $step) {
+                    $pass->transitionTo($step, reason: 'Seeded');
+                }
+            }
         }
 
         $staff = [

@@ -52,6 +52,9 @@ export function getShapeClipPath(shape: QRShape): string {
     case 'HOUSE_HEX':
       // Custom hex/house hybrid frame for homeowner staff
       return 'polygon(50% 0%, 100% 28%, 100% 75%, 75% 100%, 25% 100%, 0% 75%, 0% 28%)';
+    case 'PENTAGON':
+      // Regular pentagon for approved contractors
+      return 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
     default:
       return 'none';
   }
@@ -110,6 +113,12 @@ export function CategoryShapeIcon({ shape, className, color }: { shape: QRShape;
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle}>
           <polygon points="12 2 22 8 22 18 17 22 7 22 2 18 2 8 12 2" fill="currentColor" fillOpacity="0.15" />
+        </svg>
+      );
+    case 'PENTAGON':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle}>
+          <polygon points="12 2 22 9.5 18 22 6 22 2 9.5 12 2" fill="currentColor" fillOpacity="0.15" />
         </svg>
       );
     default:

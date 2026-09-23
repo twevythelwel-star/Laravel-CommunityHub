@@ -44,6 +44,14 @@ class BlocklistEntry extends Model
         return $this->isPermanent() || $this->expiry_date->isFuture();
     }
 
+    /** Whether an entry in force names this person (case- and space-insensitive). */
+    public static function blocks(string $name): bool
+    {
+        return static::inForce()
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($name))])
+            ->exists();
+    }
+
     public function scopeInForce($query)
     {
         return $query->where(function ($q) {

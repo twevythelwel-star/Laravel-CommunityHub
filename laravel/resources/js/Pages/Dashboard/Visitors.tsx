@@ -50,6 +50,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { VisitorIdModal } from '@/components/dashboard/visitor-id-modal';
 import { EditVisitorForm } from '@/components/dashboard/edit-visitor-form';
 import { GateQrCameraScanner } from '@/components/dashboard/gate-qr-camera-scanner';
+import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
+import { CATEGORY_SHAPES } from '@/lib/gate-pass-engine/config';
+import type { PassCategory, PassStatus } from '@/lib/gate-pass-engine/types';
 import type { VisitorStatus } from '@/types';
 
 type VisitorRow = {
@@ -75,7 +78,29 @@ type VisitorRow = {
   notify_email?: boolean;
   notify_sms?: boolean;
   notify_whatsapp?: boolean;
+  /** The visitor's gate pass. Absent for visitors registered before passes existed. */
+  pass?: VisitorPass | null;
 };
+
+type VisitorPass = {
+  id: number;
+  passId: string;
+  category: PassCategory;
+  status: PassStatus;
+  statusLabel: string;
+  validFrom: string | null;
+  validUntil: string | null;
+  singleEntry: boolean;
+  color: { hex: string; name: string };
+  /** The lifecycle moves this viewer may make, decided by the server. */
+  actions: { status: PassStatus; label: string }[];
+};
+
+/** Passes whose holder cannot be admitted right now, whatever the button says. */
+const NOT_ADMISSIBLE: PassStatus[] = ['REQUESTED', 'APPROVED', 'REJECTED', 'CANCELLED', 'REVOKED', 'EXPIRED', 'SUSPENDED'];
+
+/** Moves that must say why. */
+const NEEDS_REASON: PassStatus[] = ['REJECTED', 'SUSPENDED', 'REVOKED'];
 
 type Paginated<T> = {
   data: T[];
@@ -176,6 +201,7 @@ export default function VisitorsPage({
     notify_email: true,
     notify_sms: false,
     notify_whatsapp: false,
+    pass_category: 'VISITOR' as 'VISITOR' | 'CONTRACTOR',
   });
 
   const submitRegistration = (e: React.FormEvent) => {
@@ -204,16 +230,45 @@ export default function VisitorsPage({
     form.post('/dashboard/visitors', {
       preserveScroll: true,
       onSuccess: () => {
+        const isContractor = form.data.pass_category === 'CONTRACTOR';
         form.reset();
         setDialogOpen(false);
         toast({
-          title: 'Visitor Registered',
-          description: 'The gatehouse can now clear this visitor on arrival.',
+          title: isContractor ? 'Contractor Registered' : 'Visitor Registered',
+          description: isContractor
+            ? 'Their pass is waiting for security approval. It will be sent once approved.'
+            : 'Their pass has been issued. The gatehouse will scan it on arrival.',
         });
       },
       // A blocklist hit comes back as a validation error on `name`, so it is
       // surfaced inline by the field rather than swallowed.
     });
+  };
+
+  /** Approve, reject, suspend, reinstate, cancel or revoke a pass. */
+  const transitionPass = (visitor: VisitorRow, to: PassStatus, label: string) => {
+    if (!visitor.pass) return;
+
+    let reason: string | null = null;
+    if (NEEDS_REASON.includes(to)) {
+      reason = window.prompt(`${label} the pass for ${visitor.name}. Reason (required):`);
+      if (!reason || reason.trim() === '') return;
+    }
+
+    router.post(
+      `/dashboard/gate-pass/${visitor.pass.id}/transition`,
+      { status: to, reason },
+      {
+        preserveScroll: true,
+        onSuccess: () => toast({ title: 'Pass updated', description: `${visitor.name}: ${label.toLowerCase()} done.` }),
+        onError: (errors) =>
+          toast({
+            variant: 'destructive',
+            title: 'Pass not updated',
+            description: errors.status ?? errors.reason ?? 'The server refused the change.',
+          }),
+      },
+    );
   };
 
   const changeStatus = (visitor: VisitorRow, action: 'check-in' | 'check-out') => {
@@ -542,6 +597,27 @@ export default function VisitorsPage({
                             <Label htmlFor="r2">Recurring</Label>
                           </div>
                         </RadioGroup>
+                      </div>
+
+                      <div className="grid grid-cols-4 items-start gap-4">
+                        <Label className="text-right pt-0.5">Pass Profile</Label>
+                        <div className="col-span-3 space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id="is_contractor"
+                              checked={form.data.pass_category === 'CONTRACTOR'}
+                              onChange={(e) => form.setData('pass_category', e.target.checked ? 'CONTRACTOR' : 'VISITOR')}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                            <Label htmlFor="is_contractor" className="text-sm font-normal cursor-pointer">
+                              Contractor or tradesperson
+                            </Label>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Contractors need security approval before their pass is sent, and are admitted during working hours only.
+                          </p>
+                        </div>
                       </div>
 
                       {form.data.type === 'One-time' && (
@@ -1042,6 +1118,41 @@ export default function VisitorsPage({
                       >
                         {visitor.status === 'Checked In' ? 'Inside' : visitor.status}
                       </Badge>
+                      {visitor.pass && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                          <CategoryShapeIcon
+                            shape={CATEGORY_SHAPES[visitor.pass.category]}
+                            className="h-3.5 w-3.5 shrink-0"
+                            color={visitor.pass.color.hex}
+                          />
+                          <span className="font-mono">{visitor.pass.passId}</span>
+                          <span aria-hidden>·</span>
+                          <span className={cn(NOT_ADMISSIBLE.includes(visitor.pass.status) && 'text-destructive font-semibold')}>
+                            {visitor.pass.statusLabel}
+                          </span>
+                          {visitor.pass.actions.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[11px]">
+                                  Pass ▾<span className="sr-only"> actions for {visitor.name}</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="start">
+                                <DropdownMenuLabel>Pass {visitor.pass.passId}</DropdownMenuLabel>
+                                {visitor.pass.actions.map((action) => (
+                                  <DropdownMenuItem
+                                    key={action.status}
+                                    className={cn(['REJECTED', 'REVOKED', 'CANCELLED'].includes(action.status) && 'text-destructive')}
+                                    onClick={() => transitionPass(visitor, action.status, action.label)}
+                                  >
+                                    {action.label}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
 
                     {/* Column 5: Time */}
@@ -1060,7 +1171,8 @@ export default function VisitorsPage({
                             disabled={
                               visitor.isBlocked ||
                               visitor.expired ||
-                              visitor.status === 'Checked Out'
+                              (visitor.status !== 'Checked In' && visitor.pass != null && NOT_ADMISSIBLE.includes(visitor.pass.status)) ||
+                              (visitor.status === 'Checked Out' && (visitor.pass == null || visitor.pass.singleEntry))
                             }
                             className={cn(
                               'h-8 px-3 text-xs font-bold',

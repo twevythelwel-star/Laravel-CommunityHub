@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Enums\DenyReason;
 use App\Enums\GateId;
 use App\Enums\PassCategory;
+use App\Enums\PassStatus;
 use App\Enums\ValidationStatus;
 use App\Models\GatePass;
 use App\Models\User;
@@ -51,7 +52,7 @@ class GatePassEngineTest extends TestCase
             'access_zone' => $category->defaultZone(),
             'designated_gate' => GateId::Any,
             'rotation_seq' => 1,
-            'status' => 'Active',
+            'status' => PassStatus::Active,
         ]);
     }
 

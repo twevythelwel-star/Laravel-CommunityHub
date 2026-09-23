@@ -10,17 +10,37 @@ export type PassCategory =
   | 'RENTER' 
   | 'STAFF' 
   | 'SECURITY' 
-  | 'HOMEOWNER_STAFF';
+  | 'HOMEOWNER_STAFF'
+  | 'VISITOR'
+  | 'CONTRACTOR';
 
 export type QRShape = 
   | 'STAR_8'          // ⭐ 8-point / star frame (Highest administrative tier)
   | 'OCTAGON'         // 🛡️ Octagonal frame (Property administration)
   | 'HEXAGON'         // ⬡ Hexagonal frame (Property owner)
   | 'ROUNDED_SQUARE'  // ▢ Rounded square frame (Resident/renter)
-  | 'CIRCLE'          // ◉ Rounded-circle frame (Legacy/alternate renter)
+  | 'CIRCLE'          // ◉ Circle frame (Registered visitor)
   | 'DIAMOND'         // ◆ Diamond frame (Community staff)
   | 'SHIELD'          // 🛡 Shield frame (Security personnel)
-  | 'HOUSE_HEX';      // ⬢ Custom hex/house frame (Staff assigned to homeowner)
+  | 'HOUSE_HEX'       // ⬢ Custom hex/house frame (Staff assigned to homeowner)
+  | 'PENTAGON';       // ⬟ Pentagon frame (Approved contractor)
+
+/** Where a pass is in its life. Mirrors App\Enums\PassStatus. */
+export type PassStatus =
+  | 'REQUESTED'
+  | 'APPROVED'
+  | 'ISSUED'
+  | 'ACTIVE'
+  | 'CHECKED_IN'
+  | 'CHECKED_OUT'
+  | 'REJECTED'
+  | 'CANCELLED'
+  | 'REVOKED'
+  | 'EXPIRED'
+  | 'SUSPENDED';
+
+/** What the server tells the guard to do with a scan. */
+export type ScanDecision = 'CHECK_IN' | 'CHECK_OUT' | 'REJECT';
 
 export type GateId = 'GATE-01' | 'GATE-02' | 'GATE-ANY';
 
@@ -137,6 +157,10 @@ export interface ValidationStageResult {
 
 export interface GatePassValidationReport {
   status: ValidationStatus;
+  /** What the guard should do. Decided by the server from the pass's state. */
+  decision?: ScanDecision;
+  denyReason?: string | null;
+  passStatus?: PassStatus | null;
   primaryReason: string;
   category: PassCategory;
   shape: QRShape;
@@ -159,6 +183,17 @@ export interface GatePassValidationReport {
     cryptographicSignature: boolean;
     physicalGateAuth: boolean;
     temporalTimeAuth: boolean;
+    communityMatch?: boolean;
+    passRegistered?: boolean;
+    profileMatch?: boolean;
+    personMatch?: boolean;
+    propertyMatch?: boolean;
+    notRevoked?: boolean;
+    statusEligible?: boolean;
+    validityPeriod?: boolean;
+    personVerified?: boolean;
+    replayFree?: boolean;
+    zoneAuth?: boolean;
   };
   visualIdentity?: {
     shape: QRShape;

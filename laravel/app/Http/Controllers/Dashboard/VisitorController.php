@@ -2,14 +2,22 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Enums\GateId;
+use App\Enums\PassCategory;
+use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
 use App\Events\VisitorCheckedInEvent;
+use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
+use App\Models\GatePass;
 use App\Models\Renter;
+use App\Models\User;
 use App\Models\Visitor;
+use App\Services\GatePassEngine;
+use App\Services\GateScanner;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +33,11 @@ use Inertia\Response;
  */
 class VisitorController extends Controller
 {
+    public function __construct(
+        private readonly GatePassEngine $engine,
+        private readonly GateScanner $scanner,
+    ) {}
+
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -65,7 +78,7 @@ class VisitorController extends Controller
 
         // Query visitors based on active sub-navigation tab
         $query = Visitor::query()
-            ->with('homeowner:id,name,display_name,lot,street')
+            ->with(['homeowner:id,name,display_name,lot,street', 'gatePass'])
             ->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id))
             ->when($request->string('search')->isNotEmpty(),
                 fn ($q) => $q->where('name', 'like', '%'.$request->string('search').'%'));
@@ -103,7 +116,7 @@ class VisitorController extends Controller
             ->latest('expected_at')
             ->paginate(25)
             ->withQueryString()
-            ->through(function (Visitor $v) {
+            ->through(function (Visitor $v) use ($request) {
                 $hostLot = null;
                 if ($v->homeowner && filled($v->homeowner->lot)) {
                     $hostLot = '#'.ltrim($v->homeowner->lot, '#');
@@ -143,6 +156,7 @@ class VisitorController extends Controller
                     'notify_email' => $v->notify_email,
                     'notify_sms' => $v->notify_sms,
                     'notify_whatsapp' => $v->notify_whatsapp,
+                    'pass' => $v->gatePass ? $this->passPayload($v->gatePass, $request->user()) : null,
                 ];
             });
 
@@ -194,9 +208,13 @@ class VisitorController extends Controller
             'notify_email' => ['nullable', 'boolean'],
             'notify_sms' => ['nullable', 'boolean'],
             'notify_whatsapp' => ['nullable', 'boolean'],
+            // A contractor's pass waits for security to approve it.
+            'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
         ]);
 
         $user = $request->user();
+        $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
+        unset($validated['pass_category']);
 
         // Server-side stay timeframe enforcement for Temporary Homeowners
         if ($user->role === UserRole::TemporaryHomeowner) {
@@ -240,14 +258,19 @@ class VisitorController extends Controller
 
         $user->recordActivity("Registered visitor {$validated['name']}");
 
+        $pass = $this->engine->issueGuestPass($visitor, $user, $passCategory);
+
         // Send the pass on whichever chosen channels can actually deliver it.
+        // A contractor still awaiting approval is told once security approves.
         $channels = $visitor->passNotificationChannels();
 
-        if ($channels !== []) {
+        if ($channels !== [] && $pass->status !== PassStatus::Requested) {
             $visitor->sendPassNotification($channels);
         }
 
-        return back()->with('success', 'Visitor registered.');
+        return back()->with('success', $pass->status === PassStatus::Requested
+            ? 'Contractor registered. Their pass is waiting for security approval.'
+            : 'Visitor registered.');
     }
 
     public function update(Request $request, Visitor $visitor): RedirectResponse
@@ -301,6 +324,10 @@ class VisitorController extends Controller
 
         $visitor->update($validated);
 
+        if ($visitor->gatePass) {
+            $this->engine->syncGuestPass($visitor->gatePass, $visitor->fresh());
+        }
+
         return back()->with('success', 'Visitor updated.');
     }
 
@@ -340,6 +367,18 @@ class VisitorController extends Controller
             return back()->withErrors(['visitor' => 'Denied — this visitor is on the blocklist.']);
         }
 
+        // A visitor with a pass is checked in through it, so the pass rules
+        // (state, validity window) apply to the manual button too.
+        if ($visitor->gatePass) {
+            try {
+                $this->scanner->manualCheckIn($visitor->gatePass, $request->user(), $this->gateFrom($request));
+            } catch (ScanNotConfirmable $e) {
+                return back()->withErrors(['visitor' => "Not checked in: {$e->getMessage()}"]);
+            }
+
+            return back()->with('success', "{$visitor->name} checked in.");
+        }
+
         $visitor->checkIn();
 
         $gate = $request->string('gate')->toString() ?: 'Main Gate';
@@ -362,6 +401,16 @@ class VisitorController extends Controller
     public function checkOut(Request $request, Visitor $visitor): RedirectResponse
     {
         $this->authorize('manageSecurity');
+
+        if ($visitor->gatePass) {
+            try {
+                $this->scanner->manualCheckOut($visitor->gatePass, $request->user(), $this->gateFrom($request));
+            } catch (ScanNotConfirmable $e) {
+                return back()->withErrors(['visitor' => "Not checked out: {$e->getMessage()}"]);
+            }
+
+            return back()->with('success', "{$visitor->name} checked out.");
+        }
 
         $visitor->checkOut();
 
@@ -399,8 +448,53 @@ class VisitorController extends Controller
 
     private function isOnBlocklist(string $name): bool
     {
-        return BlocklistEntry::inForce()
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($name))])
-            ->exists();
+        return BlocklistEntry::blocks($name);
+    }
+
+    /** The page sends a gate id or a gate name; anything unknown is the main gate. */
+    private function gateFrom(Request $request): GateId
+    {
+        $gate = $request->string('gate')->toString();
+
+        return GateId::tryFrom($gate)
+            ?? GateId::tryFrom((string) array_search($gate, config('gatepass.gates'), true))
+            ?? GateId::Gate01;
+    }
+
+    /**
+     * The pass as the Visitors page shows it, with the lifecycle moves this
+     * viewer may make. Check-in and check-out are not offered here; they go
+     * through the scanner or the check-in buttons.
+     *
+     * @return array<string, mixed>
+     */
+    private function passPayload(GatePass $pass, User $viewer): array
+    {
+        $isSecurity = $viewer->can('manageSecurity');
+        $manual = [PassStatus::Approved, PassStatus::Rejected, PassStatus::Suspended, PassStatus::Active, PassStatus::Cancelled, PassStatus::Revoked];
+
+        $actions = array_values(array_filter($manual, fn (PassStatus $to) => $pass->canTransitionTo($to)
+            && ($isSecurity || ($to === PassStatus::Cancelled && $pass->visitor?->homeowner_id === $viewer->id))));
+
+        return [
+            'id' => $pass->id,
+            'passId' => $pass->pass_id,
+            'category' => $pass->category->value,
+            'status' => $pass->status->value,
+            'statusLabel' => $pass->status->label(),
+            'validFrom' => $pass->valid_from?->toIso8601String(),
+            'validUntil' => $pass->valid_until?->toIso8601String(),
+            'singleEntry' => $pass->single_entry,
+            'color' => $this->engine->variantFor($pass),
+            'actions' => array_map(fn (PassStatus $s) => ['status' => $s->value, 'label' => match ($s) {
+                PassStatus::Approved => 'Approve',
+                PassStatus::Rejected => 'Reject',
+                PassStatus::Suspended => 'Suspend',
+                PassStatus::Active => 'Reinstate',
+                PassStatus::Cancelled => 'Cancel pass',
+                PassStatus::Revoked => 'Revoke',
+                default => $s->label(),
+            }], $actions),
+        ];
     }
 }

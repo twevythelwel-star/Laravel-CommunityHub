@@ -40,6 +40,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // the access-log entry, so a scanner cannot record an entry it did not verify.
     Route::post('/gate-pass/validate', [GatePassApiController::class, 'validateToken'])
         ->middleware('can:scanPasses');
+    Route::post('/gate-pass/scans/{scan}/confirm', [GatePassApiController::class, 'confirmScan'])
+        ->middleware(['can:scanPasses', 'throttle:60,1'])
+        ->whereUuid('scan');
 
     // ── Visitors ──
     Route::get('/visitors', [VisitorApiController::class, 'index']);

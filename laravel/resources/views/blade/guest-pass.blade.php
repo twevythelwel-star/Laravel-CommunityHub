@@ -17,18 +17,23 @@
 
         {{-- QR Code & Pass Content --}}
         <div class="p-6 text-center space-y-6">
-            {{-- Dynamic QR Box --}}
+            {{--
+              Live gate code: a signed token that changes every few seconds, so a
+              screenshot stops working. Rendered on this server; nothing about
+              the pass is sent to a third party.
+            --}}
             <div class="mx-auto w-56 h-56 p-3 bg-white rounded-xl shadow-inner border border-slate-200 flex flex-col items-center justify-center">
-                {{-- SVG QR Code representation with fallback --}}
-                <img 
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=190x190&data={{ urlencode(route('guest-pass.show', $visitor->share_token)) }}" 
-                    alt="Guest Pass QR Code" 
-                    class="w-full h-full object-contain"
-                    width="190"
-                    height="190"
+                <img
+                    id="gate-code"
+                    src="{{ $code['qr'] ?? '' }}"
+                    alt="Live gate code"
+                    class="w-full h-full object-contain {{ $code['available'] ? '' : 'hidden' }}"
+                    width="200"
+                    height="200"
                 />
+                <p id="gate-code-message" class="text-sm text-slate-600 px-2 {{ $code['available'] ? 'hidden' : '' }}">{{ $code['message'] }}</p>
             </div>
-            <p class="text-xs text-muted-foreground">Scan at gatehouse scanner upon entry</p>
+            <p class="text-xs text-muted-foreground">Show this live code to the gatehouse scanner. It refreshes automatically; screenshots will not work.</p>
 
             {{-- Pass Details Grid --}}
             <div class="grid grid-cols-2 gap-3 text-left border-y border-border/60 py-4 text-sm">
@@ -97,4 +102,34 @@
         </div>
     </div>
 </div>
+
+<script>
+    (function () {
+        var img = document.getElementById('gate-code');
+        var message = document.getElementById('gate-code-message');
+        var url = @json(route('guest-pass.code', $visitor->share_token));
+
+        function refresh() {
+            fetch(url, { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (code) {
+                    if (!code) { return; }
+                    if (code.available) {
+                        img.src = code.qr;
+                        img.classList.remove('hidden');
+                        message.classList.add('hidden');
+                    } else {
+                        img.classList.add('hidden');
+                        message.textContent = code.message;
+                        message.classList.remove('hidden');
+                    }
+                })
+                .catch(function () {});
+        }
+
+        // Codes are aligned to fixed time slots, so poll at a third of the slot
+        // length: the code on screen is never more than a few seconds stale.
+        setInterval(refresh, {{ max(5, intdiv((int) config('gatepass.window_seconds', 30), 3)) * 1000 }});
+    })();
+</script>
 @endsection

@@ -18,4 +18,11 @@ enum DenyReason: string
     case OutsideHours = 'OUTSIDE_PERMITTED_HOURS';
     case UnauthorizedGate = 'UNAUTHORIZED_GATE';
     case UserNotActive = 'USER_NOT_ACTIVE';
+    case UnknownPass = 'PASS_NOT_REGISTERED';
+    case ClaimMismatch = 'PASS_CLAIM_MISMATCH';
+    case PassSuperseded = 'PASS_SUPERSEDED';
+    case OutsideValidity = 'OUTSIDE_PASS_VALIDITY';
+    case PassNotUsable = 'PASS_NOT_USABLE';
+    case HolderBlocked = 'HOLDER_BLOCKLISTED';
+    case UnauthorizedZone = 'UNAUTHORIZED_ZONE';
 }

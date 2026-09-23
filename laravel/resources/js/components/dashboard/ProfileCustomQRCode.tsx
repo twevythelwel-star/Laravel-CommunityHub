@@ -159,7 +159,7 @@ export function ProfileCustomQRCode({
           </g>
         );
 
-      case 'CIRCLE': // Renter concentric circle
+      case 'CIRCLE': // Visitor concentric circle
         return (
           <g transform={`translate(${centerX}, ${centerY})`}>
             <circle cx="0" cy="0" r={radius} fill="#FFFFFF" />
@@ -191,6 +191,15 @@ export function ProfileCustomQRCode({
             />
             {/* Inner Crest Star / Leaf */}
             <circle cx="0" cy="0" r="0.9" fill={accentColor} />
+          </g>
+        );
+
+      case 'PENTAGON': // Contractor pentagon
+        return (
+          <g transform={`translate(${centerX}, ${centerY})`}>
+            <circle cx="0" cy="0" r={radius} fill="#FFFFFF" />
+            <polygon points="0,-2.6 2.5,-0.8 1.55,2.2 -1.55,2.2 -2.5,-0.8" fill={themeColor} stroke="#FFFFFF" strokeWidth="0.35" />
+            <circle cx="0" cy="0.1" r="0.85" fill={accentColor} />
           </g>
         );
 

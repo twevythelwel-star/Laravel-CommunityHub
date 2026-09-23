@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\PassStatus;
 use App\Models\Visitor;
 use Illuminate\Console\Command;
 
@@ -66,6 +67,16 @@ class ExpireNoShowVisitors extends Command
          * no-shows drop out of the gate queue and the dashboard counts without
          * anything claiming they were admitted.
          */
+        // The pass goes with the clearance, so the code on the visitor's phone
+        // stops working at the same moment the clearance lapses.
+        $stale->each(function (Visitor $visitor) {
+            $pass = $visitor->gatePass;
+
+            if ($pass?->canTransitionTo(PassStatus::Expired)) {
+                $pass->transitionTo(PassStatus::Expired, reason: 'No-show: arrival grace period passed');
+            }
+        });
+
         $count = Visitor::noShow($hours)->update(['expired_at' => now()]);
 
         $this->info(sprintf('Expired %d visitor clearance(s) past the %d-hour grace period.', $count, $hours));

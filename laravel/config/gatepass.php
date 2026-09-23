@@ -39,6 +39,38 @@ return [
     ],
 
     /*
+     | Which access zones each gate admits into. A pass's zone must be served
+     | by the gate it is scanned at: the service gate is for staff, contractors
+     | and security, so a visitor is sent to the main gate.
+     */
+    'gate_zones' => [
+        'GATE-01' => [
+            'ZONE-ROOT-CORE', 'ZONE-ALL-PERIMETER', 'ZONE-ADMIN-COMMON',
+            'ZONE-FACILITIES-WORKSHOP', 'ZONE-RESIDENTIAL-AMENITIES', 'ZONE-HOST-RESIDENCE',
+        ],
+        'GATE-02' => [
+            'ZONE-ROOT-CORE', 'ZONE-ALL-PERIMETER', 'ZONE-ADMIN-COMMON',
+            'ZONE-FACILITIES-WORKSHOP', 'ZONE-RESIDENTIAL-AMENITIES',
+        ],
+    ],
+
+    /*
+     | When a visitor's or contractor's pass is valid, relative to the arrival
+     | time on the visitor record. A one-time pass opens an hour early and
+     | closes twelve hours after the expected arrival (the guest pass page has
+     | always treated a pass as lapsed after twelve hours). A recurring pass
+     | lasts thirty days and allows re-entry.
+     */
+    'guest_windows' => [
+        'opens_minutes_before' => 60,
+        'one_time_hours' => 12,
+        'recurring_days' => 30,
+    ],
+
+    /* How long a scanned decision waits for the guard to confirm it. */
+    'scan_confirm_seconds' => 120,
+
+    /*
     |---------------------------------------------------------------------------
     | Category visual configuration — shape identifies the profile, colour
     | identifies the access class.
@@ -136,6 +168,32 @@ return [
             'icon_name' => 'Sparkles',
             'description' => 'Private housekeeper, nanny or gardener assigned strictly to designated homeowner residence.',
         ],
+
+        'VISITOR' => [
+            'display_name' => 'Registered Visitor',
+            'shape' => 'CIRCLE',
+            'shape_label' => 'Visitor Circle Frame',
+            'theme_color' => '#0369A1',
+            'contrast_bg' => '#0C4A6E',
+            'accent_color' => '#38BDF8',
+            'badge_border' => 'border-sky-500/40',
+            'gradient' => 'from-sky-700 via-cyan-900 to-slate-950',
+            'icon_name' => 'UserCheck',
+            'description' => 'Guest registered by a resident, valid for the stay the host booked and admitted through the main gate.',
+        ],
+
+        'CONTRACTOR' => [
+            'display_name' => 'Approved Contractor',
+            'shape' => 'PENTAGON',
+            'shape_label' => 'Contractor Pentagon Frame',
+            'theme_color' => '#854D0E',
+            'contrast_bg' => '#422006',
+            'accent_color' => '#FACC15',
+            'badge_border' => 'border-yellow-500/40',
+            'gradient' => 'from-yellow-800 via-amber-900 to-slate-950',
+            'icon_name' => 'HardHat',
+            'description' => 'Tradesperson or service provider approved by estate security, admitted during working hours only.',
+        ],
     ],
 
     /*
@@ -147,59 +205,75 @@ return [
     'palettes' => [
 
         'HOMEOWNER' => [
-            ['id' => 'ho_blue',   'name' => 'Deep Royal Blue',           'hex' => '#1D4ED8', 'accent_hex' => '#60A5FA', 'contrast_ratio' => 7.1, 'wcag_pass' => true],
-            ['id' => 'ho_teal',   'name' => 'Caribbean Coastal Teal',    'hex' => '#0F766E', 'accent_hex' => '#2DD4BF', 'contrast_ratio' => 6.2, 'wcag_pass' => true],
-            ['id' => 'ho_green',  'name' => 'Emerald Palm Green',        'hex' => '#15803D', 'accent_hex' => '#4ADE80', 'contrast_ratio' => 5.6, 'wcag_pass' => true],
-            ['id' => 'ho_purple', 'name' => 'Imperial Estate Purple',    'hex' => '#7E22CE', 'accent_hex' => '#C084FC', 'contrast_ratio' => 6.9, 'wcag_pass' => true],
-            ['id' => 'ho_gold',   'name' => 'Prestige Sovereign Gold',   'hex' => '#B45309', 'accent_hex' => '#FBBF24', 'contrast_ratio' => 5.1, 'wcag_pass' => true],
+            ['id' => 'ho_blue',   'name' => 'Deep Royal Blue',           'hex' => '#1D4ED8', 'accent_hex' => '#60A5FA', 'contrast_ratio' => 6.7, 'wcag_pass' => true],
+            ['id' => 'ho_teal',   'name' => 'Caribbean Coastal Teal',    'hex' => '#0F766E', 'accent_hex' => '#2DD4BF', 'contrast_ratio' => 5.5, 'wcag_pass' => true],
+            ['id' => 'ho_green',  'name' => 'Emerald Palm Green',        'hex' => '#15803D', 'accent_hex' => '#4ADE80', 'contrast_ratio' => 5.0, 'wcag_pass' => true],
+            ['id' => 'ho_purple', 'name' => 'Imperial Estate Purple',    'hex' => '#7E22CE', 'accent_hex' => '#C084FC', 'contrast_ratio' => 7.0, 'wcag_pass' => true],
+            ['id' => 'ho_gold',   'name' => 'Prestige Sovereign Gold',   'hex' => '#B45309', 'accent_hex' => '#FBBF24', 'contrast_ratio' => 5.0, 'wcag_pass' => true],
         ],
 
         'RENTER' => [
-            ['id' => 'ren_orange', 'name' => 'Sunset Amber Orange',      'hex' => '#C2410C', 'accent_hex' => '#FB923C', 'contrast_ratio' => 5.4, 'wcag_pass' => true],
+            ['id' => 'ren_orange', 'name' => 'Sunset Amber Orange',      'hex' => '#C2410C', 'accent_hex' => '#FB923C', 'contrast_ratio' => 5.2, 'wcag_pass' => true],
             ['id' => 'ren_coral',  'name' => 'Coral Rose Crimson',       'hex' => '#BE123C', 'accent_hex' => '#FB7185', 'contrast_ratio' => 6.3, 'wcag_pass' => true],
-            ['id' => 'ren_purple', 'name' => 'Vibrant Violet Purple',    'hex' => '#6B21A8', 'accent_hex' => '#A855F7', 'contrast_ratio' => 8.4, 'wcag_pass' => true],
-            ['id' => 'ren_teal',   'name' => 'Lagoon Maritime Teal',     'hex' => '#0F766E', 'accent_hex' => '#2DD4BF', 'contrast_ratio' => 6.2, 'wcag_pass' => true],
-            ['id' => 'ren_blue',   'name' => 'Cobalt Harbor Blue',       'hex' => '#1E40AF', 'accent_hex' => '#60A5FA', 'contrast_ratio' => 8.2, 'wcag_pass' => true],
+            ['id' => 'ren_purple', 'name' => 'Vibrant Violet Purple',    'hex' => '#6B21A8', 'accent_hex' => '#A855F7', 'contrast_ratio' => 8.7, 'wcag_pass' => true],
+            ['id' => 'ren_teal',   'name' => 'Lagoon Maritime Teal',     'hex' => '#0F766E', 'accent_hex' => '#2DD4BF', 'contrast_ratio' => 5.5, 'wcag_pass' => true],
+            ['id' => 'ren_blue',   'name' => 'Cobalt Harbor Blue',       'hex' => '#1E40AF', 'accent_hex' => '#60A5FA', 'contrast_ratio' => 8.7, 'wcag_pass' => true],
         ],
 
         'STAFF' => [
-            ['id' => 'stf_green',  'name' => 'Forest Operations Green',  'hex' => '#166534', 'accent_hex' => '#4ADE80', 'contrast_ratio' => 7.2, 'wcag_pass' => true],
-            ['id' => 'stf_blue',   'name' => 'Engineering Cobalt Blue',  'hex' => '#0369A1', 'accent_hex' => '#38BDF8', 'contrast_ratio' => 5.8, 'wcag_pass' => true],
-            ['id' => 'stf_orange', 'name' => 'Industrial Safety Orange', 'hex' => '#EA580C', 'accent_hex' => '#FDBA74', 'contrast_ratio' => 5.1, 'wcag_pass' => true],
-            ['id' => 'stf_violet', 'name' => 'Facilities Deep Violet',   'hex' => '#581C87', 'accent_hex' => '#C084FC', 'contrast_ratio' => 9.8, 'wcag_pass' => true],
+            ['id' => 'stf_green',  'name' => 'Forest Operations Green',  'hex' => '#166534', 'accent_hex' => '#4ADE80', 'contrast_ratio' => 7.1, 'wcag_pass' => true],
+            ['id' => 'stf_blue',   'name' => 'Engineering Cobalt Blue',  'hex' => '#0369A1', 'accent_hex' => '#38BDF8', 'contrast_ratio' => 5.9, 'wcag_pass' => true],
+            ['id' => 'stf_orange', 'name' => 'Industrial Safety Orange', 'hex' => '#C2410C', 'accent_hex' => '#FDBA74', 'contrast_ratio' => 5.2, 'wcag_pass' => true],
+            ['id' => 'stf_violet', 'name' => 'Facilities Deep Violet',   'hex' => '#581C87', 'accent_hex' => '#C084FC', 'contrast_ratio' => 10.9, 'wcag_pass' => true],
             ['id' => 'stf_teal',   'name' => 'Service Marine Teal',      'hex' => '#115E59', 'accent_hex' => '#5EEAD4', 'contrast_ratio' => 7.6, 'wcag_pass' => true],
         ],
 
         'SYSADMIN' => [
-            ['id' => 'sys_indigo',  'name' => 'Royal Cyber Indigo',       'hex' => '#3730A3', 'accent_hex' => '#818CF8', 'contrast_ratio' => 9.2,  'wcag_pass' => true],
-            ['id' => 'sys_violet',  'name' => 'Deep Root Violet',         'hex' => '#4C1D95', 'accent_hex' => '#A78BFA', 'contrast_ratio' => 10.1, 'wcag_pass' => true],
-            ['id' => 'sys_gold',    'name' => 'Radiant Sovereign Gold',   'hex' => '#92400E', 'accent_hex' => '#FCD34D', 'contrast_ratio' => 6.1,  'wcag_pass' => true],
-            ['id' => 'sys_blue',    'name' => 'Midnight Electric Blue',   'hex' => '#1E3A8A', 'accent_hex' => '#60A5FA', 'contrast_ratio' => 9.8,  'wcag_pass' => true],
-            ['id' => 'sys_crimson', 'name' => 'Secure Kernel Crimson',    'hex' => '#991B1B', 'accent_hex' => '#F87171', 'contrast_ratio' => 7.5,  'wcag_pass' => true],
+            ['id' => 'sys_indigo',  'name' => 'Royal Cyber Indigo',       'hex' => '#3730A3', 'accent_hex' => '#818CF8', 'contrast_ratio' => 9.9,  'wcag_pass' => true],
+            ['id' => 'sys_violet',  'name' => 'Deep Root Violet',         'hex' => '#4C1D95', 'accent_hex' => '#A78BFA', 'contrast_ratio' => 11.0, 'wcag_pass' => true],
+            ['id' => 'sys_gold',    'name' => 'Radiant Sovereign Gold',   'hex' => '#92400E', 'accent_hex' => '#FCD34D', 'contrast_ratio' => 7.1,  'wcag_pass' => true],
+            ['id' => 'sys_blue',    'name' => 'Midnight Electric Blue',   'hex' => '#1E3A8A', 'accent_hex' => '#60A5FA', 'contrast_ratio' => 10.4,  'wcag_pass' => true],
+            ['id' => 'sys_crimson', 'name' => 'Secure Kernel Crimson',    'hex' => '#991B1B', 'accent_hex' => '#F87171', 'contrast_ratio' => 8.3,  'wcag_pass' => true],
         ],
 
         'ADMIN' => [
-            ['id' => 'adm_cyan',    'name' => 'Administrative Cyan Teal', 'hex' => '#0E7490', 'accent_hex' => '#22D3EE', 'contrast_ratio' => 5.9, 'wcag_pass' => true],
-            ['id' => 'adm_emerald', 'name' => 'Executive Emerald',        'hex' => '#047857', 'accent_hex' => '#34D399', 'contrast_ratio' => 6.4, 'wcag_pass' => true],
-            ['id' => 'adm_navy',    'name' => 'Prestige Estate Navy',     'hex' => '#1E3A8A', 'accent_hex' => '#93C5FD', 'contrast_ratio' => 9.8, 'wcag_pass' => true],
-            ['id' => 'adm_amber',   'name' => 'Director Bronze Amber',    'hex' => '#B45309', 'accent_hex' => '#FDE047', 'contrast_ratio' => 5.1, 'wcag_pass' => true],
-            ['id' => 'adm_cobalt',  'name' => 'Sovereign Cobalt',         'hex' => '#1D4ED8', 'accent_hex' => '#93C5FD', 'contrast_ratio' => 7.1, 'wcag_pass' => true],
+            ['id' => 'adm_cyan',    'name' => 'Administrative Cyan Teal', 'hex' => '#0E7490', 'accent_hex' => '#22D3EE', 'contrast_ratio' => 5.4, 'wcag_pass' => true],
+            ['id' => 'adm_emerald', 'name' => 'Executive Emerald',        'hex' => '#047857', 'accent_hex' => '#34D399', 'contrast_ratio' => 5.5, 'wcag_pass' => true],
+            ['id' => 'adm_navy',    'name' => 'Prestige Estate Navy',     'hex' => '#1E3A8A', 'accent_hex' => '#93C5FD', 'contrast_ratio' => 10.4, 'wcag_pass' => true],
+            ['id' => 'adm_amber',   'name' => 'Director Bronze Amber',    'hex' => '#B45309', 'accent_hex' => '#FDE047', 'contrast_ratio' => 5.0, 'wcag_pass' => true],
+            ['id' => 'adm_cobalt',  'name' => 'Sovereign Cobalt',         'hex' => '#1D4ED8', 'accent_hex' => '#93C5FD', 'contrast_ratio' => 6.7, 'wcag_pass' => true],
         ],
 
         'SECURITY' => [
-            ['id' => 'sec_midnight', 'name' => 'Tactical Midnight Blue',     'hex' => '#1E1B4B', 'accent_hex' => '#6366F1', 'contrast_ratio' => 12.4, 'wcag_pass' => true],
-            ['id' => 'sec_emerald',  'name' => 'Perimeter Forest Emerald',   'hex' => '#064E3B', 'accent_hex' => '#34D399', 'contrast_ratio' => 11.2, 'wcag_pass' => true],
-            ['id' => 'sec_violet',   'name' => 'Enforcement Night Violet',   'hex' => '#4A044E', 'accent_hex' => '#E879F9', 'contrast_ratio' => 11.8, 'wcag_pass' => true],
-            ['id' => 'sec_slate',    'name' => 'Armored Steel Slate',        'hex' => '#334155', 'accent_hex' => '#94A3B8', 'contrast_ratio' => 8.2,  'wcag_pass' => true],
-            ['id' => 'sec_crimson',  'name' => 'Tactical Alert Crimson',     'hex' => '#881337', 'accent_hex' => '#F43F5E', 'contrast_ratio' => 8.9,  'wcag_pass' => true],
+            ['id' => 'sec_midnight', 'name' => 'Tactical Midnight Blue',     'hex' => '#1E1B4B', 'accent_hex' => '#6366F1', 'contrast_ratio' => 16.0, 'wcag_pass' => true],
+            ['id' => 'sec_emerald',  'name' => 'Perimeter Forest Emerald',   'hex' => '#064E3B', 'accent_hex' => '#34D399', 'contrast_ratio' => 9.7, 'wcag_pass' => true],
+            ['id' => 'sec_violet',   'name' => 'Enforcement Night Violet',   'hex' => '#4A044E', 'accent_hex' => '#E879F9', 'contrast_ratio' => 14.8, 'wcag_pass' => true],
+            ['id' => 'sec_slate',    'name' => 'Armored Steel Slate',        'hex' => '#334155', 'accent_hex' => '#94A3B8', 'contrast_ratio' => 10.4,  'wcag_pass' => true],
+            ['id' => 'sec_crimson',  'name' => 'Tactical Alert Crimson',     'hex' => '#881337', 'accent_hex' => '#F43F5E', 'contrast_ratio' => 9.6,  'wcag_pass' => true],
         ],
 
         'HOMEOWNER_STAFF' => [
             ['id' => 'hstf_rose',       'name' => 'Domestic Carmine Rose',    'hex' => '#BE123C', 'accent_hex' => '#FB7185', 'contrast_ratio' => 6.3, 'wcag_pass' => true],
-            ['id' => 'hstf_amber',      'name' => 'Estate Warm Amber',        'hex' => '#B45309', 'accent_hex' => '#FCD34D', 'contrast_ratio' => 5.1, 'wcag_pass' => true],
-            ['id' => 'hstf_teal',       'name' => 'Household Maritime Teal',  'hex' => '#0F766E', 'accent_hex' => '#5EEAD4', 'contrast_ratio' => 6.2, 'wcag_pass' => true],
-            ['id' => 'hstf_plum',       'name' => 'Private Residence Plum',   'hex' => '#701A75', 'accent_hex' => '#F0ABFC', 'contrast_ratio' => 8.3, 'wcag_pass' => true],
-            ['id' => 'hstf_terracotta', 'name' => 'Cottage Terracotta',       'hex' => '#9A3412', 'accent_hex' => '#FDBA74', 'contrast_ratio' => 6.4, 'wcag_pass' => true],
+            ['id' => 'hstf_amber',      'name' => 'Estate Warm Amber',        'hex' => '#B45309', 'accent_hex' => '#FCD34D', 'contrast_ratio' => 5.0, 'wcag_pass' => true],
+            ['id' => 'hstf_teal',       'name' => 'Household Maritime Teal',  'hex' => '#0F766E', 'accent_hex' => '#5EEAD4', 'contrast_ratio' => 5.5, 'wcag_pass' => true],
+            ['id' => 'hstf_plum',       'name' => 'Private Residence Plum',   'hex' => '#701A75', 'accent_hex' => '#F0ABFC', 'contrast_ratio' => 10.0, 'wcag_pass' => true],
+            ['id' => 'hstf_terracotta', 'name' => 'Cottage Terracotta',       'hex' => '#9A3412', 'accent_hex' => '#FDBA74', 'contrast_ratio' => 7.3, 'wcag_pass' => true],
+        ],
+
+        'VISITOR' => [
+            ['id' => 'vis_sky',     'name' => 'Welcome Sky Blue',  'hex' => '#0369A1', 'accent_hex' => '#38BDF8', 'contrast_ratio' => 5.9, 'wcag_pass' => true],
+            ['id' => 'vis_indigo',  'name' => 'Guest Indigo',      'hex' => '#4338CA', 'accent_hex' => '#A5B4FC', 'contrast_ratio' => 7.9, 'wcag_pass' => true],
+            ['id' => 'vis_magenta', 'name' => 'Arrival Magenta',   'hex' => '#9D174D', 'accent_hex' => '#F9A8D4', 'contrast_ratio' => 7.9, 'wcag_pass' => true],
+            ['id' => 'vis_green',   'name' => 'Courtesy Green',    'hex' => '#15803D', 'accent_hex' => '#86EFAC', 'contrast_ratio' => 5.0, 'wcag_pass' => true],
+            ['id' => 'vis_cyan',    'name' => 'Lobby Cyan',        'hex' => '#0E7490', 'accent_hex' => '#67E8F9', 'contrast_ratio' => 5.4, 'wcag_pass' => true],
+        ],
+
+        'CONTRACTOR' => [
+            ['id' => 'con_ochre',    'name' => 'Worksite Ochre',   'hex' => '#854D0E', 'accent_hex' => '#FACC15', 'contrast_ratio' => 6.9,  'wcag_pass' => true],
+            ['id' => 'con_rust',     'name' => 'Trade Rust',       'hex' => '#7C2D12', 'accent_hex' => '#FDBA74', 'contrast_ratio' => 9.4,  'wcag_pass' => true],
+            ['id' => 'con_graphite', 'name' => 'Toolbox Graphite', 'hex' => '#374151', 'accent_hex' => '#D1D5DB', 'contrast_ratio' => 10.3, 'wcag_pass' => true],
+            ['id' => 'con_signal',   'name' => 'Signal Red',       'hex' => '#B91C1C', 'accent_hex' => '#FCA5A5', 'contrast_ratio' => 6.5,  'wcag_pass' => true],
+            ['id' => 'con_navy',     'name' => 'Utility Navy',     'hex' => '#1E40AF', 'accent_hex' => '#93C5FD', 'contrast_ratio' => 8.7,  'wcag_pass' => true],
         ],
     ],
 
@@ -353,6 +427,48 @@ return [
             'operational_hours' => [
                 'is_24_hours' => false,
                 'start_hour' => 6,
+                'end_hour' => 18,
+                'days_of_week' => [1, 2, 3, 4, 5, 6],
+            ],
+            'privileges' => [
+                'can_manage_guests' => false,
+                'can_associate_vehicles' => false,
+                'has_emergency_override' => false,
+                'has_gate_operation_override' => false,
+                'restricted_from_homeowner_functions' => true,
+            ],
+        ],
+
+        'VISITOR' => [
+            'title' => 'Registered Guest Clearance',
+            'description' => 'Entry to the host residence for the stay the resident registered, through the main gate only.',
+            'authorized_zones' => [
+                'Host Residence & Driveway',
+                'Main Ingress Road',
+            ],
+            'allowed_gates' => ['GATE-01'],
+            // The pass's own validity window bounds the visit; no extra shift.
+            'operational_hours' => ['is_24_hours' => true],
+            'privileges' => [
+                'can_manage_guests' => false,
+                'can_associate_vehicles' => false,
+                'has_emergency_override' => false,
+                'has_gate_operation_override' => false,
+                'restricted_from_homeowner_functions' => true,
+            ],
+        ],
+
+        'CONTRACTOR' => [
+            'title' => 'Approved Contractor Clearance',
+            'description' => 'Working-hours entry for approved tradespeople to the job site and service corridors.',
+            'authorized_zones' => [
+                'Assigned Job Site',
+                'Service Corridors & Utility Areas',
+            ],
+            'allowed_gates' => ['GATE-01', 'GATE-02'],
+            'operational_hours' => [
+                'is_24_hours' => false,
+                'start_hour' => 7,
                 'end_hour' => 18,
                 'days_of_week' => [1, 2, 3, 4, 5, 6],
             ],

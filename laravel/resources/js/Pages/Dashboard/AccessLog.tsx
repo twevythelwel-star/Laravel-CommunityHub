@@ -48,10 +48,24 @@ type LogRow = {
   method: string;
   gate: string;
   passId: string | null;
-  result: 'ALLOW' | 'DENY';
+  result: 'ALLOW' | 'DENY' | 'CHECK_IN' | 'CHECK_OUT';
   denyReason: string | null;
   timestamp: string;
 };
+
+/** ALLOW is a scan that passed; CHECK_IN and CHECK_OUT are what the guard then confirmed. */
+function resultLabel(result: string): string {
+  switch (result) {
+    case 'DENY':
+      return 'Refused';
+    case 'CHECK_IN':
+      return 'Checked in';
+    case 'CHECK_OUT':
+      return 'Checked out';
+    default:
+      return 'Scan passed';
+  }
+}
 
 type Paginated<T> = {
   data: T[];
@@ -228,7 +242,7 @@ export default function AccessLogPage({
                     <SelectItem value={ANY}>Any result</SelectItem>
                     {results.map((result) => (
                       <SelectItem key={result} value={result}>
-                        {result === 'DENY' ? 'Refused' : 'Allowed'}
+                        {resultLabel(result)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -325,7 +339,7 @@ export default function AccessLogPage({
                           )}
                         </div>
                       ) : (
-                        <Badge variant="secondary">Allowed</Badge>
+                        <Badge variant={entry.result === 'ALLOW' ? 'secondary' : 'default'}>{resultLabel(entry.result)}</Badge>
                       )}
                     </TableCell>
                     <TableCell>

@@ -46,6 +46,9 @@ Route::get('/terms', [PublicPageController::class, 'terms'])->name('terms');
 Route::get('/refunds', [PublicPageController::class, 'refunds'])->name('refunds');
 Route::get('/cookies', [PublicPageController::class, 'cookies'])->name('cookies');
 Route::get('/guest/pass/{token}', [GuestPassController::class, 'show'])->name('guest-pass.show');
+Route::get('/guest/pass/{token}/code', [GuestPassController::class, 'code'])
+    ->middleware('throttle:30,1')
+    ->name('guest-pass.code');
 Route::get('/guest/pass/{token}/pdf', [PdfController::class, 'downloadVisitorPass'])->name('pdf.visitor-pass');
 Route::get('/pay/{token}', [UniversalPaymentLinkController::class, 'show'])->name('pay.show');
 Route::get('/pay/{token}/poster', [UniversalPaymentLinkController::class, 'poster'])->name('pay.poster');
@@ -99,12 +102,17 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/gate-pass/scan', [GatePassController::class, 'scan'])
         ->middleware('can:scanPasses')
         ->name('gate-pass.scan');
-    Route::post('/gate-pass/confirm-action', [GatePassController::class, 'confirmAction'])
-        ->middleware('can:scanPasses')
-        ->name('gate-pass.confirm-action');
-    Route::get('/gate-pass/sample-tokens', [GatePassController::class, 'sampleTokens'])
+    Route::post('/gate-pass/scans/{scan}/confirm', [GatePassController::class, 'confirmScan'])
+        ->middleware(['can:scanPasses', 'throttle:60,1'])
+        ->whereUuid('scan')
+        ->name('gate-pass.scans.confirm');
+    // Authorization is in the controller: security for every move, a host
+    // for cancelling their own guest's pass.
+    Route::post('/gate-pass/{gatePass}/transition', [GatePassController::class, 'transition'])
+        ->name('gate-pass.transition');
+    Route::post('/gate-pass/reissue/{user}', [GatePassController::class, 'reissue'])
         ->middleware('can:manageSecurity')
-        ->name('gate-pass.sample-tokens');
+        ->name('gate-pass.reissue');
     Route::post('/gate-pass/{gatePass}/revoke', [GatePassController::class, 'revoke'])
         ->middleware('can:manageSecurity')
         ->name('gate-pass.revoke');

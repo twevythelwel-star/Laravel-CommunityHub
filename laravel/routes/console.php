@@ -21,6 +21,19 @@ Schedule::call(function (GatePassEngine $engine) {
 })->hourly()->name('gatepass:prune-nonces');
 
 /*
+ | Expire gate passes whose validity window has closed. Someone still checked
+ | in is left alone: they are checked out, however late, not expired.
+ */
+Artisan::command('gatepass:expire', function (GatePassEngine $engine) {
+    $this->info(sprintf('Expired %d gate pass(es).', $engine->expireLapsedPasses()));
+})->purpose('Expire gate passes past their validity window');
+
+Schedule::command('gatepass:expire')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->name('gatepass:expire');
+
+/*
  | Expire stale visitor pre-clearances. The original ran this check in the
  | browser every 60 seconds, so it only happened while the visitors page was
  | open. Every 15 minutes on the server is both more reliable and far cheaper.

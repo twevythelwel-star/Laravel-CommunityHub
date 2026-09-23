@@ -32,8 +32,8 @@ import {
   ExternalLink,
   Info,
 } from 'lucide-react';
-import { GateId, GatePassValidationReport } from '@/lib/gate-pass-engine/types';
-import { scanGatePassToken, fetchGatePassToken, describeRequestError } from '@/lib/gate-pass-engine/api';
+import { GateId, GatePassValidationReport, ScanDecision } from '@/lib/gate-pass-engine/types';
+import { describeRequestError } from '@/lib/gate-pass-engine/api';
 import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -81,15 +81,12 @@ export function GateQrCameraScanner({
   // Scan state results
   const [report, setReport] = useState<GatePassValidationReport | null>(null);
   const [accessLogId, setAccessLogId] = useState<number | null>(null);
-  const [isCurrentlyInside, setIsCurrentlyInside] = useState<boolean>(false);
-  const [checkedInAtFormatted, setCheckedInAtFormatted] = useState<string | null>(null);
-  const [dwellDuration, setDwellDuration] = useState<string | null>(null);
-  const [checkoutCompletedTime, setCheckoutCompletedTime] = useState<string | null>(null);
+  // The server's decision for the last scan, and the ID that confirms it.
+  const [decision, setDecision] = useState<ScanDecision | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<{ action: 'CHECK_IN' | 'CHECK_OUT' | 'REFUSED'; time: string } | null>(null);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [isConfirmingAction, setIsConfirmingAction] = useState(false);
-
-  // Sample tokens for instant operator test passes
-  const [sampleTokens, setSampleTokens] = useState<Record<string, any> | null>(null);
 
   // Kiosk mode continuous scan with auto-rearm
   const [isKioskMode, setIsKioskMode] = useState<boolean>(false);
@@ -101,15 +98,6 @@ export function GateQrCameraScanner({
   const scanLoopRef = useRef<number | null>(null);
   const lastScannedTokenRef = useRef<string | null>(null);
   const lastScanTimestampRef = useRef<number>(0);
-
-  // Fetch sample tokens for easy officer testing
-  useEffect(() => {
-    if (open) {
-      axios.get('/dashboard/gate-pass/sample-tokens')
-        .then(res => setSampleTokens(res.data))
-        .catch(() => {});
-    }
-  }, [open]);
 
   // Continuous Kiosk Mode Auto-Rearm Countdown
   useEffect(() => {
@@ -125,7 +113,7 @@ export function GateQrCameraScanner({
           clearInterval(interval);
           setReport(null);
           setInputToken('');
-          setCheckoutCompletedTime(null);
+          setCompleted(null);
           lastScannedTokenRef.current = null;
           return null;
         }
@@ -219,7 +207,7 @@ export function GateQrCameraScanner({
   const executeScan = useCallback(
     async (token: string) => {
       setIsScanning(true);
-      setCheckoutCompletedTime(null);
+      setCompleted(null);
 
       try {
         const response = await axios.post('/dashboard/gate-pass/scan', {
@@ -230,9 +218,8 @@ export function GateQrCameraScanner({
         const data = response.data;
         setReport(data.report);
         setAccessLogId(data.accessLogId);
-        setIsCurrentlyInside(Boolean(data.isCurrentlyInside));
-        setCheckedInAtFormatted(data.checkedInAtFormatted || null);
-        setDwellDuration(data.dwellDuration || null);
+        setDecision(data.decision);
+        setScanId(data.scanId);
 
         // Sound / Beep Feedback
         try {
@@ -348,83 +335,42 @@ export function GateQrCameraScanner({
       setReport(null);
       setInputToken('');
       lastScannedTokenRef.current = null;
-      setCheckoutCompletedTime(null);
+      setCompleted(null);
     }
   }, [open, startCamera, stopCamera]);
 
-  // Handle Check In button press
-  const handleConfirmCheckIn = async () => {
-    if (!report) return;
+  /*
+   | Confirms or refuses the server's decision. Only the scan ID is sent: the
+   | action (check in or check out) is the one the server decided when it
+   | validated the code, so this screen cannot choose it.
+   */
+  const handleConfirm = async (accept: boolean) => {
+    if (!report || !scanId) return;
     setIsConfirmingAction(true);
 
     try {
-      const res = await axios.post('/dashboard/gate-pass/confirm-action', {
-        pass_id: report.passId,
-        user_name: report.userName,
-        category: report.category,
-        action: 'CHECK_IN',
-        gate: selectedGate,
+      const res = await axios.post(`/dashboard/gate-pass/scans/${scanId}/confirm`, {
+        accept,
+        reason: accept ? null : 'Refused by officer after inspection',
       });
+
+      setCompleted({ action: res.data.action, time: res.data.time });
+      setScanId(null);
 
       toast({
-        title: 'Check In Confirmed',
-        description: `${report.userName} has been officially checked in at ${res.data.time}.`,
-      });
-
-      setIsCurrentlyInside(true);
-      setCheckedInAtFormatted(res.data.time);
-      setDwellDuration('0m');
-      onSuccessCheck?.();
-    } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Check In Error',
-        description: err.response?.data?.message || 'Could not record check in.',
-      });
-    } finally {
-      setIsConfirmingAction(false);
-    }
-  };
-
-  // Handle Check Out button press
-  const handleConfirmCheckOut = async () => {
-    if (!report) return;
-    setIsConfirmingAction(true);
-
-    try {
-      const res = await axios.post('/dashboard/gate-pass/confirm-action', {
-        pass_id: report.passId,
-        user_name: report.userName,
-        category: report.category,
-        action: 'CHECK_OUT',
-        gate: selectedGate,
-      });
-
-      setCheckoutCompletedTime(res.data.time);
-      setIsCurrentlyInside(false);
-
-      toast({
-        title: 'Check Out Recorded',
-        description: `${report.userName} checked out at ${res.data.time}.`,
+        title: res.data.action === 'CHECK_IN' ? 'Checked in' : res.data.action === 'CHECK_OUT' ? 'Checked out' : 'Entry refused',
+        description: `${report.userName}: ${res.data.message}`,
       });
       onSuccessCheck?.();
     } catch (err: any) {
       toast({
         variant: 'destructive',
-        title: 'Check Out Error',
-        description: err.response?.data?.message || 'Could not record check out.',
+        title: 'Not recorded',
+        description: err.response?.data?.message || 'Could not record the decision. Scan the pass again.',
       });
     } finally {
       setIsConfirmingAction(false);
     }
-  };
-
-  const handleReportIncident = () => {
-    toast({
-      variant: 'destructive',
-      title: 'Security Incident Flagged',
-      description: `Incident logged for attempted entry by ${report?.userName || 'Unknown'} (${report?.passId || 'Unrecognized'}). Host notified.`,
-    });
   };
 
   return (
@@ -631,114 +577,6 @@ export function GateQrCameraScanner({
               </Button>
             </form>
 
-            {/* Quick Testing Pass Selector */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-muted-foreground mr-1">
-                Quick Test Credentials:
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-teal-600 border-teal-500/30 hover:bg-teal-500/10"
-                onClick={() => {
-                  if (sampleTokens?.homeownerStaff?.token) {
-                    setInputToken(sampleTokens.homeownerStaff.token);
-                    void executeScan(sampleTokens.homeownerStaff.token);
-                  }
-                }}
-              >
-                Maria Williams (Staff)
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-blue-600 border-blue-500/30 hover:bg-blue-500/10"
-                onClick={() => {
-                  if (sampleTokens?.resident?.token) {
-                    setInputToken(sampleTokens.resident.token);
-                    void executeScan(sampleTokens.resident.token);
-                  }
-                }}
-              >
-                Resident Pass
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-rose-600 border-rose-500/30 hover:bg-rose-500/10"
-                onClick={() => {
-                  if (sampleTokens?.expired?.token) {
-                    setInputToken(sampleTokens.expired.token);
-                    void executeScan(sampleTokens.expired.token);
-                  }
-                }}
-              >
-                Expired Pass
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-orange-600 border-orange-500/30 hover:bg-orange-500/10"
-                onClick={() => {
-                  if (sampleTokens?.wrongCommunity?.token) {
-                    setInputToken(sampleTokens.wrongCommunity.token);
-                    void executeScan(sampleTokens.wrongCommunity.token);
-                  }
-                }}
-              >
-                Wrong Community
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-purple-600 border-purple-500/30 hover:bg-purple-500/10"
-                onClick={() => {
-                  if (sampleTokens?.wrongGate?.token) {
-                    setInputToken(sampleTokens.wrongGate.token);
-                    void executeScan(sampleTokens.wrongGate.token);
-                  }
-                }}
-              >
-                Wrong Gate
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-red-600 border-red-500/30 hover:bg-red-500/10"
-                onClick={async () => {
-                  try {
-                    const issued = await fetchGatePassToken();
-                    const tampered = issued.token.slice(0, -4) + 'XXXX';
-                    setInputToken(tampered);
-                    void executeScan(tampered);
-                  } catch (_) {}
-                }}
-              >
-                Forged Signature
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px] text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
-                onClick={async () => {
-                  try {
-                    const issued = await fetchGatePassToken();
-                    setInputToken(issued.token);
-                    await executeScan(issued.token);
-                    await executeScan(issued.token);
-                  } catch (_) {}
-                }}
-              >
-                Replay Duplicate
-              </Button>
-            </div>
           </div>
 
           {/* ══════════════════════════════════════════════════════════════════
@@ -748,7 +586,7 @@ export function GateQrCameraScanner({
           {report && (
             <div className="animate-in fade-in slide-in-from-bottom-3 duration-300 space-y-4">
               {/* STATE 1: CHECK IN (✓ VERIFIED) */}
-              {report.status === 'ALLOW' && !isCurrentlyInside && !checkoutCompletedTime && (
+              {decision === 'CHECK_IN' && !completed && (
                 <div className="border-2 border-emerald-500/60 rounded-2xl overflow-hidden shadow-xl bg-card">
                   {/* Verified Header Banner */}
                   <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-6 text-white text-center space-y-2">
@@ -798,14 +636,23 @@ export function GateQrCameraScanner({
                         type="button"
                         size="lg"
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-base font-black tracking-wide py-6 shadow-lg gap-2"
-                        onClick={() => void handleConfirmCheckIn()}
+                        onClick={() => void handleConfirm(true)}
                         disabled={isConfirmingAction}
                       >
                         <UserCheck className="w-5 h-5" />
                         [ CHECK IN ]
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full mt-2 text-xs font-bold"
+                        onClick={() => void handleConfirm(false)}
+                        disabled={isConfirmingAction}
+                      >
+                        Refuse entry (ID does not match)
+                      </Button>
                       <p className="text-center text-[11px] text-muted-foreground mt-2">
-                        The officer confirms Check In, and the system records the entry into the access log.
+                        Check the person against their photo ID, then confirm. The decision expires after two minutes.
                       </p>
                     </div>
                   </div>
@@ -813,7 +660,7 @@ export function GateQrCameraScanner({
               )}
 
               {/* STATE 2: VISITOR INSIDE (🔵 CHECK OUT) */}
-              {report.status === 'ALLOW' && isCurrentlyInside && !checkoutCompletedTime && (
+              {decision === 'CHECK_OUT' && !completed && (
                 <div className="border-2 border-blue-500/60 rounded-2xl overflow-hidden shadow-xl bg-card">
                   {/* Inside Header Banner */}
                   <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white text-center space-y-2">
@@ -831,21 +678,11 @@ export function GateQrCameraScanner({
                     </div>
                   </div>
 
-                  {/* Dwell Metrics */}
                   <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-2 gap-4 text-center">
-                      <div className="p-4 bg-muted/40 rounded-xl border">
-                        <span className="text-xs font-mono text-muted-foreground uppercase block">Checked in</span>
-                        <strong className="text-lg font-bold text-foreground">
-                          {checkedInAtFormatted || '4:32 PM'}
-                        </strong>
-                      </div>
-                      <div className="p-4 bg-blue-500/5 rounded-xl border border-blue-500/20">
-                        <span className="text-xs font-mono text-muted-foreground uppercase block">Current duration</span>
-                        <strong className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                          {dwellDuration || '1h 14m'}
-                        </strong>
-                      </div>
+                    <div className="p-4 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
+                      <span className="text-xs font-mono text-muted-foreground uppercase block">Pass</span>
+                      <strong className="text-lg font-bold text-blue-600 dark:text-blue-400">{report.passId}</strong>
+                      <span className="block text-xs text-muted-foreground mt-1">Recorded as inside the estate</span>
                     </div>
 
                     {/* CONFIRM CHECK OUT ACTION */}
@@ -854,37 +691,37 @@ export function GateQrCameraScanner({
                         type="button"
                         size="lg"
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white text-base font-black tracking-wide py-6 shadow-lg gap-2"
-                        onClick={() => void handleConfirmCheckOut()}
+                        onClick={() => void handleConfirm(true)}
                         disabled={isConfirmingAction}
                       >
                         <LogOut className="w-5 h-5" />
                         [ CHECK OUT ]
                       </Button>
                       <p className="text-center text-[11px] text-muted-foreground mt-2">
-                        For someone already inside, scanning their QR recognizes the active visit and closes clearance.
+                        Leaving is always allowed, even after hours or after the pass has lapsed.
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* POST-CHECKOUT CONFIRMATION */}
-              {checkoutCompletedTime && (
+              {/* CONFIRMATION */}
+              {completed && (
                 <div className="p-6 rounded-2xl bg-blue-500/10 border-2 border-blue-500/40 text-center space-y-2">
                   <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <h3 className="text-xl font-black text-foreground">
-                    CHECKED OUT — {checkoutCompletedTime}
+                    {completed.action === 'CHECK_IN' ? 'CHECKED IN' : completed.action === 'CHECK_OUT' ? 'CHECKED OUT' : 'ENTRY REFUSED'} — {completed.time}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Departure recorded on estate access log. Gate clearance has ended.
+                    Recorded on the estate access log.
                   </p>
                 </div>
               )}
 
               {/* STATE 3: REJECT (🔴 REJECT / ✕ REJECTED) */}
-              {report.status === 'DENY' && (
+              {decision === 'REJECT' && (
                 <div className="border-2 border-red-500/60 rounded-2xl overflow-hidden shadow-xl bg-card">
                   {/* Rejected Header Banner */}
                   <div className="bg-gradient-to-r from-red-600 to-rose-700 p-6 text-white text-center space-y-2">
@@ -935,19 +772,10 @@ export function GateQrCameraScanner({
                         {showTechnicalDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         [ VIEW DETAILS ]
                       </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="flex-1 py-5 text-xs font-bold gap-2"
-                        onClick={handleReportIncident}
-                      >
-                        <ShieldAlert className="w-4 h-4" />
-                        [ REPORT INCIDENT ]
-                      </Button>
                     </div>
 
                     <p className="text-center text-[11px] text-muted-foreground">
-                      The system records the attempted access automatically. Security cannot edit the underlying pass from this screen.
+                      This refusal is already on the access log and the security log. Change the pass itself from the Visitors list.
                     </p>
                   </div>
                 </div>

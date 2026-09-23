@@ -41,7 +41,7 @@ class ProfileController extends Controller
             'passVisual' => [
                 'passId' => $pass->pass_id,
                 'config' => $engine->categoryConfig($category),
-                'variant' => $engine->assignedColorVariant($category, $pass->pass_id, $pass->rotation_seq),
+                'variant' => $engine->variantFor($pass),
                 'shape' => $category->shape()->value,
             ],
             'activity' => $user->activityLog()->limit(20)->get()->map(fn ($a) => [

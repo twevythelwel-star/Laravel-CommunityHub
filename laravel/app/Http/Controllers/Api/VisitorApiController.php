@@ -2,15 +2,26 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\GateId;
+use App\Enums\PassCategory;
+use App\Enums\PassStatus;
+use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
 use App\Models\Visitor;
+use App\Services\GatePassEngine;
+use App\Services\GateScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class VisitorApiController extends Controller
 {
+    public function __construct(
+        private readonly GatePassEngine $engine,
+        private readonly GateScanner $scanner,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -51,7 +62,11 @@ class VisitorApiController extends Controller
             'notify_email' => ['nullable', 'boolean'],
             'notify_sms' => ['nullable', 'boolean'],
             'notify_whatsapp' => ['nullable', 'boolean'],
+            'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
         ]);
+
+        $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
+        unset($validated['pass_category']);
 
         if ($this->isOnBlocklist($validated['name'])) {
             return response()->json([
@@ -72,18 +87,33 @@ class VisitorApiController extends Controller
             'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
         ]);
 
+        $pass = $this->engine->issueGuestPass($visitor, $user, $passCategory);
+
         // Send the pass on whichever chosen channels can actually deliver it.
         $channels = $visitor->passNotificationChannels();
 
-        if ($channels !== []) {
+        if ($channels !== [] && $pass->status !== PassStatus::Requested) {
             $visitor->sendPassNotification($channels);
         }
 
-        return response()->json(['visitor' => ['id' => $visitor->id]], 201);
+        return response()->json([
+            'visitor' => ['id' => $visitor->id],
+            'pass' => ['passId' => $pass->pass_id, 'status' => $pass->status->value],
+        ], 201);
     }
 
     public function checkIn(Request $request, Visitor $visitor): JsonResponse
     {
+        if ($visitor->gatePass) {
+            try {
+                $this->scanner->manualCheckIn($visitor->gatePass, $request->user(), $this->gateFrom($request));
+            } catch (ScanNotConfirmable $e) {
+                return response()->json(['allowed' => false, 'reason' => $e->getMessage()], 422);
+            }
+
+            return response()->json(['allowed' => true, 'status' => $visitor->fresh()->status->value]);
+        }
+
         if ($this->isOnBlocklist($visitor->name)) {
             $visitor->update(['is_blocked' => true]);
 
@@ -111,6 +141,16 @@ class VisitorApiController extends Controller
 
     public function checkOut(Request $request, Visitor $visitor): JsonResponse
     {
+        if ($visitor->gatePass) {
+            try {
+                $this->scanner->manualCheckOut($visitor->gatePass, $request->user(), $this->gateFrom($request));
+            } catch (ScanNotConfirmable $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return response()->json(['status' => $visitor->fresh()->status->value]);
+        }
+
         $visitor->checkOut();
 
         return response()->json(['status' => $visitor->status->value]);
@@ -118,8 +158,11 @@ class VisitorApiController extends Controller
 
     private function isOnBlocklist(string $name): bool
     {
-        return BlocklistEntry::inForce()
-            ->whereRaw('LOWER(name) = ?', [mb_strtolower(trim($name))])
-            ->exists();
+        return BlocklistEntry::blocks($name);
+    }
+
+    private function gateFrom(Request $request): GateId
+    {
+        return GateId::tryFrom($request->string('gate')->toString()) ?? GateId::Gate01;
     }
 }

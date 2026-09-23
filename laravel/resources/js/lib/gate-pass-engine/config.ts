@@ -66,6 +66,8 @@ export const PASS_CATEGORIES: PassCategory[] = [
     'STAFF',
     'SECURITY',
     'HOMEOWNER_STAFF',
+    'VISITOR',
+    'CONTRACTOR',
 ];
 
 /**
@@ -84,6 +86,8 @@ export const CATEGORY_SHAPES: Record<PassCategory, QRShape> = {
     STAFF: 'DIAMOND',
     SECURITY: 'SHIELD',
     HOMEOWNER_STAFF: 'HOUSE_HEX',
+    VISITOR: 'CIRCLE',
+    CONTRACTOR: 'PENTAGON',
 };
 
 /** Neutral styling used only if a component renders before hydration. */
@@ -141,6 +145,8 @@ export function formatPassIdForDisplay(category: PassCategory, rawId: string): s
         STAFF: 'GP-STF',
         SECURITY: 'GP-SEC',
         HOMEOWNER_STAFF: 'GP-HST',
+        VISITOR: 'GP-VIS',
+        CONTRACTOR: 'GP-CON',
     };
 
     const digits = rawId.replace(/\D/g, '') || '0';
