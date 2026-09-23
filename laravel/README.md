@@ -1,10 +1,11 @@
 # Community Hub — Laravel
 
 The Community Hub platform on Laravel 12 with PHP 8.2+, converted from the
-Next.js 15 / React / TypeScript application in `../src`.
+Next.js 15 / React / TypeScript application that used to live in `../src`.
 
-The original Next.js app is untouched in the parent directory. Nothing was
-deleted, so you can run both side by side and compare screen for screen.
+The original Next.js app is preserved in git history — check out commit
+`f3c48c6` (the last commit before the conversion) to run it and compare screen
+for screen.
 
 ---
 
@@ -16,7 +17,7 @@ services and authorization rules:
 | Surface | Renders | Covers |
 |---|---|---|
 | **Blade** | Server HTML, no React bundle | Sign-in (`/`), privacy policy |
-| **Inertia + React** | Your existing React components | All 22 dashboard pages, plus a new boundary-editor route |
+| **Inertia + React** | Your existing React components | All 23 dashboard pages, including the boundary editor |
 | **JSON API** (`/api/*`) | JSON, Sanctum tokens | Capacitor mobile shell, handheld gate scanners |
 
 All business logic lives in PHP. The React components were reused rather than
@@ -28,23 +29,23 @@ instead of reading module-level mock arrays.
 laravel/
 ├── app/
 │   ├── Enums/                  UserRole, PassCategory, QRShape, GateId, DenyReason…
-│   ├── Models/                 31 Eloquent models
+│   ├── Models/                 44 Eloquent models
 │   ├── Services/
 │   │   ├── GatePassEngine.php          ← port of src/lib/gate-pass-engine/engine.ts
 │   │   ├── GeofenceService.php         ← port of src/lib/geofence-utils.ts
 │   │   └── NotificationTargetingService.php  ← port of the Genkit AI flow
 │   ├── Http/Controllers/
-│   │   ├── Dashboard/          22 Inertia controllers
+│   │   ├── Dashboard/          24 Inertia controllers
 │   │   ├── Api/                5 JSON controllers
 │   │   └── Auth/               Session login/logout
 │   └── Providers/AuthServiceProvider.php   ← all role rules, in one place
 ├── config/gatepass.php         Pass categories, WCAG palettes, access policies
-├── database/migrations/        38 tables (32 domain + 6 framework)
+├── database/migrations/        49 tables (domain + framework)
 ├── database/seeders/           Reproduces every mock record
 ├── resources/
 │   ├── views/blade/            Sign-in + privacy (Blade)
 │   └── js/Pages/Dashboard/     23 Inertia pages
-└── tests/                     255 tests — engine, geofence, access control, pages
+└── tests/                     464 tests — engine, geofence, access control, pages, payments
 ```
 
 ---
@@ -344,6 +345,24 @@ react-qr-code, react-hook-form, zod, date-fns) is retained at the same version.
 
 ## Testing
 
+To run every build gate CI runs, in order, stopping at the first failure:
+
+```bash
+composer check
+```
+
+| Gate | Command | Must be |
+|---|---|---|
+| Lock file | `composer validate` | valid (`composer.json` and `composer.lock` agree) |
+| PHP tests | `php artisan test` | 0 failures |
+| Style | `vendor/bin/pint --test` | 0 files to fix |
+| TypeScript | `npm run typecheck` | 0 errors |
+| Dependencies | `npm audit --omit=dev --audit-level=high` | 0 production vulnerabilities |
+| Build | `npm run build` | passes |
+
+Run `composer install` and `npm ci` first on a fresh checkout. For the tests
+alone:
+
 ```bash
 php artisan test
 ```
@@ -384,34 +403,57 @@ blocklist enforcement at both registration and check-in, visitor ownership,
 single-vote warnings, scan logging, self-deactivation, and that contact details
 stay hidden from non-admins.
 
-All 168 pass. See *Verification status* below for what the first real run found.
+The full suite is 464 tests across 34 files. See *Verification status* below
+for the current result and what the first real run found.
 
 ---
 
 ## Verification status
 
-Everything below has now been **executed** on Laravel 12.69.2 / PHP 8.4.25
-(Laravel Herd) against SQLite. Earlier revisions of this file said the code had
-never run; that is no longer true.
+Everything below has been **executed** on Laravel 12.69.2 / PHP 8.4.25
+(Laravel Herd) against SQLite. Last re-run: **22 September 2026** (except the
+two rows marked † and *).
 
 ```
-php artisan migrate:fresh --seed     12 migrations, 6 seeders          PASS
-php artisan test                     255 tests, 1,815 assertions       PASS
+php artisan migrate:fresh --seed     16 migrations, 7 seeders          PASS†
+php artisan test                     464 tests, 2,678 assertions       PASS‡
 npm run typecheck                    0 errors                          PASS
-npm run build                        23 page chunks built              PASS
-php artisan route:list              107 routes resolve                 PASS
+npm run build                        23 pages built                    PASS
+php artisan route:list              129 routes resolve                 PASS
+npm audit --omit=dev                 0 vulnerabilities                 PASS
 composer audit                       no advisories                     PASS*
 ```
 
-(107 rather than the original 93: Boost registers `_boost/browser-logs`,
-Laravel 12 adds `storage.local.upload`, the pages wired since then added their
-own, and the Stripe checkout, guest-pass and PDF work added seven more.)
+(129 rather than the original 93: Boost registers `_boost/browser-logs`,
+Laravel 12 adds `storage.local.upload`, and the pages wired since then, the
+Stripe checkout, guest-pass, PDF, payment-channel and revenue-engine work added
+their own.)
+
+† Not re-run on 22 September, to avoid wiping the local database; last passed
+before the visitor-notification work. The counts are the current files.
+
+‡ All pass. PHPUnit reports one *deprecated* notice: bacon-qr-code 2.0.8
+uses implicitly nullable parameters, which PHP 8.4 deprecates. It is a
+warning, not a failure. bacon-qr-code 3 fixes it, but simple-qrcode 4.2 pins
+bacon-qr-code to 2.x.
+
+The three `SendVisitorPassNotificationTest` failures from earlier are fixed.
+`simplesoftwareio/simple-qrcode` was in `composer.json` but missing from
+`composer.lock` and `vendor/`. It is installed now, along with its
+bacon-qr-code and dasprid/enum dependencies, and `composer validate` passes.
+Installing it alone would not have been enough: simple-qrcode 4.x writes PNG
+only through the **imagick** extension, which Herd's PHP does not have. So the
+job now draws the PNG with GD (`App\Services\QrCodePng`), and bacon-qr-code
+does the encoding. GD is already required by dompdf, so no extension is
+needed anywhere. A rendered guest-pass URL was decoded back with jsQR to
+confirm the image scans. `bacon/bacon-qr-code` is declared directly in
+`composer.json`, since the job now uses it itself.
 
 \* `composer audit` returned *No security vulnerability advisories found* twice
 — at the end of `composer update` and on the first verification pass. A later
 re-run could not complete because packagist.org's advisories API was returning
 `HTTP 502`. That is the registry being down, not a finding; re-run it when
-packagist recovers.
+packagist recovers. It was not re-run on 22 September.
 
 The suite was run three times consecutively to shake out order dependence.
 
@@ -464,9 +506,107 @@ deploying anywhere real.
 
 ---
 
+## Continuous integration
+
+`.github/workflows/ci.yml` (at the repository root, since `laravel/` is a
+subdirectory) runs on every push to `main` and every pull request, in two
+jobs:
+
+| Job | Steps |
+|---|---|
+| **backend** | `composer validate` (lock file matches `composer.json`), `composer install`, `php artisan test`, `pint --test`, `composer audit` |
+| **frontend** | `npm ci`, `npm run typecheck`, `npm run build`, `npm audit --omit=dev --audit-level=high` |
+
+PHP 8.4 runs with GD, which renders both the dompdf PDFs and the visitor-pass
+QR images. No imagick extension is needed.
+
+Every step passes locally: `composer validate`, the full test suite,
+`pint --test` across the project, the type check, the production build and
+both audits.
+
+To make CI a gate rather than a report, add both jobs as required status
+checks in the branch protection rules for `main`.
+
+---
+
+## Deployment
+
+The app needs three long-running processes, not one:
+
+| Process | Command | Why |
+|---|---|---|
+| Web | Apache serving `public/` | The site and the JSON API |
+| Queue worker | `php artisan queue:work` | Visitor-pass SMS/WhatsApp/email notifications and broadcast events are queued (`QUEUE_CONNECTION=database`). Without a worker they sit in the `jobs` table forever |
+| Scheduler | `php artisan schedule:work` | `routes/console.php`: gate-pass nonce pruning (hourly) and visitor no-show expiry (every 15 minutes). Without it, stale visitor pre-clearances stay valid at the gate |
+
+### Docker (recommended)
+
+`Dockerfile` builds one image (assets built in a Node stage, Composer
+dependencies in a Composer stage, PHP 8.4 + Apache at runtime, running as
+`www-data` on port 8080). `docker-compose.yml` runs it three times (web,
+queue, scheduler) plus MySQL 8.4, sharing one `storage` volume so the web
+container can serve QR images the worker writes.
+
+```bash
+cp .env.production.example .env.production
+# fill in APP_KEY, APP_URL, GATE_ENGINE_SECRET, DB_PASSWORD, DB_ROOT_PASSWORD
+docker compose --env-file .env.production up -d --build
+```
+
+`--env-file` is needed: without it Compose reads `${DB_PASSWORD}` from
+`laravel/.env`, the development file.
+
+On start-up, `docker/entrypoint.sh` refuses to run without `APP_KEY` and
+`GATE_ENGINE_SECRET`, migrates (web container only, so the three do not
+race), links storage, and caches config, routes, views and events. Health is
+checked against Laravel's `/up` route.
+
+Generate the two secrets with:
+
+```bash
+php artisan key:generate --show
+php artisan gatepass:secret --show
+```
+
+The image serves plain HTTP. Put a TLS-terminating proxy (Caddy, nginx, a
+cloud load balancer) in front of it and set `TRUSTED_PROXIES` so Laravel
+generates `https://` URLs (see `config/trustedproxy.php`).
+
+`.gitattributes` pins `*.sh` and the `Dockerfile` to LF line endings. With
+`core.autocrlf=true`, a CRLF checkout on Windows would otherwise break the
+entrypoint with `/bin/sh^M: not found`.
+
+### Without Docker (a VPS)
+
+Run the web server as usual, then keep the worker alive with Supervisor:
+
+```ini
+[program:community-hub-queue]
+command=php /var/www/community-hub/artisan queue:work --tries=3 --backoff=10 --max-time=3600
+user=www-data
+autostart=true
+autorestart=true
+stopwaitsecs=60
+```
+
+and add one cron entry for the scheduler:
+
+```
+* * * * * cd /var/www/community-hub && php artisan schedule:run >> /dev/null 2>&1
+```
+
+After each deploy, run `php artisan migrate --force`, `php artisan optimize`
+and `php artisan queue:restart` so workers pick up the new code.
+
+**Not yet verified:** the image has not been built on this machine, since the
+build pulls base images from Docker Hub. `docker compose config` validates
+the compose file, and the entrypoint passes `sh -n`.
+
+---
+
 ## Page wiring status
 
-**Wired to the server (12 of 23):**
+**Wired to the server (20 of 23):**
 
 | Page | What changed |
 |---|---|
@@ -482,6 +622,14 @@ deploying anywhere real.
 | `Dashboard/AccessLog` | Refused entries are visible for the first time; the filters and CSV export finally have controls, and the export matches the filtered view |
 | `Dashboard/Billing` | The fake card form and its Stripe claim are gone; invoices, totals and the collections chart are real; marking an invoice paid finally works |
 | `Dashboard/Fundraising` | Fundraisers and donations come from the database; donations are forced into the fundraiser's currency so the total means something; the page no longer throws on SQLite |
+| `Dashboard/Renters` | Renters come from the database, paginated and scoped to the viewer's property; create, edit and delete go through the server |
+| `Dashboard/Profile` | Profile, pass visual and activity come from props; saving display name and phone patches `dashboard.profile` |
+| `Dashboard/Boundary` | `BoundaryPointManager` receives the server's draft, published polygon and permissions instead of reading `localStorage` |
+| `Dashboard/Calendar` | Events, entry slots and the viewer's visitors come from props. The event form used to close and reload without sending anything while toasting "Event Created"; it now posts to `dashboard.calendar.store` / `.update` and only reports success once the server accepts |
+| `Dashboard/Deactivation` | "Delete My Account Now" used to clear `localStorage`, sign out and announce *"Account Permanently Deleted"* while the account stayed active and its pass kept working. The client-only scheduling countdown promised email and SMS reminders nothing sends. Both are gone: the page posts password, reason and confirmation to `DeactivationController::store`, and Temporary Homeowners, whom the route and menu already allowed, are no longer shown "Access Denied" |
+| `Dashboard/Updates` | Updates come from the database, newest first and paginated; the Add Update form posts to `dashboard.updates.store` and reports success only once the server accepts. Dates are sent and read as calendar dates, so an update does not drift a day for viewers west of UTC |
+| `Dashboard/Guidelines` | Guidelines come from the database, grouped by category. The page always offered Add, Edit and Delete, but the server had only `index`, so every change was lost on reload. `store`, `update` and `destroy` now exist behind `broadcastNotices`, and a new guideline goes to the end of its category |
+| `Dashboard/ReviewFeedback` | The real queue, with status and type filters, status counts and pagination. The page never showed a submission's body, so administrators saw only a subject line; a View & Respond dialog now shows it and saves a status and response. The Delete action had no endpoint and was removed: resolving a submission is how it leaves the queue, and it stays the submitter's record |
 
 Supporting pieces, reusable by the remaining pages:
 
@@ -604,6 +752,63 @@ Defects fixed in passing:
   Nothing was stored and no administrator had anywhere to see it. Requests are
   now `blocklist_removal_requests` rows that surface on the block list for
   reviewers, and approving one is what lifts the block.
+
+### SMS and WhatsApp said "sent" and sent nothing
+
+`SmsService` and `WhatsAppService` wrote `Would send to <full number>:
+<full message>` to the application log and returned `true`. Every SMS and
+WhatsApp pass was reported as delivered and none was. The log also built up
+a list of visitors' phone numbers next to working guest-pass links, which let
+anyone who could read the log through the gate.
+
+**They now send through Twilio** (`App\Services\Messaging\TwilioClient`, one
+REST call through Laravel's HTTP client, so no SDK and `Http::fake()` in tests).
+They return Twilio's message SID or throw `MessageNotSent`. They refuse
+up front when:
+
+- Twilio is not configured (`TWILIO_SID`, `TWILIO_TOKEN`, plus `TWILIO_FROM`
+  for SMS or `TWILIO_WHATSAPP_FROM` for WhatsApp);
+- the contact is not a phone number. `contact` holds an email *or* a number,
+  and the old code would queue an SMS to `liam@example.com`. Numbers are
+  normalised to E.164, with 10-digit local numbers given
+  `SMS_DEFAULT_COUNTRY_CODE` (1, which covers Jamaica).
+
+**Logs carry a masked number (`+1******1234`) and Twilio's SID, never the
+message.** Twilio's own error text is kept out of exceptions too, since it
+quotes the number; the error code is enough to look up.
+
+**WhatsApp needs an approved template to reach most visitors.** WhatsApp only
+delivers free text to someone who has messaged the business in the last 24
+hours, and a visitor being sent a pass usually has not. Set
+`TWILIO_WHATSAPP_CONTENT_SID` to a Meta-approved template with variables
+`{{1}}` visitor name, `{{2}}` guest-pass URL, `{{3}}` arrival, `{{4}}` host.
+Without one it sends free text, which works in the Twilio sandbox and is
+otherwise refused (Twilio error 63016). That refusal is logged as not sent,
+not as sent.
+
+**The forms stop offering what cannot happen.** A shared `messaging` prop tells
+the visitor forms which channels are configured; SMS and WhatsApp are
+disabled and marked *(not set up)* otherwise. The server applies the same
+rule in `Visitor::passNotificationChannels()`, so a crafted request cannot
+queue them either.
+
+**The job had two bugs of its own**, both fixed in
+`SendVisitorPassNotification`:
+
+- **Email was a fatal error.** It called `notify()` on an anonymous class with
+  no `Notifiable` trait, so the job died before SMS or WhatsApp were tried. It
+  now uses an on-demand notification, and only for an email-address contact.
+- **One failed channel re-sent the others.** Any exception was rethrown, so the
+  queue retried the whole job and re-sent the email each time WhatsApp was
+  refused. Channels now fail independently and are logged. QR generation is
+  best-effort too: SMS never needed the image, and a failure to draw it no
+  longer stops the link going out.
+
+**Still not done:** delivery receipts. Twilio accepting a message is not the
+same as the handset receiving it. A status-callback webhook would record
+`delivered` and `undelivered`, but the job does not do that today.
+
+---
 
 ### The notice board targeted nobody
 
@@ -786,31 +991,99 @@ payment feature at all.
 **The whole form is gone.** What replaces it is the monthly dues, what you owe,
 what you have paid this year, and your full invoice history.
 
-### A Stripe integration has since been added — do not enable it yet
+### Stripe Checkout: webhooks, idempotency and refunds
 
-A parallel workstream added real Stripe checkout (`StripeCheckoutController`,
-`StripePaymentService`), guest passes, PDF generation and broadcast events. It
-is in the repository and its tests pass. **It must not be exposed to residents
-as it stands.**
+A parallel workstream added Stripe Checkout (`StripeCheckoutController`,
+`StripePaymentService`). Its original demo branch, which marked invoices paid
+without taking money, was removed earlier. With no `STRIPE_SECRET` the
+checkout routes 404. What it still lacked was a webhook, protection against
+paying twice, and refunds. All three now exist.
 
-`config/services.php` declares no `stripe` key. `config('services.stripe.secret')`
-is therefore `null`, and `StripePaymentService` always takes its demo branch:
-`createCheckoutSession()` fabricates a session id and returns the success URL
-directly, and `completePayment()` then sets the invoice to `Paid`. **Clicking Pay
-settles a real debt without taking any money.**
-`tests/Feature/StripeBillingTest.php` passes because of that branch, so a green
-suite is not evidence the flow works.
+**Settlement follows Stripe, by two routes that share one code path.**
+`StripePaymentService::settleSession()` is called by:
 
-Finishing it properly is a project rather than a wiring task: the config entry
-and key, a checkout session created server-side (that part exists), and then a
-webhook endpoint that marks the invoice paid only on a verified
-`checkout.session.completed` event — never on the browser reaching the success
-URL, which is what happens today. Plus idempotency keys so a retried webhook does
-not double-pay, refund handling, and a decision about who is liable for card
-data. The warning is repeated at the top of `BillingController`.
+- the success URL, after the session id from the browser has been fetched from
+  Stripe's API and checked against the invoice it was presented for; and
+- `POST /api/webhooks/stripe` on `checkout.session.completed` (and
+  `async_payment_succeeded`), signed by Stripe and verified against
+  `STRIPE_WEBHOOK_SECRET`. This also covers the resident who pays and closes
+  the tab before the redirect, which previously left a paid invoice unpaid.
 
-Until that is done the resident page describes only the office-payment route,
-which is the part that actually works, and makes no claim about card handling.
+The session must be `paid`, name an invoice that exists, and be in the
+invoice's currency. The invoice row is locked while it is settled, because the
+redirect and the webhook routinely arrive within a second of each other.
+
+**A payment cannot be recorded twice.** There are two layers:
+
+1. `stripe_events` has a unique `event_id`, written in the same database
+   transaction as the event's effects. A redelivered event finds its row and
+   does nothing; an event that fails part-way rolls its row back too, so
+   Stripe's retry starts clean.
+2. Every Stripe payment is a `transactions` row whose unique `reference` is
+   `stripe:<PaymentIntent id>`. Two *different* events for one payment (say
+   `completed` then `async_payment_succeeded`, or the webhook and the redirect)
+   still produce one ledger row.
+
+Checkout creation is idempotent as well: a still-open session for the invoice
+is reused, and creation sends an idempotency key, so a double click does not
+produce two sessions the resident could both pay. If money does arrive for an
+invoice already settled another way (paid at the office, say), it is recorded
+on the ledger, the invoice is left alone, and a warning is logged so the
+payment can be refunded.
+
+**Refunds.** Administrators get a *Refund* action on Stripe payments in the
+Transactions ledger (`POST /dashboard/billing/transactions/{transaction}/refund`,
+behind `manageBilling`). Partial refunds work, and the amount is capped at what
+is still refundable. Refunds made in the Stripe dashboard arrive through the
+`charge.refunded` webhook.
+
+Both routes record refunds the same way: from the charge's cumulative
+`amount_refunded`, writing only the difference from what the ledger already
+holds (reference `stripe-refund:<PaymentIntent>:<cumulative total>`). That makes
+it correct however many times, and in whatever order, the admin action and
+the webhook arrive. The refund request to Stripe also carries an idempotency
+key, so a double-submitted form sends one refund.
+
+If the refunded payment is the one that settled the invoice, the invoice goes
+back to *Partially Paid* or *Unpaid*: the money that paid it has been
+returned. Refunding a duplicate payment leaves the invoice *Paid*.
+`Invoice::amountPaidMinor()` now subtracts refunds.
+
+**To turn it on:**
+
+1. Set `STRIPE_SECRET` (`sk_live_…` or `sk_test_…`).
+2. In the Stripe dashboard, add a webhook endpoint at
+   `https://<your host>/api/webhooks/stripe` for `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded` and `charge.refunded`.
+3. Put that endpoint's signing secret in `STRIPE_WEBHOOK_SECRET` (`whsec_…`).
+   Without it the webhook route 404s and nothing is accepted.
+
+For local testing, `stripe listen --forward-to localhost:8000/api/webhooks/stripe`
+prints a signing secret to use.
+
+**Still not handled:** a refund that Stripe later reports as *failed*
+(`refund.failed`, rare for cards) is not reversed on the ledger, and disputes
+and chargebacks (`charge.dispute.*`) are not handled. Who is liable for card
+data is still a business decision; Checkout keeps card numbers off this
+server entirely.
+
+**Separate, and not fixed: the Payment Center settles without money.**
+`POST /dashboard/billing/pay` (`BillingController::pay()`) takes a `channel`
+(card, bank wire, Zelle, NFC and others), calls that channel's driver in
+`app/Services/Payments/Drivers`, and records a `completed` transaction,
+marking the invoice Paid. Every driver's `settle()` returns success with an
+invented reference; `StripeCardDriver` returns `STRIPE-XXXXXXXXXX` without
+calling Stripe. So any resident can settle their own invoice by posting that
+form. Card payments should go only through Checkout above. The other
+channels need either a real processor or a *pending* status that an
+administrator confirms. The same pattern was already closed for wallet
+top-ups and public payment links; this endpoint is the one still open.
+
+**Tests:** `StripeWebhookTest` runs signed deliveries through the real service
+with no network access. It covers forged and stale signatures, settlement,
+redelivery, two events for one payment, currency mismatch, overpayment, full
+and step-by-step partial refunds, and retries of each. `StripeRefundTest`
+covers the admin action and who sees it.
 
 **The exchange rates went too.** The dues figure was shown next to four
 conversions — USD, CAD, GBP, EUR — from a hardcoded rate table. Those numbers
@@ -907,27 +1180,28 @@ the two need to agree either way.
 
 ## Remaining work
 
-The backend, schema, routing, authorization and business logic are complete, and
-twelve pages are fully wired. The other **11 pages still hold their original
-`useState` mock data** — they were moved and mechanically converted (directives
-stripped, Next imports rewritten) but do not yet read the props their controllers
-send.
+The backend, schema, routing, authorization and business logic are complete.
+Twenty of the 23 dashboard pages read their data from the server. **Three
+pages still ignore the props their controllers send.** Their default exports take no arguments, so they render built-in
+content or nothing:
+
+| Page | What it shows today | Controller already sends |
+|---|---|---|
+| `Changelog` | Hardcoded `changelogData` array | `entries`, newest first |
+| `Deals` | Businesses and vouchers from `@/lib/placeholder-images.json` | `businesses` with active vouchers |
+| `Feedback` | A form with no submit handler | `submissions`; `store` validates type/subject/body |
 
 **Every import spec now resolves**, down from twelve unresolved at the start.
 The last one — `@/ai/flows/generate-targeted-notifications` — closed with
 `Notifications.tsx`: the form now calls `dashboard.notifications.suggest-audience`
 instead of a client-side Genkit stub that never reached a model.
 
-Every context, shared library and mock data module is now gone. The remaining
-pages need only their own props wiring. Use
+Every context and shared library has been ported. The one mock data module
+left is `resources/js/lib/placeholder-images.json`, which `Deals` still reads;
+it can go once that page is wired. The remaining pages need only their own
+props wiring. Use
 `resources/js/context/auth-context.tsx` as the pattern: read from `usePage()`,
 mutate with `router`.
-
-The eleven still on mock data: `Renters`,
-`Updates`, `Calendar`, `Guidelines`, `Changelog`,
-`Feedback`, `ReviewFeedback`, `Deals`, `Profile`,
-`Deactivation`, `Boundary`. Their controllers are all written and already send
-the props each one needs.
 
 Wiring a page is small and repetitive. For example, `Visitors.tsx`:
 
@@ -947,16 +1221,15 @@ router.post(`/dashboard/visitors/${id}/check-in`);
 Each page needs: read props instead of `useState`, swap local mutations for
 `router.post`/`patch`/`delete`, and wrap the export in `DashboardLayout`.
 
-Two pages need a little more than that:
-
-- **`GatePass.tsx`** — the token must be polled from `dashboard.gate-pass.token`
-  rather than generated locally, since the signing key is no longer in the
-  browser. Poll once per `windowSeconds`.
-- **`Boundary.tsx`** — `BoundaryPointManager` keeps its own state and wrote to
-  localStorage; point it at `dashboard.boundary.draft` / `.publish` / `.validate`.
-  The prop types it needs are already declared at the top of `Boundary.tsx`.
-
-Also outstanding: file-upload wiring for visitor and staff ID images (the routes
-and validation exist; the components still hold data-URL previews), and a
-password-reset mail flow if you want self-service resets — the sign-in page
+Also outstanding: file uploads for visitor ID and staff photos. Both are
+plain URL fields today (`id_image_url` is validated as a URL, and new staff
+default to a `picsum.photos` placeholder), so there is no way to attach a
+photo taken at the gate. There is also no password-reset mail flow for
+self-service resets; the sign-in page
 currently directs residents to the estate office, matching the original.
+
+**The Capacitor mobile shell has no config.** `capacitor.config.ts` was part of
+the Next.js app and was removed with it. It pointed `webDir` at the Next.js
+static export (`out/`), which the Laravel app does not produce. A server-rendered
+app needs a new config whose `server.url` points at the deployed site. The old
+file is in git history at `f3c48c6`.

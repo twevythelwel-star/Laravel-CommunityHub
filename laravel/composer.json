@@ -50,7 +50,19 @@
         "post-create-project-cmd": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate --ansi"
+        ],
+        "check": [
+            "Composer\\Config::disableProcessTimeout",
+            "@composer validate --no-check-publish --no-check-all",
+            "@php artisan test",
+            "@php vendor/bin/pint --test",
+            "npm run typecheck",
+            "npm audit --omit=dev --audit-level=high",
+            "npm run build"
         ]
+    },
+    "scripts-descriptions": {
+        "check": "Every build gate CI runs: lock file, tests, Pint, TypeScript, npm audit and the production build."
     },
     "extra": {
         "laravel": {
