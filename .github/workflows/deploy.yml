@@ -1,7 +1,12 @@
 name: Production Deployment & Container Release
 
+# Runs only after CI has finished for a push to main, never alongside it.
+# verify-ci then refuses to continue unless that CI run succeeded; a manual
+# dispatch must name a commit that already has a successful CI run.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
     inputs:
@@ -21,6 +26,7 @@ concurrency:
 permissions:
   contents: read
   packages: write
+  actions: read
 
 defaults:
   run:
@@ -31,10 +37,49 @@ jobs:
   verify-ci:
     name: Verify CI Gate Passed
     runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.gate.outputs.sha }}
     steps:
-      - name: Confirm commit readiness
+      # workflow_run: the triggering CI run must be a successful push to
+      # main in this repository. The branch filter alone also matches a
+      # pull request from a fork's own `main`, so the event and repository
+      # are checked too.
+      - name: Require the triggering CI run to have passed
+        if: github.event_name == 'workflow_run'
+        id: from-run
+        working-directory: .
+        env:
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT: ${{ github.event.workflow_run.event }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          echo "Commit ${{ github.sha }} on ${{ github.ref }} is being prepared for deployment."
+          echo "CI run for $HEAD_SHA: event=$EVENT repo=$HEAD_REPO conclusion=$CONCLUSION"
+          if [ "$CONCLUSION" != "success" ] || [ "$EVENT" != "push" ] || [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::CI did not pass for a push to main in this repository. Not deploying."
+            exit 1
+          fi
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      # workflow_dispatch: look up CI for the commit being deployed.
+      - name: Require a successful CI run for the dispatched commit
+        if: github.event_name == 'workflow_dispatch'
+        id: from-dispatch
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq '.total_count')
+          if [ "$passed" -lt 1 ]; then
+            echo "::error::No successful CI run exists for $GITHUB_SHA. Push it and let CI pass first."
+            exit 1
+          fi
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Record the commit cleared for deployment
+        id: gate
+        working-directory: .
+        run: echo "sha=${{ steps.from-run.outputs.sha || steps.from-dispatch.outputs.sha }}" >> "$GITHUB_OUTPUT"
 
   # ── 2. Build & Verify Production Container ──────────────────────────
   build-and-verify:
@@ -42,7 +87,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [verify-ci]
     steps:
+      # Check out the commit CI passed, not the branch tip, which may have
+      # moved on since.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify-ci.outputs.sha }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
