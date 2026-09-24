@@ -56,7 +56,13 @@ export function FoodAppForm({ children, open, onOpenChange, onSave, app }: FoodA
 
   useEffect(() => {
     if (app) {
-      form.reset(app);
+      form.reset({
+        name: app.name,
+        websiteUrl: app.websiteUrl,
+        logoUrl: app.logoUrl || 'https://picsum.photos/seed/newapp/100/100',
+        aiHint: app.aiHint || 'food delivery logo',
+        couponPercentage: app.couponPercentage ?? undefined,
+      });
     } else {
        form.reset({
         name: '',

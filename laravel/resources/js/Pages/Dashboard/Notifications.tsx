@@ -10,8 +10,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Bell } from 'lucide-react';
+import { Bell, Radio, CheckCircle2, AlertTriangle, ShieldCheck, Mail, MessageSquare, Smartphone } from 'lucide-react';
 import { NotificationForm } from '@/components/dashboard/notification-form';
+import { EmergencyBroadcastDialog } from '@/components/dashboard/emergency-broadcast-dialog';
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 
 /**
@@ -33,6 +34,14 @@ type NotificationRow = {
   targetRoles: string[] | null;
 };
 
+type ChannelStatus = {
+  channel: string;
+  label: string;
+  provider: string;
+  configured: boolean;
+  status: 'available' | 'unavailable';
+};
+
 type Paginated<T> = {
   data: T[];
   links: { url: string | null; label: string; active: boolean }[];
@@ -47,6 +56,7 @@ type Props = {
   roles: string[];
   community: string;
   aiEnabled: boolean;
+  notificationChannels?: Record<string, ChannelStatus>;
 };
 
 /** First letter of the author's display name, for the avatar fallback. */
@@ -60,17 +70,23 @@ export default function NotificationsPage({
   roles,
   community,
   aiEnabled,
+  notificationChannels = {},
 }: Props) {
   return (
     <DashboardLayout>
       <Head title="Notifications" />
 
       <div className="grid gap-8">
-        <div>
-          <h1 className="font-headline text-3xl font-bold">Notifications</h1>
-          <p className="text-muted-foreground">
-            Send and view community-wide announcements.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="font-headline text-3xl font-bold">Notifications</h1>
+            <p className="text-muted-foreground">
+              Send and view community-wide announcements.
+            </p>
+          </div>
+          {canBroadcast && (
+            <EmergencyBroadcastDialog community={community} />
+          )}
         </div>
 
         {/*
@@ -78,6 +94,55 @@ export default function NotificationsPage({
           `broadcastNotices` holders can publish, and the route enforces it —
           so showing the form to anybody else offered a button that 403s.
         */}
+        {canBroadcast && Object.keys(notificationChannels).length > 0 && (
+          <Card className="border shadow-sm bg-gradient-to-br from-card via-card to-muted/20">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-primary" />
+                    <span>Notification Engine &bull; Channel Readiness</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Multi-channel delivery status. Unconfigured providers are reported as unavailable rather than reporting false transmission confirmations.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="font-mono text-xs">
+                  5 Delivery Channels
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {Object.values(notificationChannels).map((ch) => (
+                  <div
+                    key={ch.channel}
+                    className="p-3 rounded-xl border bg-background/50 flex flex-col justify-between gap-2 text-xs"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="font-semibold text-foreground">{ch.label}</span>
+                        {ch.configured ? (
+                          <Badge variant="outline" className="font-mono text-[9px] border-emerald-500/40 text-emerald-600 bg-emerald-500/10">
+                            Available
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="font-mono text-[9px] border-amber-500/40 text-amber-600 bg-amber-500/10">
+                            Unavailable
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground block truncate" title={ch.provider}>
+                        {ch.provider}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {canBroadcast && (
           <Card>
             <CardHeader>

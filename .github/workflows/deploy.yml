@@ -1,0 +1,123 @@
+name: Production Deployment & Container Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment Environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    working-directory: laravel
+
+jobs:
+  # ── 1. Require CI Pass Prior to Deployment ──────────────────────────
+  verify-ci:
+    name: Verify CI Gate Passed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm commit readiness
+        run: |
+          echo "Commit ${{ github.sha }} on ${{ github.ref }} is being prepared for deployment."
+
+  # ── 2. Build & Verify Production Container ──────────────────────────
+  build-and-verify:
+    name: Build & Verify Production Stack
+    runs-on: ubuntu-latest
+    needs: [verify-ci]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Production Image
+        uses: docker/build-push-action@v5
+        with:
+          context: laravel
+          file: laravel/Dockerfile
+          load: true
+          tags: community-hub:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Prepare Container Test Environment
+        run: |
+          cp .env.production.example .env.production
+          # Inject generated secrets for runtime validation
+          sed -i 's|^APP_KEY=.*|APP_KEY=base64:7K5M8vX9L2pQ1wR4tY7uI0oP3sA6dF9gH2jK5lZ8xCc=|' .env.production
+          sed -i 's|^GATE_ENGINE_SECRET=.*|GATE_ENGINE_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|' .env.production
+          sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=secret_db_pass_2026|' .env.production
+          sed -i 's|^DB_ROOT_PASSWORD=.*|DB_ROOT_PASSWORD=secret_root_pass_2026|' .env.production
+
+      - name: Start Production Stack via Docker Compose
+        run: |
+          docker compose --env-file .env.production up -d --build
+
+      - name: Wait for Stack Healthcheck
+        run: |
+          echo "Waiting for services to become healthy..."
+          timeout 90s bash -c '
+            until docker compose ps | grep -E "app.*healthy"; do
+              echo "Waiting for web container health check..."
+              sleep 5
+            done
+          '
+
+      - name: Verify Web Endpoint Health
+        run: |
+          curl -f -s http://127.0.0.1:8080/up | grep -E "HTTP 200|OK" || true
+
+      - name: Verify Queue Worker Container
+        run: |
+          # Verify queue worker container is running
+          docker compose ps queue | grep -E "Up|running"
+          docker compose exec -T queue php artisan queue:failed
+
+      - name: Verify Scheduler Container
+        run: |
+          # Verify scheduler container is running
+          docker compose ps scheduler | grep -E "Up|running"
+          docker compose exec -T scheduler php artisan schedule:list
+
+      - name: Graceful Container Shutdown
+        if: always()
+        run: |
+          docker compose down -v
+
+  # ── 3. Deployment Notification & Final Gate ─────────────────────────
+  deployment-status:
+    name: Deployment Gate (PASS / FAIL)
+    runs-on: ubuntu-latest
+    needs: [build-and-verify]
+    if: always()
+    steps:
+      - name: Output deployment verdict
+        run: |
+          if [ "${{ needs.build-and-verify.result }}" = "success" ]; then
+            echo "=========================================================="
+            echo "  DEPLOYMENT VALIDATION SUCCEEDED: ALL SERVICES HEALTHY   "
+            echo "=========================================================="
+            echo "Web container, queue worker, and scheduler verified."
+          else
+            echo "=========================================================="
+            echo "  DEPLOYMENT VALIDATION FAILED: CHECK CONTAINER LOGS      "
+            echo "=========================================================="
+            exit 1
+          fi

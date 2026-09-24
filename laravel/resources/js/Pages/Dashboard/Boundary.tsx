@@ -19,6 +19,9 @@ import { useAuth } from '@/context/auth-context';
  *   dashboard.boundary.publish   POST { points: [...], notes? }
  *   dashboard.boundary.validate  POST { points: [...] } -> validation result
  */
+import { ChevronRight } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+
 export type BoundaryPoint = {
     id: number;
     label: string;
@@ -56,6 +59,16 @@ export type BoundaryAuditEntry = {
     perimeterMeters: number | null;
 };
 
+export type BoundaryPreviousVersion = {
+    id: number;
+    version: number;
+    status: string;
+    pointsCount: number;
+    publishedAt: string | null;
+    publishedBy: string | null;
+    points: BoundaryPoint[];
+};
+
 type Props = {
     community: {
         name: string;
@@ -79,6 +92,7 @@ type Props = {
     publishedCoordinates: [number, number][];
     validation: BoundaryValidation | null;
     auditHistory: BoundaryAuditEntry[];
+    previousVersions?: BoundaryPreviousVersion[];
 };
 
 export default function Boundary({
@@ -86,6 +100,7 @@ export default function Boundary({
     draft,
     publishedCoordinates,
     auditHistory,
+    previousVersions = [],
 }: Props) {
     const { can } = useAuth();
 
@@ -94,11 +109,24 @@ export default function Boundary({
             <Head title="Community Boundary" />
 
             <div className="space-y-6">
+                {/* SysAdmin Breadcrumb Navigation */}
+                <nav className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium" aria-label="Breadcrumb">
+                    <span className="text-primary font-bold">System Admin</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
+                    <span>Community Management</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
+                    <Link href="/map" className="hover:text-foreground transition-colors">
+                        Community Map
+                    </Link>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60" />
+                    <span className="text-foreground font-semibold">Boundary Configuration</span>
+                </nav>
+
                 <header className="space-y-1">
                     <h1 className="text-2xl font-bold tracking-tight">Community Boundary</h1>
                     <p className="text-sm text-muted-foreground">
                         Define and publish the estate perimeter for {community.name}. Points 1–4 are
-                        required; points 5–8 are optional.
+                        required; points 5–8 are optional. Minimum: 4, Maximum: 8.
                     </p>
                 </header>
 
@@ -129,6 +157,7 @@ export default function Boundary({
                         cadastralZone: community.cadastralZone ?? '',
                     }}
                     canManage={can.manageBoundary}
+                    previousVersions={previousVersions}
                 />
             </div>
         </DashboardLayout>

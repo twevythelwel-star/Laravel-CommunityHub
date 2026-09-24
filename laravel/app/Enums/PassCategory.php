@@ -37,6 +37,21 @@ enum PassCategory: string
         };
     }
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::SysAdmin => 'System Admin',
+            self::Admin => 'Admin',
+            self::Homeowner => 'Homeowner',
+            self::Renter => 'Renter',
+            self::Staff => 'Staff',
+            self::Security => 'Security',
+            self::HomeownerStaff => 'Homeowner Staff',
+            self::Visitor => 'Visitor',
+            self::Contractor => 'Contractor',
+        };
+    }
+
     /**
      * Visitors and contractors are passes for a person without an account,
      * issued for a stay with a start and an end.

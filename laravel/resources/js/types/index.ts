@@ -139,26 +139,27 @@ export type BlocklistEntry = {
 }
 
 export type Business = {
-  id: string;
+  id: string | number;
   name: string;
-  logoUrl: string;
-  aiHint: string;
+  logoUrl?: string | null;
+  aiHint?: string | null;
 }
 
 export type Voucher = {
-  id: string;
-  businessId: string;
+  id: string | number;
+  businessId?: string | number;
   title: string;
   description: string;
+  expiresAt?: string | null;
 }
 
 export type FoodApp = {
-  id: string;
+  id: string | number;
   name: string;
-  logoUrl: string;
+  logoUrl?: string | null;
   websiteUrl: string;
-  aiHint: string;
-  couponPercentage?: number;
+  aiHint?: string | null;
+  couponPercentage?: number | null;
 }
 
 /*
@@ -188,3 +189,7 @@ export type Guideline = {
  * will accept anything for. The row type now lives with its page, in
  * Pages/Dashboard/AccessLog.tsx, as `LogRow`.
  */
+
+declare global {
+  function route(name?: string, params?: any, absolute?: boolean): string;
+}

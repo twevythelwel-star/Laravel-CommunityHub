@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Model;
  */
 class StripeEvent extends Model
 {
-    protected $fillable = ['event_id', 'type', 'processed_at'];
+    protected $fillable = ['event_id', 'type', 'status', 'payload', 'error_message', 'processed_at'];
 
     protected function casts(): array
     {
-        return ['processed_at' => 'datetime'];
+        return [
+            'processed_at' => 'datetime',
+        ];
     }
 }

@@ -55,6 +55,7 @@ class HandleInertiaRequests extends Middleware
                     'manageSecurity' => $user->can('manageSecurity'),
                     'scanPasses' => $user->can('scanPasses'),
                     'manageBoundary' => $user->can('manageBoundary'),
+                    'viewBoundary' => $user->can('viewBoundary'),
                     'manageBilling' => $user->can('manageBilling'),
                     'reviewFeedback' => $user->can('reviewFeedback'),
                     'manageBlocklist' => $user->can('manageBlocklist'),

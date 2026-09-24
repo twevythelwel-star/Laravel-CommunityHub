@@ -51,10 +51,24 @@ return [
 
     'twilio' => [
         'sid' => env('TWILIO_SID'),
+        // Either the Auth Token, or an API key pair (preferred: revocable on its own).
         'token' => env('TWILIO_TOKEN'),
+        'api_key' => env('TWILIO_API_KEY'),
+        'api_secret' => env('TWILIO_API_SECRET'),
         'from' => env('TWILIO_FROM'),
         'whatsapp_from' => env('TWILIO_WHATSAPP_FROM'),
         'whatsapp_content_sid' => env('TWILIO_WHATSAPP_CONTENT_SID'),
         'default_country_code' => env('SMS_DEFAULT_COUNTRY_CODE', '1'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Push Notifications (WebPush / FCM)
+    |--------------------------------------------------------------------------
+    */
+    'push' => [
+        'vapid_public_key' => env('VAPID_PUBLIC_KEY'),
+        'vapid_private_key' => env('VAPID_PRIVATE_KEY'),
+        'fcm_server_key' => env('FCM_SERVER_KEY'),
     ],
 ];

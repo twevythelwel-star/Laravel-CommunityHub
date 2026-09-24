@@ -10,8 +10,10 @@ use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use Stripe\BillingPortal\Session as BillingPortalSession;
 use Stripe\Charge;
 use Stripe\Checkout\Session;
+use Stripe\Customer;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Refund;
 use Stripe\Stripe;
@@ -133,6 +135,45 @@ class StripePaymentService
     }
 
     /**
+     * Create a Stripe Billing Portal session for self-service payment management.
+     */
+    public function createCustomerPortalSession(User $user, string $returnUrl): string
+    {
+        if (! $this->isLive()) {
+            throw new RuntimeException('Stripe is not configured; billing portal is unavailable.');
+        }
+
+        Stripe::setApiKey($this->secretKey);
+
+        $customerId = null;
+        try {
+            $existing = Customer::all(['email' => $user->email, 'limit' => 1]);
+            if (! empty($existing->data)) {
+                $customerId = $existing->data[0]->id;
+            } else {
+                $created = Customer::create([
+                    'email' => $user->email,
+                    'name' => $user->display_name,
+                    'metadata' => [
+                        'user_id' => (string) $user->id,
+                        'lot' => $user->lot ?? 'unassigned',
+                    ],
+                ]);
+                $customerId = $created->id;
+            }
+        } catch (ApiErrorException $e) {
+            throw new RuntimeException("Unable to resolve Stripe customer: {$e->getMessage()}", 0, $e);
+        }
+
+        $session = BillingPortalSession::create([
+            'customer' => $customerId,
+            'return_url' => $returnUrl,
+        ]);
+
+        return $session->url;
+    }
+
+    /**
      * Verify a completed checkout with Stripe and settle the invoice.
      *
      * Used by the success URL. The session id arrives as a query parameter the
@@ -198,6 +239,8 @@ class StripePaymentService
             $inserted = StripeEvent::query()->insertOrIgnore([
                 'event_id' => $event->id,
                 'type' => $event->type,
+                'status' => 'pending',
+                'payload' => json_encode($event->data->object),
                 'processed_at' => $now,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -209,12 +252,27 @@ class StripePaymentService
 
             $object = $event->data->object;
 
-            return match ($event->type) {
+            $outcome = match ($event->type) {
                 'checkout.session.completed',
                 'checkout.session.async_payment_succeeded' => $this->settleSession($object),
+                'payment_intent.succeeded' => $this->settlePaymentIntent($object),
+                'payment_intent.payment_failed',
+                'checkout.session.expired' => $this->handlePaymentFailure($object, $event->type),
                 'charge.refunded' => $this->syncRefunds($object),
+                'charge.dispute.created',
+                'charge.dispute.closed',
+                'charge.dispute.funds_withdrawn',
+                'charge.dispute.funds_reinstated' => $this->handleDispute($object, $event->type),
+                'payout.paid',
+                'payout.failed' => $this->handlePayout($object, $event->type),
                 default => 'ignored',
             };
+
+            StripeEvent::where('event_id', $event->id)->update([
+                'status' => $outcome,
+            ]);
+
+            return $outcome;
         });
     }
 
@@ -267,6 +325,9 @@ class StripePaymentService
                     'user_id' => $invoice->user_id,
                     'invoice_id' => $invoice->id,
                     'amount_minor' => $amountMinor,
+                    'fee_minor' => 0,
+                    'net_amount_minor' => $amountMinor,
+                    'settled_at' => now(),
                     'currency' => strtoupper($invoice->currency),
                     'payment_channel' => self::CHANNEL,
                     'status' => 'completed',
@@ -303,6 +364,241 @@ class StripePaymentService
 
             return 'settled';
         });
+    }
+
+    /**
+     * Settle an invoice when a PaymentIntent succeeds directly. Idempotent.
+     */
+    public function settlePaymentIntent(StripeObject $paymentIntent): string
+    {
+        $piId = $paymentIntent->id;
+        $invoiceId = $paymentIntent->metadata->invoice_id ?? null;
+
+        $invoice = $invoiceId
+            ? Invoice::find((int) $invoiceId)
+            : Invoice::where('stripe_payment_intent', $piId)->first();
+
+        if (! $invoice) {
+            return 'unknown_invoice';
+        }
+
+        if ($paymentIntent->status !== 'succeeded') {
+            return 'unpaid';
+        }
+
+        $amountMinor = (int) $paymentIntent->amount;
+        $feeMinor = (int) ($paymentIntent->application_fee_amount ?? 0);
+
+        return DB::transaction(function () use ($invoice, $piId, $amountMinor, $feeMinor): string {
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->id);
+
+            $payment = Transaction::query()->firstOrCreate(
+                ['reference' => $this->paymentReference($piId)],
+                [
+                    'user_id' => $invoice->user_id,
+                    'invoice_id' => $invoice->id,
+                    'amount_minor' => $amountMinor,
+                    'fee_minor' => $feeMinor,
+                    'net_amount_minor' => $amountMinor - $feeMinor,
+                    'settled_at' => now(),
+                    'currency' => strtoupper($invoice->currency),
+                    'payment_channel' => self::CHANNEL,
+                    'status' => 'completed',
+                    'notes' => "Stripe PaymentIntent {$piId}",
+                ],
+            );
+
+            if (! $payment->wasRecentlyCreated) {
+                return 'duplicate';
+            }
+
+            if (in_array($invoice->status, ['Paid', 'Waived'], true)) {
+                return 'overpaid';
+            }
+
+            $invoice->forceFill([
+                'stripe_payment_intent' => $piId,
+            ]);
+
+            if ($amountMinor >= $invoice->amount_minor) {
+                $invoice->markPaid();
+            } else {
+                $invoice->update(['status' => 'Partially Paid']);
+            }
+
+            return 'settled';
+        });
+    }
+
+    /**
+     * Record a payment failure event on the ledger and audit trail. Idempotent.
+     */
+    public function handlePaymentFailure(StripeObject $object, string $eventType): string
+    {
+        $id = $object->id;
+        $invoiceId = $object->metadata->invoice_id ?? ($object->client_reference_id ?? null);
+
+        $invoice = $invoiceId ? Invoice::find((int) $invoiceId) : null;
+        if (! $invoice && isset($object->payment_intent)) {
+            $piId = $this->idOf($object->payment_intent);
+            if ($piId) {
+                $invoice = Invoice::where('stripe_payment_intent', $piId)->first();
+            }
+        }
+
+        $errorMessage = $object->last_payment_error->message
+            ?? ($object->cancellation_reason ?? 'Payment failed or expired at processor.');
+
+        $amountMinor = (int) ($object->amount ?? ($object->amount_total ?? ($invoice?->amount_minor ?? 0)));
+
+        if ($invoice) {
+            Transaction::query()->firstOrCreate(
+                ['reference' => "stripe-failed:{$id}"],
+                [
+                    'user_id' => $invoice->user_id,
+                    'invoice_id' => $invoice->id,
+                    'amount_minor' => $amountMinor,
+                    'fee_minor' => 0,
+                    'net_amount_minor' => 0,
+                    'currency' => strtoupper($invoice->currency),
+                    'payment_channel' => self::CHANNEL,
+                    'status' => 'failed',
+                    'notes' => "Payment failed ({$eventType}): {$errorMessage}",
+                ]
+            );
+
+            if ($invoice->status === 'Pending') {
+                $invoice->update(['status' => 'Unpaid']);
+            }
+
+            Log::channel('security')->warning('Stripe payment failure recorded', [
+                'invoice' => $invoice->reference,
+                'event_type' => $eventType,
+                'error' => $errorMessage,
+            ]);
+        }
+
+        return 'failed';
+    }
+
+    /**
+     * Process chargebacks and dispute lifecycle events. Idempotent.
+     */
+    public function handleDispute(StripeObject $dispute, string $eventType): string
+    {
+        $disputeId = $dispute->id;
+        $chargeId = isset($dispute->charge) ? $this->idOf($dispute->charge) : null;
+        $amountMinor = (int) $dispute->amount;
+        $currency = strtoupper((string) ($dispute->currency ?? 'USD'));
+
+        // Locate transaction or invoice
+        $payment = Transaction::where('payment_channel', self::CHANNEL)
+            ->where(function ($q) use ($chargeId) {
+                if ($chargeId) {
+                    $q->where('notes', 'like', "%{$chargeId}%");
+                }
+            })->first();
+
+        $invoice = $payment?->invoice;
+        if (! $invoice && isset($dispute->metadata->invoice_id)) {
+            $invoice = Invoice::find((int) $dispute->metadata->invoice_id);
+        }
+
+        if ($eventType === 'charge.dispute.created' || $eventType === 'charge.dispute.funds_withdrawn') {
+            if ($invoice) {
+                Transaction::query()->firstOrCreate(
+                    ['reference' => "stripe-dispute:{$disputeId}:created"],
+                    [
+                        'user_id' => $invoice->user_id,
+                        'invoice_id' => $invoice->id,
+                        'amount_minor' => $amountMinor,
+                        'fee_minor' => 0,
+                        'net_amount_minor' => $amountMinor * -1,
+                        'currency' => $currency,
+                        'payment_channel' => self::CHANNEL,
+                        'status' => 'disputed',
+                        'dispute_reason' => $dispute->reason ?? 'general',
+                        'notes' => "Chargeback/dispute opened ({$dispute->reason}). Status: {$dispute->status}",
+                    ]
+                );
+
+                $invoice->update(['status' => 'Disputed']);
+
+                Log::channel('security')->alert('Stripe chargeback/dispute created for invoice', [
+                    'invoice' => $invoice->reference,
+                    'dispute_id' => $disputeId,
+                    'amount' => $amountMinor,
+                    'reason' => $dispute->reason ?? 'unknown',
+                ]);
+            }
+
+            return 'disputed';
+        }
+
+        if ($eventType === 'charge.dispute.closed') {
+            $status = $dispute->status; // won, lost
+            if ($status === 'won') {
+                if ($invoice) {
+                    $invoice->markPaid();
+                    Transaction::query()->firstOrCreate(
+                        ['reference' => "stripe-dispute:{$disputeId}:won"],
+                        [
+                            'user_id' => $invoice->user_id,
+                            'invoice_id' => $invoice->id,
+                            'amount_minor' => $amountMinor,
+                            'fee_minor' => 0,
+                            'net_amount_minor' => $amountMinor,
+                            'currency' => $currency,
+                            'payment_channel' => self::CHANNEL,
+                            'status' => 'completed',
+                            'notes' => 'Dispute won in estate favor. Funds reinstated.',
+                        ]
+                    );
+                }
+
+                return 'dispute_won';
+            } else {
+                if ($invoice) {
+                    $invoice->update(['status' => 'Unpaid']);
+                    Transaction::query()->firstOrCreate(
+                        ['reference' => "stripe-dispute:{$disputeId}:lost"],
+                        [
+                            'user_id' => $invoice->user_id,
+                            'invoice_id' => $invoice->id,
+                            'amount_minor' => $amountMinor,
+                            'fee_minor' => 0,
+                            'net_amount_minor' => 0,
+                            'currency' => $currency,
+                            'payment_channel' => self::CHANNEL,
+                            'status' => 'failed',
+                            'notes' => 'Dispute lost. Funds returned to cardholder.',
+                        ]
+                    );
+                }
+
+                return 'dispute_lost';
+            }
+        }
+
+        return 'disputed';
+    }
+
+    /**
+     * Record payout settlement against open transactions. Idempotent.
+     */
+    public function handlePayout(StripeObject $payout, string $eventType): string
+    {
+        $payoutId = $payout->id;
+
+        Transaction::where('payment_channel', self::CHANNEL)
+            ->whereNull('payout_reference')
+            ->where('status', 'completed')
+            ->update([
+                'payout_reference' => $payoutId,
+                'settled_at' => now(),
+            ]);
+
+        return 'payout_settled';
     }
 
     /**
@@ -352,6 +648,9 @@ class StripePaymentService
                 'user_id' => $invoice->user_id,
                 'invoice_id' => $invoice->id,
                 'amount_minor' => $delta,
+                'fee_minor' => 0,
+                'net_amount_minor' => $delta * -1,
+                'settled_at' => now(),
                 'currency' => strtoupper((string) $charge->currency),
                 'payment_channel' => self::CHANNEL,
                 // One row per step in the cumulative total, so the same step

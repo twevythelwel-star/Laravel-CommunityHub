@@ -75,7 +75,7 @@ class MapController extends Controller
 
     public function storeLandmark(Request $request): RedirectResponse
     {
-        $this->authorize('manageBoundary');
+        $this->authorize('manageLandmarks');
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
@@ -98,7 +98,7 @@ class MapController extends Controller
 
     public function destroyLandmark(Request $request, Landmark $landmark): RedirectResponse
     {
-        $this->authorize('manageBoundary');
+        $this->authorize('manageLandmarks');
 
         $name = $landmark->name;
         $landmark->delete();

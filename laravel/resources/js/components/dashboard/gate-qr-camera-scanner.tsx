@@ -31,6 +31,8 @@ import {
   ChevronUp,
   ExternalLink,
   Info,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { GateId, GatePassValidationReport, ScanDecision } from '@/lib/gate-pass-engine/types';
 import { describeRequestError } from '@/lib/gate-pass-engine/api';
@@ -39,20 +41,69 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
 
-function formatDenyReason(primaryReason?: string): string {
-  if (!primaryReason) return 'EXPIRED';
+function describeDenyReason(primaryReason?: string): { label: string; explanation: string; action: string } {
+  if (!primaryReason) {
+    return {
+      label: 'EXPIRED PASS',
+      explanation: 'This pass has expired and is outside its authorized validity window.',
+      action: 'Do not admit. Ask guest to contact their resident host.',
+    };
+  }
   const upper = primaryReason.toUpperCase();
-  if (upper.includes('TOKEN_EXPIRED') || upper.includes('EXPIRED')) return 'EXPIRED';
-  if (upper.includes('PASS_REVOKED') || upper.includes('REVOKED')) return 'REVOKED';
-  if (upper.includes('NOT_A_GPE') || upper.includes('UNRECOGNIZED')) return 'NOT FOUND';
-  if (upper.includes('SIGNATURE_MISMATCH') || upper.includes('INVALID_QR_STRUCTURE') || upper.includes('TAMPERED') || upper.includes('FORGED')) return 'TAMPERED';
-  if (upper.includes('UNAUTHORIZED_COMMUNITY') || upper.includes('COMMUNITY')) return 'WRONG COMMUNITY';
-  if (upper.includes('UNAUTHORIZED_GATE')) return 'WRONG GATE';
-  if (upper.includes('OUTSIDE_HOURS') || upper.includes('TOKEN_NOT_YET_VALID') || upper.includes('TIME')) return 'WRONG TIME';
-  if (upper.includes('UNAUTHORIZED_ZONE') || upper.includes('ZONE')) return 'WRONG ACCESS ZONE';
-  if (upper.includes('REPLAY') || upper.includes('DUPLICATE')) return 'REPLAY ATTACK';
-  if (upper.includes('USER_NOT_ACTIVE')) return 'ACCOUNT DEACTIVATED';
-  return primaryReason.split(':')[0] || 'PASS NOT VALID';
+  if (upper.includes('REPLAY') || upper.includes('DUPLICATE')) {
+    return {
+      label: 'REPLAY ATTACK (DUPLICATE CODE)',
+      explanation: 'Static screenshot detected. This specific QR code token was already scanned and consumed.',
+      action: 'Do not admit. Request live, animated pass from the resident app.',
+    };
+  }
+  if (upper.includes('PASS_REVOKED') || upper.includes('REVOKED')) {
+    return {
+      label: 'REVOKED PASS',
+      explanation: 'This credential was revoked by community administration.',
+      action: 'Do not admit. Direct individual to estate management.',
+    };
+  }
+  if (upper.includes('OUTSIDE_HOURS') || upper.includes('OUTSIDE_PASS_VALIDITY') || upper.includes('TOKEN_EXPIRED') || upper.includes('EXPIRED')) {
+    return {
+      label: 'EXPIRED PASS / OUTSIDE HOURS',
+      explanation: 'Pass validity period has ended or visiting hours for this profile have closed.',
+      action: 'Do not admit. Host must issue a refreshed clearance.',
+    };
+  }
+  if (upper.includes('UNAUTHORIZED_GATE')) {
+    return {
+      label: 'WRONG GATE',
+      explanation: 'Pass is designated for a different entrance portal.',
+      action: 'Direct driver to their authorized gate.',
+    };
+  }
+  if (upper.includes('UNAUTHORIZED_COMMUNITY') || upper.includes('COMMUNITY')) {
+    return {
+      label: 'WRONG ESTATE / COMMUNITY',
+      explanation: 'This pass was minted for an external property, not Cypress Bay.',
+      action: 'Do not admit. Check recipient credentials.',
+    };
+  }
+  if (upper.includes('USER_NOT_ACTIVE')) {
+    return {
+      label: 'ACCOUNT DEACTIVATED',
+      explanation: 'The sponsoring resident or homeowner account is suspended or expired.',
+      action: 'Do not admit. Contact management office.',
+    };
+  }
+  if (upper.includes('SIGNATURE_MISMATCH') || upper.includes('TAMPERED') || upper.includes('FORGED') || upper.includes('INVALID_QR')) {
+    return {
+      label: 'TAMPERED / FORGED CODE',
+      explanation: 'Cryptographic HMAC signature check failed. Code was altered or forged.',
+      action: 'Do not admit. Security supervisor notified.',
+    };
+  }
+  return {
+    label: 'ACCESS DENIED',
+    explanation: primaryReason,
+    action: 'Do not admit until verified with host.',
+  };
 }
 
 interface GateQrCameraScannerProps {
@@ -77,11 +128,11 @@ export function GateQrCameraScanner({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchEnabled, setTorchEnabled] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   // Scan state results
   const [report, setReport] = useState<GatePassValidationReport | null>(null);
   const [accessLogId, setAccessLogId] = useState<number | null>(null);
-  // The server's decision for the last scan, and the ID that confirms it.
   const [decision, setDecision] = useState<ScanDecision | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
   const [completed, setCompleted] = useState<{ action: 'CHECK_IN' | 'CHECK_OUT' | 'REFUSED'; time: string } | null>(null);
@@ -99,6 +150,16 @@ export function GateQrCameraScanner({
   const lastScannedTokenRef = useRef<string | null>(null);
   const lastScanTimestampRef = useRef<number>(0);
 
+  // Fast reset helper
+  const handleResetForNextScan = useCallback(() => {
+    setReport(null);
+    setInputToken('');
+    setCompleted(null);
+    setScanId(null);
+    setDecision(null);
+    lastScannedTokenRef.current = null;
+  }, []);
+
   // Continuous Kiosk Mode Auto-Rearm Countdown
   useEffect(() => {
     if (!isKioskMode || !report) {
@@ -106,15 +167,12 @@ export function GateQrCameraScanner({
       return;
     }
 
-    setAutoRearmCountdown(4);
+    setAutoRearmCountdown(3);
     const interval = setInterval(() => {
       setAutoRearmCountdown((prev) => {
         if (prev === null || prev <= 1) {
           clearInterval(interval);
-          setReport(null);
-          setInputToken('');
-          setCompleted(null);
-          lastScannedTokenRef.current = null;
+          handleResetForNextScan();
           return null;
         }
         return prev - 1;
@@ -122,7 +180,7 @@ export function GateQrCameraScanner({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isKioskMode, report]);
+  }, [isKioskMode, report, handleResetForNextScan]);
 
   // Start / Stop Camera Stream
   const startCamera = useCallback(async () => {
@@ -151,7 +209,6 @@ export function GateQrCameraScanner({
 
       setIsCameraActive(true);
 
-      // Check if torch/flashlight is supported
       const track = stream.getVideoTracks()[0];
       const capabilities = (track.getCapabilities ? track.getCapabilities() : {}) as any;
       if (capabilities && capabilities.torch) {
@@ -164,7 +221,7 @@ export function GateQrCameraScanner({
       setIsCameraActive(false);
       setCameraError(
         err.name === 'NotAllowedError'
-          ? 'Camera permission denied. Please allow camera access in your browser or use the manual input/samples below.'
+          ? 'Camera permission denied. Allow camera access in browser or use manual code entry.'
           : 'Unable to initialize device camera video stream.'
       );
     }
@@ -221,27 +278,51 @@ export function GateQrCameraScanner({
         setDecision(data.decision);
         setScanId(data.scanId);
 
-        // Sound / Beep Feedback
-        try {
-          const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.type = data.report.status === 'ALLOW' ? 'sine' : 'sawtooth';
-          osc.frequency.setValueAtTime(data.report.status === 'ALLOW' ? 880 : 220, ctx.currentTime);
-          gain.gain.setValueAtTime(0.15, ctx.currentTime);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.15);
-        } catch (_) {}
+        // Sound / Beep Feedback (Web Audio API)
+        if (soundEnabled) {
+          try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const gain = ctx.createGain();
+            gain.connect(ctx.destination);
+
+            if (data.report.status === 'ALLOW') {
+              // High pleasant dual-tone chime (880Hz then 1174Hz)
+              const osc1 = ctx.createOscillator();
+              const osc2 = ctx.createOscillator();
+              osc1.type = 'sine';
+              osc2.type = 'sine';
+              osc1.frequency.setValueAtTime(880, ctx.currentTime);
+              osc2.frequency.setValueAtTime(1174, ctx.currentTime + 0.08);
+              gain.gain.setValueAtTime(0.25, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+              osc1.connect(gain);
+              osc2.connect(gain);
+              osc1.start(ctx.currentTime);
+              osc2.start(ctx.currentTime + 0.08);
+              osc1.stop(ctx.currentTime + 0.35);
+              osc2.stop(ctx.currentTime + 0.35);
+            } else {
+              // Low warning alert buzz (180Hz then 120Hz sawtooth)
+              const osc = ctx.createOscillator();
+              osc.type = 'sawtooth';
+              osc.frequency.setValueAtTime(180, ctx.currentTime);
+              osc.frequency.setValueAtTime(120, ctx.currentTime + 0.12);
+              gain.gain.setValueAtTime(0.3, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+              osc.connect(gain);
+              osc.start(ctx.currentTime);
+              osc.stop(ctx.currentTime + 0.35);
+            }
+          } catch (_) {}
+        }
 
         // Mobile Device Haptic Vibration Feedback
         if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
           try {
             if (data.report.status === 'ALLOW') {
-              navigator.vibrate([60, 40, 60]); // Crisp double pulse confirmation
+              navigator.vibrate([70, 40, 70]); // Crisp double pulse
             } else {
-              navigator.vibrate([120, 80, 180]); // Distinct security alert buzz
+              navigator.vibrate([200, 100, 200, 100, 400]); // Strong warning buzz
             }
           } catch (_) {}
         }
@@ -255,7 +336,7 @@ export function GateQrCameraScanner({
         setIsScanning(false);
       }
     },
-    [selectedGate, toast],
+    [selectedGate, soundEnabled, toast],
   );
 
   // Frame processing loop for QR decoding
@@ -271,7 +352,6 @@ export function GateQrCameraScanner({
       }
 
       const now = Date.now();
-      // Throttle to 10 FPS to save CPU / battery
       if (now - lastScanTimestampRef.current > 100 && !isScanningFrame && !isScanning) {
         lastScanTimestampRef.current = now;
         isScanningFrame = true;
@@ -298,15 +378,15 @@ export function GateQrCameraScanner({
             });
 
             if (qrCode && qrCode.data) {
-              const scannedText = qrCode.data.trim();
-              if (scannedText !== lastScannedTokenRef.current || now - lastScanTimestampRef.current > 3000) {
-                lastScannedTokenRef.current = scannedText;
-                setInputToken(scannedText);
-                void executeScan(scannedText);
+              const rawData = qrCode.data.trim();
+              if (rawData && rawData !== lastScannedTokenRef.current) {
+                lastScannedTokenRef.current = rawData;
+                setInputToken(rawData);
+                void executeScan(rawData);
               }
             }
           }
-        } catch (e) {
+        } catch (_) {
           // ignore transient frame read errors
         } finally {
           isScanningFrame = false;
@@ -332,19 +412,12 @@ export function GateQrCameraScanner({
       void startCamera();
     } else {
       stopCamera();
-      setReport(null);
-      setInputToken('');
-      lastScannedTokenRef.current = null;
-      setCompleted(null);
+      handleResetForNextScan();
     }
-  }, [open, startCamera, stopCamera]);
+  }, [open, startCamera, stopCamera, handleResetForNextScan]);
 
-  /*
-   | Confirms or refuses the server's decision. Only the scan ID is sent: the
-   | action (check in or check out) is the one the server decided when it
-   | validated the code, so this screen cannot choose it.
-   */
-  const handleConfirm = async (accept: boolean) => {
+  // Confirm or refuse entry
+  const handleConfirm = useCallback(async (accept: boolean) => {
     if (!report || !scanId) return;
     setIsConfirmingAction(true);
 
@@ -371,32 +444,74 @@ export function GateQrCameraScanner({
     } finally {
       setIsConfirmingAction(false);
     }
-  };
+  }, [report, scanId, toast, onSuccessCheck]);
+
+  // Global Keyboard Shortcuts for Security Operator Speed
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is currently typing in the manual input
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+        return;
+      }
+
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        if (report && !completed && (decision === 'CHECK_IN' || decision === 'CHECK_OUT')) {
+          void handleConfirm(true);
+        } else if (report && (decision === 'REJECT' || completed)) {
+          handleResetForNextScan();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, report, completed, decision, handleConfirm, handleResetForNextScan]);
+
+  const denyInfo = report ? describeDenyReason(report.primaryReason) : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[94vh] overflow-y-auto p-0 border shadow-2xl bg-card">
-        {/* Header with Portal Selector & Scanner Title */}
-        <div className="p-5 border-b bg-muted/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <DialogContent className="max-w-4xl max-h-[96vh] overflow-y-auto p-0 border shadow-2xl bg-card">
+        {/* Header with Portal Selector & Sound Controls */}
+        <div className="p-5 border-b bg-muted/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm shrink-0">
-              <Scan className="w-6 h-6 animate-pulse" />
+            <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
+              <Camera className="w-6 h-6" />
             </div>
             <div>
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                Digital Gate Pass QR Scanner
-                <Badge variant="outline" className="text-[10px] tracking-wider font-mono border-primary/30 text-primary uppercase">
-                  Engine v1
-                </Badge>
+              <DialogTitle className="text-xl font-black tracking-tight text-foreground flex items-center gap-2">
+                <span>Gate Pass Scanner</span>
+                <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-600 border border-emerald-600/20">
+                  REAL-TIME
+                </span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Live Camera Reticle • 16-Point Cryptographic & Policy Ingress Engine
+                High-speed credential verification with anti-replay & perimeter validation.
               </DialogDescription>
             </div>
           </div>
 
-          {/* Controls: Portal & Kiosk Mode */}
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Quick Toolbar */}
+          <div className="flex items-center flex-wrap gap-2">
+            {/* Audio Toggle */}
+            <Button
+              type="button"
+              size="sm"
+              variant={soundEnabled ? 'default' : 'outline'}
+              onClick={() => setSoundEnabled((prev) => !prev)}
+              className={cn(
+                'text-xs font-bold gap-1.5 h-9 rounded-xl',
+                soundEnabled && 'bg-slate-800 text-white hover:bg-slate-700'
+              )}
+              title={soundEnabled ? 'Audio Chimes Enabled' : 'Audio Muted'}
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              <span>{soundEnabled ? 'Sound ON' : 'Muted'}</span>
+            </Button>
+
             {/* Kiosk Mode Toggle */}
             <Button
               type="button"
@@ -404,67 +519,68 @@ export function GateQrCameraScanner({
               variant={isKioskMode ? 'default' : 'outline'}
               onClick={() => setIsKioskMode((prev) => !prev)}
               className={cn(
-                'text-xs font-semibold gap-1.5 h-8 rounded-xl',
+                'text-xs font-bold gap-1.5 h-9 rounded-xl',
                 isKioskMode && 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-sm'
               )}
-              title="Continuous scanning with automatic re-arm after each vehicle"
+              title="Continuous vehicle fast-lane mode with 3s auto-rearm"
             >
-              <Zap className={cn('w-3.5 h-3.5', isKioskMode && 'fill-white animate-pulse')} />
-              <span>{isKioskMode ? 'Kiosk Lane: Active' : 'Kiosk Mode'}</span>
+              <Zap className={cn('w-4 h-4', isKioskMode && 'fill-white animate-pulse')} />
+              <span>{isKioskMode ? 'Fast-Lane: ON' : 'Fast-Lane Mode'}</span>
             </Button>
 
-            {/* Gate Selection Pill */}
-            <div className="flex items-center gap-1.5 bg-background border rounded-xl p-1 text-xs shadow-xs">
-              <span className="text-muted-foreground px-2 font-mono text-[11px]">PORTAL:</span>
+            {/* Portal Selection */}
+            <div className="flex items-center gap-1 bg-background border rounded-xl p-1 text-xs shadow-xs">
+              <span className="text-muted-foreground px-2 font-mono text-[11px] font-bold">GATE:</span>
               <button
                 type="button"
                 onClick={() => setSelectedGate('GATE-01')}
                 className={cn(
-                  'px-3 py-1 rounded-lg font-bold transition-all text-xs',
+                  'px-3 py-1.5 rounded-lg font-black transition-all text-xs cursor-pointer',
                   selectedGate === 'GATE-01'
                     ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                Main Gate (01)
+                Gate 01 (Main)
               </button>
               <button
                 type="button"
                 onClick={() => setSelectedGate('GATE-02')}
                 className={cn(
-                  'px-3 py-1 rounded-lg font-bold transition-all text-xs',
+                  'px-3 py-1.5 rounded-lg font-black transition-all text-xs cursor-pointer',
                   selectedGate === 'GATE-02'
                     ? 'bg-primary text-primary-foreground shadow-xs'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                Service Gate (02)
+                Gate 02 (Service)
               </button>
             </div>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Continuous Kiosk Auto-Rearm Status Banner */}
+          {/* Continuous Fast-Lane Auto-Rearm Countdown */}
           {autoRearmCountdown !== null && (
-            <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-amber-700 dark:text-amber-400 font-medium animate-in fade-in duration-200">
-              <span className="flex items-center gap-2">
-                <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                <span>Continuous Fast-Lane: Re-arming camera in <strong>{autoRearmCountdown}s</strong> for next vehicle…</span>
+            <div className="flex items-center justify-between bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl px-5 py-3 text-sm text-amber-800 dark:text-amber-300 font-bold animate-in fade-in duration-200">
+              <span className="flex items-center gap-2.5">
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+                <span>Fast-Lane Mode: Re-arming camera in <strong>{autoRearmCountdown}s</strong> for next vehicle…</span>
               </span>
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => setAutoRearmCountdown(null)}
-                className="h-6 px-2 text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-500/20"
+                className="h-7 px-3 text-xs font-bold border-amber-500/50"
               >
                 Pause Auto-Rearm
               </Button>
             </div>
           )}
-          {/* CAMERA VIEWFINDER & RETICLE */}
-          <div className="relative rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-2xl flex flex-col items-center justify-center min-h-[300px]">
+
+          {/* LARGE CAMERA VIEWFINDER & HIGH-CONTRAST RETICLE */}
+          <div className="relative rounded-3xl overflow-hidden bg-slate-950 border-2 border-slate-800 shadow-2xl flex flex-col items-center justify-center min-h-[380px] sm:min-h-[460px] max-h-[560px]">
             {/* Live Video Feed */}
             <video
               ref={videoRef}
@@ -472,92 +588,91 @@ export function GateQrCameraScanner({
               muted
               autoPlay
               className={cn(
-                'w-full max-h-[360px] object-cover transition-opacity duration-300',
+                'w-full h-full min-h-[380px] sm:min-h-[460px] max-h-[560px] object-cover transition-opacity duration-300',
                 isCameraActive ? 'opacity-90' : 'opacity-20 hidden'
               )}
             />
 
             {/* Fallback Viewport if camera is unavailable or loading */}
             {!isCameraActive && (
-              <div className="p-8 text-center space-y-3">
-                <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center mx-auto text-muted-foreground">
-                  <Camera className="w-8 h-8 opacity-70" />
+              <div className="p-8 text-center space-y-4">
+                <div className="w-20 h-20 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center mx-auto text-slate-300 shadow-lg">
+                  <Camera className="w-10 h-10" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-200">
-                    {cameraError ? 'Camera Access Notice' : 'Connecting to Camera Stream…'}
+                  <p className="text-base font-bold text-slate-200">
+                    {cameraError ? 'Camera Notice' : 'Connecting to High-Definition Camera Stream…'}
                   </p>
                   <p className="text-xs text-slate-400 max-w-sm mt-1 mx-auto">
                     {cameraError || 'Position the pass QR directly within device viewport.'}
                   </p>
                 </div>
                 <Button
-                  size="sm"
+                  size="default"
                   variant="outline"
                   onClick={() => void startCamera()}
-                  className="text-xs gap-1.5 border-slate-700 text-slate-200 hover:bg-slate-800"
+                  className="text-xs font-bold gap-2 border-slate-600 text-slate-200 hover:bg-slate-800 h-11 px-5 rounded-xl cursor-pointer"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-4 h-4" />
                   Retry Camera
                 </Button>
               </div>
             )}
 
-            {/* OVERLAY: Reticle Matching User Diagram */}
+            {/* High-Contrast Target Reticle */}
             {isCameraActive && (
               <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-4">
-                {/* Target Square */}
-                <div className="relative w-56 h-56 sm:w-64 sm:h-64 border-2 border-primary/60 rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.3)] flex items-center justify-center">
-                  {/* Corner Reticles */}
-                  <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-                  <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-                  <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-                  <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-lg" />
+                <div className="relative w-64 h-64 sm:w-72 sm:h-72 border-2 border-emerald-400/50 rounded-3xl shadow-[0_0_30px_rgba(16,185,129,0.3)] flex items-center justify-center">
+                  {/* Thick High-Contrast Corner Bars */}
+                  <div className="absolute -top-1.5 -left-1.5 w-8 h-8 border-t-[6px] border-l-[6px] border-emerald-400 rounded-tl-xl" />
+                  <div className="absolute -top-1.5 -right-1.5 w-8 h-8 border-t-[6px] border-r-[6px] border-emerald-400 rounded-tr-xl" />
+                  <div className="absolute -bottom-1.5 -left-1.5 w-8 h-8 border-b-[6px] border-l-[6px] border-emerald-400 rounded-bl-xl" />
+                  <div className="absolute -bottom-1.5 -right-1.5 w-8 h-8 border-b-[6px] border-r-[6px] border-emerald-400 rounded-br-xl" />
 
                   {/* Laser Scan Sweep Line */}
-                  <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_12px_#38bdf8] animate-bounce" />
+                  <div className="absolute left-2 right-2 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_#34d399] animate-bounce" />
 
-                  {/* Center QR Glyph */}
-                  <div className="text-primary/40 font-mono text-2xl font-bold tracking-widest">
+                  {/* Center Glyph */}
+                  <div className="text-emerald-400/40 font-mono text-3xl font-black">
                     ▣
                   </div>
 
-                  <span className="absolute -bottom-7 text-[11px] font-mono font-bold tracking-wider text-primary-foreground bg-primary/90 px-3 py-0.5 rounded-full shadow-sm">
-                    SCAN DIGITAL GATE PASS
+                  <span className="absolute -bottom-9 text-xs font-mono font-black tracking-widest text-black bg-emerald-400 px-4 py-1 rounded-full shadow-lg border border-white">
+                    ALIGN PASS IN CENTER
                   </span>
                 </div>
               </div>
             )}
 
-            {/* Camera Floating Controls */}
+            {/* Floating Camera Utilities */}
             {isCameraActive && (
-              <div className="absolute top-3 right-3 flex items-center gap-2">
+              <div className="absolute top-4 right-4 flex items-center gap-2">
                 {torchSupported && (
                   <Button
                     size="icon"
                     variant="secondary"
-                    className="h-8 w-8 rounded-full bg-slate-900/80 backdrop-blur-sm border border-slate-700 text-slate-200"
+                    className="h-10 w-10 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-100 hover:bg-slate-800"
                     onClick={() => void toggleTorch()}
-                    title="Toggle Flash"
+                    title="Toggle Flashlight"
                   >
-                    {torchEnabled ? <Zap className="w-4 h-4 text-amber-400" /> : <ZapOff className="w-4 h-4" />}
+                    {torchEnabled ? <Zap className="w-5 h-5 text-amber-400" /> : <ZapOff className="w-5 h-5" />}
                   </Button>
                 )}
                 <Button
                   size="icon"
                   variant="secondary"
-                  className="h-8 w-8 rounded-full bg-slate-900/80 backdrop-blur-sm border border-slate-700 text-slate-200"
+                  className="h-10 w-10 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 text-slate-100 hover:bg-slate-800"
                   onClick={flipCamera}
                   title="Switch Camera (Front/Back)"
                 >
-                  <RefreshCw className="w-4 h-4" />
+                  <RefreshCw className="w-5 h-5" />
                 </Button>
               </div>
             )}
           </div>
 
-          {/* MANUAL TOKEN INPUT & QUICK SAMPLES */}
-          <div className="bg-muted/30 border rounded-xl p-4 space-y-3">
+          {/* MANUAL TOKEN INPUT BACKUP */}
+          <div className="bg-muted/40 border rounded-2xl p-4 space-y-3">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -569,219 +684,293 @@ export function GateQrCameraScanner({
                 placeholder="Scan QR or paste 'CH-GPE:v1....'"
                 value={inputToken}
                 onChange={(e) => setInputToken(e.target.value)}
-                className="font-mono text-xs h-9 bg-background"
+                className="font-mono text-xs sm:text-sm h-11 bg-background rounded-xl"
               />
-              <Button type="submit" size="sm" className="h-9 px-4 text-xs font-bold gap-1.5" disabled={isScanning}>
-                <Scan className="w-3.5 h-3.5" />
+              <Button type="submit" size="default" className="h-11 px-6 text-xs sm:text-sm font-bold gap-2 rounded-xl" disabled={isScanning}>
+                <Scan className="w-4 h-4" />
                 Verify
               </Button>
             </form>
-
           </div>
 
           {/* ══════════════════════════════════════════════════════════════════
-              SCAN VERIFICATION RESULT STATES MATCHING USER SPECIFICATIONS
+              HIGH-CONTRAST, ACCESSIBLE SCAN RESULTS
              ══════════════════════════════════════════════════════════════════ */}
 
           {report && (
-            <div className="animate-in fade-in slide-in-from-bottom-3 duration-300 space-y-4">
-              {/* STATE 1: CHECK IN (✓ VERIFIED) */}
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-5">
+              {/* STATE 1: CHECK IN (✓ VALID PASS) */}
               {decision === 'CHECK_IN' && !completed && (
-                <div className="border-2 border-emerald-500/60 rounded-2xl overflow-hidden shadow-xl bg-card">
-                  {/* Verified Header Banner */}
-                  <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-6 text-white text-center space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-sm shadow-xs uppercase tracking-wider">
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                      ✓ VERIFIED
+                <div className="border-4 border-emerald-600 rounded-3xl overflow-hidden shadow-2xl bg-card">
+                  {/* High-Contrast Valid Header */}
+                  <div className="bg-emerald-600 dark:bg-emerald-700 p-6 text-white text-center space-y-3 border-b-4 border-emerald-800">
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black bg-white text-emerald-900 shadow-md uppercase tracking-wider">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                      <span>✓ ACCESS GRANTED — VALID PASS</span>
                     </div>
-                    <div className="pt-2">
-                      <span className="text-xs font-mono uppercase tracking-widest text-emerald-100 block">
-                        {report.category}
-                      </span>
-                      <h2 className="text-3xl font-black tracking-tight text-white mt-0.5">
-                        {report.userName}
+
+                    <div className="pt-2 flex flex-col items-center">
+                      {report.photoUrl ? (
+                        <div className="relative mb-3">
+                          <img
+                            src={report.photoUrl}
+                            alt={report.person || report.userName}
+                            className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-xl"
+                          />
+                          <Badge className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-emerald-950 text-[11px] font-bold px-3 py-0.5 border-white text-white whitespace-nowrap">
+                            Photo Verified
+                          </Badge>
+                        </div>
+                      ) : (
+                        <div className="w-20 h-20 rounded-full bg-white/20 border-4 border-white flex items-center justify-center text-3xl font-black mb-2 text-white shadow-md">
+                          {(report.person || report.userName).charAt(0).toUpperCase()}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs font-mono uppercase tracking-widest text-emerald-100 font-bold">
+                          {report.profile || report.category}
+                        </span>
+                      </div>
+
+                      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white mt-1">
+                        {report.person || report.userName}
                       </h2>
-                      <p className="text-sm text-emerald-100 font-medium">
+                      <p className="text-sm font-bold text-emerald-100 mt-0.5">
                         {report.property.startsWith('Property:') ? report.property : `Property: ${report.property}`}
                       </p>
                     </div>
                   </div>
 
-                  {/* Access Clearance Details */}
-                  <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-                      <div className="p-3.5 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
-                        <span className="text-[10px] font-mono text-muted-foreground uppercase block">Clearance</span>
-                        <strong className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                          ACCESS: AUTHORIZED
+                  {/* Structured Details */}
+                  <div className="p-6 space-y-5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-left">
+                      <div className="p-3 bg-muted/60 rounded-xl border-2">
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase block font-bold">Person</span>
+                        <strong className="text-sm font-black text-foreground truncate block">
+                          {report.person || report.userName}
                         </strong>
                       </div>
-                      <div className="p-3.5 bg-muted/40 rounded-xl border">
-                        <span className="text-[10px] font-mono text-muted-foreground uppercase block">Authorized Portal</span>
-                        <strong className="text-sm font-bold text-foreground">
-                          {report.gateChecked === 'GATE-01' ? 'Main Gate' : 'Service Gate'}
+                      <div className="p-3 bg-muted/60 rounded-xl border-2">
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase block font-bold">Profile</span>
+                        <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400 truncate block">
+                          {report.profile || report.category}
                         </strong>
                       </div>
-                      <div className="p-3.5 bg-muted/40 rounded-xl border">
-                        <span className="text-[10px] font-mono text-muted-foreground uppercase block">Valid Window</span>
-                        <strong className="text-sm font-bold text-foreground">
-                          {report.secondsRemaining > 0 ? `${report.secondsRemaining}s remaining` : 'Active'}
+                      <div className="p-3 bg-muted/60 rounded-xl border-2">
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase block font-bold">Property</span>
+                        <strong className="text-sm font-black text-foreground truncate block">
+                          {report.property}
+                        </strong>
+                      </div>
+                      <div className="p-3 bg-muted/60 rounded-xl border-2">
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase block font-bold">Resident Host</span>
+                        <strong className="text-sm font-black text-foreground truncate block">
+                          {report.host || 'Self'}
+                        </strong>
+                      </div>
+                      <div className="p-3 bg-muted/60 rounded-xl border-2">
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase block font-bold">Pass Type</span>
+                        <strong className="text-sm font-black text-foreground truncate block">
+                          {report.passType || 'Standard Access'}
+                        </strong>
+                      </div>
+                      <div className="p-3 bg-muted/60 rounded-xl border-2">
+                        <span className="text-[10px] font-mono text-muted-foreground uppercase block font-bold">Portal</span>
+                        <strong className="text-sm font-black text-foreground truncate block">
+                          {report.gateChecked}
                         </strong>
                       </div>
                     </div>
 
-                    {/* CONFIRM CHECK IN ACTION */}
-                    <div className="pt-2">
+                    {/* Giant Check In Button */}
+                    <div className="space-y-3 pt-2">
                       <Button
                         type="button"
                         size="lg"
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-base font-black tracking-wide py-6 shadow-lg gap-2"
+                        className="w-full h-16 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-lg font-black tracking-wide shadow-xl gap-3 rounded-2xl cursor-pointer focus-visible:ring-4 focus-visible:ring-emerald-400"
                         onClick={() => void handleConfirm(true)}
                         disabled={isConfirmingAction}
                       >
-                        <UserCheck className="w-5 h-5" />
-                        [ CHECK IN ]
+                        <UserCheck className="w-6 h-6" />
+                        <span>CONFIRM CHECK IN</span>
+                        <span className="ml-2 px-2.5 py-1 rounded-lg bg-black/25 text-xs font-mono border border-white/30">
+                          [Enter / Space]
+                        </span>
                       </Button>
+
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full mt-2 text-xs font-bold"
+                        className="w-full h-12 text-sm font-bold text-rose-600 dark:text-rose-400 border-2 border-rose-300 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-xl cursor-pointer"
                         onClick={() => void handleConfirm(false)}
                         disabled={isConfirmingAction}
                       >
-                        Refuse entry (ID does not match)
+                        Refuse Entry (Photo / Identity Mismatch)
                       </Button>
-                      <p className="text-center text-[11px] text-muted-foreground mt-2">
-                        Check the person against their photo ID, then confirm. The decision expires after two minutes.
-                      </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* STATE 2: VISITOR INSIDE (🔵 CHECK OUT) */}
+              {/* STATE 2: CHECK OUT (✓ VALID / INSIDE) */}
               {decision === 'CHECK_OUT' && !completed && (
-                <div className="border-2 border-blue-500/60 rounded-2xl overflow-hidden shadow-xl bg-card">
-                  {/* Inside Header Banner */}
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white text-center space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-sm shadow-xs uppercase tracking-wider">
-                      <Clock className="w-4 h-4 text-white" />
-                      VISITOR INSIDE
+                <div className="border-4 border-blue-600 rounded-3xl overflow-hidden shadow-2xl bg-card">
+                  <div className="bg-blue-600 dark:bg-blue-700 p-6 text-white text-center space-y-3 border-b-4 border-blue-800">
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black bg-white text-blue-900 shadow-md uppercase tracking-wider">
+                      <Clock className="w-5 h-5 text-blue-600" />
+                      <span>✓ CURRENTLY INSIDE — RECORD DEPARTURE</span>
                     </div>
-                    <div className="pt-2">
-                      <h2 className="text-3xl font-black tracking-tight text-white">
-                        {report.userName}
+
+                    <div className="pt-2 flex flex-col items-center">
+                      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                        {report.person || report.userName}
                       </h2>
-                      <p className="text-sm text-blue-100 font-medium">
+                      <p className="text-sm font-bold text-blue-100 mt-1">
                         {report.property.startsWith('Property:') ? report.property : `Property: ${report.property}`}
                       </p>
                     </div>
                   </div>
 
-                  <div className="p-6 space-y-6">
-                    <div className="p-4 bg-blue-500/5 rounded-xl border border-blue-500/20 text-center">
-                      <span className="text-xs font-mono text-muted-foreground uppercase block">Pass</span>
-                      <strong className="text-lg font-bold text-blue-600 dark:text-blue-400">{report.passId}</strong>
-                      <span className="block text-xs text-muted-foreground mt-1">Recorded as inside the estate</span>
-                    </div>
-
-                    {/* CONFIRM CHECK OUT ACTION */}
-                    <div className="pt-2">
+                  <div className="p-6 space-y-5">
+                    {/* Giant Check Out Button */}
+                    <div className="space-y-3 pt-2">
                       <Button
                         type="button"
                         size="lg"
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-base font-black tracking-wide py-6 shadow-lg gap-2"
+                        className="w-full h-16 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-lg font-black tracking-wide shadow-xl gap-3 rounded-2xl cursor-pointer focus-visible:ring-4 focus-visible:ring-blue-400"
                         onClick={() => void handleConfirm(true)}
                         disabled={isConfirmingAction}
                       >
-                        <LogOut className="w-5 h-5" />
-                        [ CHECK OUT ]
+                        <LogOut className="w-6 h-6" />
+                        <span>CONFIRM CHECK OUT</span>
+                        <span className="ml-2 px-2.5 py-1 rounded-lg bg-black/25 text-xs font-mono border border-white/30">
+                          [Enter / Space]
+                        </span>
                       </Button>
-                      <p className="text-center text-[11px] text-muted-foreground mt-2">
-                        Leaving is always allowed, even after hours or after the pass has lapsed.
-                      </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* CONFIRMATION */}
+              {/* CONFIRMATION RECORDED */}
               {completed && (
-                <div className="p-6 rounded-2xl bg-blue-500/10 border-2 border-blue-500/40 text-center space-y-2">
-                  <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-6 h-6" />
+                <div className="p-8 rounded-3xl bg-card border-4 border-emerald-600 shadow-2xl text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-lg">
+                    <CheckCircle2 className="w-10 h-10" />
                   </div>
-                  <h3 className="text-xl font-black text-foreground">
-                    {completed.action === 'CHECK_IN' ? 'CHECKED IN' : completed.action === 'CHECK_OUT' ? 'CHECKED OUT' : 'ENTRY REFUSED'} — {completed.time}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Recorded on the estate access log.
-                  </p>
+                  <div>
+                    <h3 className="text-2xl font-black text-foreground">
+                      {completed.action === 'CHECK_IN' ? '✓ CHECKED IN' : completed.action === 'CHECK_OUT' ? '✓ CHECKED OUT' : '✕ ENTRY REFUSED'}
+                    </h3>
+                    <p className="text-sm font-bold text-muted-foreground mt-1">
+                      Recorded at {completed.time}. Access log entry created.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="w-full h-16 text-base font-black bg-primary text-primary-foreground gap-3 rounded-2xl shadow-xl cursor-pointer"
+                    onClick={handleResetForNextScan}
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                    <span>SCAN NEXT PASS</span>
+                    <span className="px-2 py-0.5 rounded-md bg-black/25 text-xs font-mono border border-white/20">
+                      [Enter / Space]
+                    </span>
+                  </Button>
                 </div>
               )}
 
-              {/* STATE 3: REJECT (🔴 REJECT / ✕ REJECTED) */}
+              {/* STATE 3: REJECT (✕ ACCESS DENIED) */}
               {decision === 'REJECT' && (
-                <div className="border-2 border-red-500/60 rounded-2xl overflow-hidden shadow-xl bg-card">
-                  {/* Rejected Header Banner */}
-                  <div className="bg-gradient-to-r from-red-600 to-rose-700 p-6 text-white text-center space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-sm shadow-xs uppercase tracking-wider">
-                      <XCircle className="w-4 h-4 text-white" />
-                      ✕ REJECTED
+                <div className="border-4 border-rose-600 rounded-3xl overflow-hidden shadow-2xl bg-card">
+                  {/* High-Contrast Red Header */}
+                  <div className="bg-rose-700 dark:bg-rose-900 p-6 text-white text-center space-y-3 border-b-4 border-rose-950">
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black bg-white text-rose-900 shadow-md uppercase tracking-wider">
+                      <XCircle className="w-5 h-5 text-rose-700" />
+                      <span>✕ ACCESS DENIED — DO NOT ADMIT</span>
                     </div>
+
                     <div className="pt-2">
-                      <h2 className="text-3xl font-black tracking-tight text-white">
-                        PASS NOT VALID
+                      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                        REJECTED
                       </h2>
-                      <div className="mt-2 inline-block px-3 py-1 rounded-lg bg-black/30 font-mono text-xs font-bold text-red-100">
-                        Reason: {formatDenyReason(report.primaryReason)}
+                      <div className="mt-3 inline-block px-4 py-1.5 rounded-xl bg-black/40 font-mono text-sm font-black text-rose-100 border border-white/30">
+                        {denyInfo?.label || 'UNAUTHORIZED'}
                       </div>
                     </div>
                   </div>
 
-                  {/* Rejection Details */}
-                  <div className="p-6 space-y-6">
-                    <div className="p-4 bg-red-500/5 rounded-xl border border-red-500/20 space-y-2">
-                      <p className="text-xs font-medium text-foreground">
-                        <strong>Security Diagnostic:</strong> {report.primaryReason}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 text-xs font-mono text-muted-foreground pt-1 border-t border-red-500/10">
+                  {/* Clear Readable Error Message & Security Actions */}
+                  <div className="p-6 space-y-5">
+                    <div className="p-5 bg-rose-500/10 rounded-2xl border-2 border-rose-500/30 space-y-3">
+                      <div>
+                        <span className="text-[11px] font-mono uppercase text-muted-foreground font-bold block">Security Notice:</span>
+                        <p className="text-sm font-bold text-foreground mt-0.5">
+                          {denyInfo?.explanation}
+                        </p>
+                      </div>
+
+                      <div className="p-3 bg-card rounded-xl border border-rose-500/20 text-xs font-bold text-rose-700 dark:text-rose-400">
+                        <span>Officer Directive: </span>
+                        <span>{denyInfo?.action}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs font-mono text-muted-foreground pt-2 border-t border-rose-500/20">
                         <div>
-                          <span>Issued: </span>
-                          <strong className="text-foreground">
-                            {new Date(report.issuedAt).toLocaleDateString()}
-                          </strong>
+                          <span>Attempted Gate: </span>
+                          <strong className="text-foreground">{report.gateChecked}</strong>
                         </div>
                         <div>
-                          <span>Expired: </span>
-                          <strong className="text-red-500">
-                            {new Date(report.expiresAt).toLocaleDateString()}
-                          </strong>
+                          <span>Pass ID: </span>
+                          <strong className="text-foreground">{report.passId}</strong>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Automatic Audit Log Notice */}
+                    <div className="p-4 bg-muted/60 rounded-2xl border flex items-center gap-3">
+                      <ShieldAlert className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0" />
+                      <div className="text-xs text-foreground">
+                        <span className="font-bold block">Incident Recorded in Security Log</span>
+                        <span className="text-muted-foreground">
+                          Rejection logged to central security directory {accessLogId ? `(Access Log #${accessLogId})` : ''} and dispatched to supervisor.
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Large Fast-Recovery Button */}
+                    <div className="space-y-3 pt-2">
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="w-full h-16 text-base font-black bg-primary text-primary-foreground gap-3 rounded-2xl shadow-xl cursor-pointer"
+                        onClick={handleResetForNextScan}
+                      >
+                        <RefreshCw className="w-5 h-5" />
+                        <span>↺ READY FOR NEXT SCAN (RESET)</span>
+                        <span className="px-2 py-0.5 rounded-md bg-black/25 text-xs font-mono border border-white/20">
+                          [Enter / Space]
+                        </span>
+                      </Button>
+
                       <Button
                         type="button"
                         variant="outline"
-                        className="flex-1 py-5 text-xs font-bold gap-2"
+                        className="w-full h-11 text-xs font-bold gap-2 rounded-xl"
                         onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
                       >
-                        {showTechnicalDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        [ VIEW DETAILS ]
+                        <Layers className="w-4 h-4" />
+                        {showTechnicalDetails ? 'Hide Security Audit Matrix' : 'View Security Audit Matrix'}
                       </Button>
                     </div>
-
-                    <p className="text-center text-[11px] text-muted-foreground">
-                      This refusal is already on the access log and the security log. Change the pass itself from the Visitors list.
-                    </p>
                   </div>
                 </div>
               )}
 
-              {/* 16-POINT TECHNICAL VERIFICATION MATRIX (COLLAPSIBLE) */}
+              {/* 16-POINT TECHNICAL MATRIX */}
               {showTechnicalDetails && (
                 <div className="border rounded-2xl p-5 bg-card space-y-4 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between border-b pb-3">
@@ -797,13 +986,13 @@ export function GateQrCameraScanner({
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                     <div className="p-2.5 rounded-lg border bg-muted/20">
                       <span className="text-[10px] text-muted-foreground block font-mono">1. QR Structure</span>
-                      <strong className={report.stages.structure.passed ? "text-emerald-600" : "text-red-600"}>
+                      <strong className={report.stages.structure.passed ? "text-emerald-600" : "text-rose-600"}>
                         {report.stages.structure.passed ? '✓ Valid Envelope' : '✕ Malformed'}
                       </strong>
                     </div>
                     <div className="p-2.5 rounded-lg border bg-muted/20">
                       <span className="text-[10px] text-muted-foreground block font-mono">2. HMAC-SHA256</span>
-                      <strong className={report.stages.cryptography.passed ? "text-emerald-600" : "text-red-600"}>
+                      <strong className={report.stages.cryptography.passed ? "text-emerald-600" : "text-rose-600"}>
                         {report.stages.cryptography.passed ? '✓ Verified' : '✕ Forged'}
                       </strong>
                     </div>
@@ -814,62 +1003,6 @@ export function GateQrCameraScanner({
                     <div className="p-2.5 rounded-lg border bg-muted/20">
                       <span className="text-[10px] text-muted-foreground block font-mono">4. Person/Account</span>
                       <strong className="text-foreground truncate block">{report.userName}</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">5. Profile/Category</span>
-                      <strong className="text-foreground truncate block">{report.category}</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">6. Community Match</span>
-                      <strong className="text-foreground truncate block">{report.communityId}</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">7. Property/Host</span>
-                      <strong className="text-foreground truncate block">{report.property}</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">8. Pass Status</span>
-                      <strong className="text-emerald-600">✓ Active</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">9. Start Window</span>
-                      <strong className="text-foreground">{new Date(report.issuedAt).toLocaleTimeString()}</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">10. Expiration</span>
-                      <strong className={report.secondsRemaining > 0 ? "text-emerald-600" : "text-red-600"}>
-                        {report.secondsRemaining > 0 ? `${report.secondsRemaining}s left` : 'Expired'}
-                      </strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">11. Gate Clearance</span>
-                      <strong className={report.checks?.physicalGateAuth ? "text-emerald-600" : "text-red-600"}>
-                        {report.gateChecked}
-                      </strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">12. Zone Clearance</span>
-                      <strong className="text-foreground truncate block">{report.accessZone}</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">13. Revocation Check</span>
-                      <strong className="text-emerald-600">✓ Zero Flags</strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">14. Anti-Replay Nonce</span>
-                      <strong className={report.stages.serverCache.passed ? "text-emerald-600" : "text-red-600"}>
-                        {report.stages.serverCache.passed ? '✓ Unique' : '✕ Replay Hit'}
-                      </strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">15. Curfew/Policy</span>
-                      <strong className={report.stages.accessPolicy.passed ? "text-emerald-600" : "text-red-600"}>
-                        {report.stages.accessPolicy.passed ? '✓ Permitted' : '✕ Shift Violation'}
-                      </strong>
-                    </div>
-                    <div className="p-2.5 rounded-lg border bg-muted/20">
-                      <span className="text-[10px] text-muted-foreground block font-mono">16. Officer Ingress</span>
-                      <strong className="text-emerald-600">✓ Authorized</strong>
                     </div>
                   </div>
                 </div>

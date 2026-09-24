@@ -38,6 +38,19 @@ class GateScanner
      */
     public function scan(string $token, GateId $gate, User $guard, string $method = 'Digital Pass'): array
     {
+        $trimmed = trim(str_replace('-', '', $token));
+        if (preg_match('/^\d{6}$/', $trimmed)) {
+            $candidate = GatePass::whereIn('status', [PassStatus::Active, PassStatus::CheckedIn])
+                ->get()
+                ->first(fn ($p) => $p->offline_pin === $trimmed);
+
+            if ($candidate) {
+                $issued = $this->engine->issueToken($candidate, $gate);
+                $token = $issued['token'];
+                $method = 'Offline Gate PIN';
+            }
+        }
+
         $report = $this->engine->validate($token, $gate);
         $pass = GatePass::with(['user', 'visitor'])->where('pass_id', $report['passId'])->first();
         $decision = ScanDecision::from($report['decision']);

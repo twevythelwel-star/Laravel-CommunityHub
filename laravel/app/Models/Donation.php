@@ -14,12 +14,14 @@ class Donation extends Model
         'fundraiser_id', 'user_id', 'amount_minor', 'currency',
         'donor_name', 'is_anonymous', 'donated_at',
         'is_recurring', 'frequency', 'tax_deductible', 'receipt_number', 'payment_channel',
+        'status', 'refunded_at', 'refund_reason', 'notes',
     ];
 
     protected function casts(): array
     {
         return [
             'donated_at' => 'datetime',
+            'refunded_at' => 'datetime',
             'is_anonymous' => 'boolean',
             'is_recurring' => 'boolean',
             'tax_deductible' => 'boolean',
@@ -40,6 +42,11 @@ class Donation extends Model
     public function amount(): float
     {
         return (float) ($this->amount_minor / 100);
+    }
+
+    public function isRefunded(): bool
+    {
+        return $this->status === 'refunded';
     }
 
     /** Never leak a donor identity that was marked anonymous. */

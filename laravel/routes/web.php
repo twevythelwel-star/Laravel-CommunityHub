@@ -12,6 +12,7 @@ use App\Http\Controllers\Dashboard\DealsController;
 use App\Http\Controllers\Dashboard\DirectoryController;
 use App\Http\Controllers\Dashboard\FeedbackController;
 use App\Http\Controllers\Dashboard\FundraisingController;
+use App\Http\Controllers\Dashboard\GatePass\ScanGatePassController;
 use App\Http\Controllers\Dashboard\GatePassController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\MapController;
@@ -25,6 +26,7 @@ use App\Http\Controllers\Dashboard\StripeCheckoutController;
 use App\Http\Controllers\Dashboard\UpdateController;
 use App\Http\Controllers\Dashboard\VisitorController;
 use App\Http\Controllers\Dashboard\WarningController;
+use App\Http\Controllers\EventRsvpController;
 use App\Http\Controllers\GuestPassController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PublicPageController;
@@ -53,6 +55,10 @@ Route::get('/guest/pass/{token}/pdf', [PdfController::class, 'downloadVisitorPas
 Route::get('/pay/{token}', [UniversalPaymentLinkController::class, 'show'])->name('pay.show');
 Route::get('/pay/{token}/poster', [UniversalPaymentLinkController::class, 'poster'])->name('pay.poster');
 Route::post('/pay/{token}/process', [UniversalPaymentLinkController::class, 'process'])->name('pay.process');
+Route::get('/rsvp/{token}', [EventRsvpController::class, 'show'])->name('rsvp.show');
+Route::post('/rsvp/{token}', [EventRsvpController::class, 'submit'])
+    ->middleware('throttle:30,1')
+    ->name('rsvp.submit');
 
 /*
 |--------------------------------------------------------------------------
@@ -99,13 +105,16 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/gate-pass', [GatePassController::class, 'index'])->name('gate-pass');
     Route::get('/gate-pass/token', [GatePassController::class, 'token'])->name('gate-pass.token');
     Route::post('/gate-pass/rotate', [GatePassController::class, 'rotate'])->name('gate-pass.rotate');
-    Route::post('/gate-pass/scan', [GatePassController::class, 'scan'])
+    Route::post('/gate-pass/scan', ScanGatePassController::class)
         ->middleware('can:scanPasses')
         ->name('gate-pass.scan');
     Route::post('/gate-pass/scans/{scan}/confirm', [GatePassController::class, 'confirmScan'])
         ->middleware(['can:scanPasses', 'throttle:60,1'])
         ->whereUuid('scan')
         ->name('gate-pass.scans.confirm');
+    Route::get('/gate-scanner', [GatePassController::class, 'scanner'])
+        ->middleware('can:scanPasses')
+        ->name('gate-scanner');
     // Authorization is in the controller: security for every move, a host
     // for cancelling their own guest's pass.
     Route::post('/gate-pass/{gatePass}/transition', [GatePassController::class, 'transition'])
@@ -122,9 +131,13 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::middleware('can:accessEstateInformation')->group(function () {
         Route::get('/visitors', [VisitorController::class, 'index'])->name('visitors');
         Route::post('/visitors', [VisitorController::class, 'store'])->name('visitors.store');
+        Route::post('/visitors/bulk', [VisitorController::class, 'storeBulk'])->name('visitors.bulk');
+        Route::post('/visitors/invites', [EventRsvpController::class, 'createInvite'])->name('visitors.invites.create');
         Route::match(['put', 'patch'], '/visitors/{visitor}', [VisitorController::class, 'update'])->name('visitors.update');
         Route::post('/visitors/{visitor}/check-in', [VisitorController::class, 'checkIn'])->name('visitors.check-in');
         Route::post('/visitors/{visitor}/check-out', [VisitorController::class, 'checkOut'])->name('visitors.check-out');
+        Route::post('/visitors/{visitor}/resend', [VisitorController::class, 'resendPass'])->name('visitors.resend');
+        Route::post('/visitors/{visitor}/extend', [VisitorController::class, 'extendPass'])->name('visitors.extend');
         Route::delete('/visitors/{visitor}', [VisitorController::class, 'destroy'])->name('visitors.destroy');
     });
 
@@ -226,11 +239,18 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/map/locate', [MapController::class, 'locate'])->name('map.locate');
     });
 
+    Route::get('/map/boundary', [BoundaryController::class, 'edit'])
+        ->middleware('can:viewBoundary')
+        ->name('boundary');
+
     Route::middleware('can:manageBoundary')->group(function () {
-        Route::get('/map/boundary', [BoundaryController::class, 'edit'])->name('boundary');
         Route::post('/map/boundary/draft', [BoundaryController::class, 'saveDraft'])->name('boundary.draft');
         Route::post('/map/boundary/publish', [BoundaryController::class, 'publish'])->name('boundary.publish');
+        Route::post('/map/boundary/replace/{boundaryConfig}', [BoundaryController::class, 'replace'])->name('boundary.replace');
+        Route::delete('/map/boundary/{boundaryConfig}', [BoundaryController::class, 'destroy'])->name('boundary.destroy');
         Route::post('/map/boundary/validate', [BoundaryController::class, 'validateBoundary'])->name('boundary.validate');
+        Route::get('/map/boundary/export', [BoundaryController::class, 'exportGeoJson'])->name('boundary.export');
+        Route::post('/map/boundary/import', [BoundaryController::class, 'importGeoJson'])->name('boundary.import');
     });
 
     // ── Communications ──
@@ -241,6 +261,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/notifications/suggest-audience', [NotificationController::class, 'suggestAudience'])
         ->middleware('can:broadcastNotices')
         ->name('notifications.suggest-audience');
+    Route::post('/notifications/broadcast', [NotificationController::class, 'broadcastEmergency'])
+        ->middleware('can:broadcastNotices')
+        ->name('notifications.broadcast');
 
     Route::get('/updates', [UpdateController::class, 'index'])
         ->middleware('can:accessCommunityLife')
@@ -268,6 +291,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/changelog', [ChangelogController::class, 'index'])
         ->middleware('can:viewAppChangelog')
         ->name('changelog');
+    Route::post('/changelog', [ChangelogController::class, 'store'])
+        ->middleware('can:viewAppChangelog')
+        ->name('changelog.store');
 
     Route::get('/feedback', [FeedbackController::class, 'index'])->name('feedback');
     Route::post('/feedback', [FeedbackController::class, 'store'])->name('feedback.store');
@@ -286,9 +312,21 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/deals/businesses', [DealsController::class, 'storeBusiness'])
         ->middleware('can:manageUsers')
         ->name('deals.businesses.store');
+    Route::delete('/deals/businesses/{business}', [DealsController::class, 'destroyBusiness'])
+        ->middleware('can:manageUsers')
+        ->name('deals.businesses.destroy');
     Route::post('/deals/food-apps', [DealsController::class, 'storeFoodApp'])
         ->middleware('can:manageUsers')
         ->name('deals.food-apps.store');
+    Route::delete('/deals/food-apps/{foodApp}', [DealsController::class, 'destroyFoodApp'])
+        ->middleware('can:manageUsers')
+        ->name('deals.food-apps.destroy');
+    Route::post('/deals/vouchers', [DealsController::class, 'storeVoucher'])
+        ->middleware('can:manageUsers')
+        ->name('deals.vouchers.store');
+    Route::delete('/deals/vouchers/{voucher}', [DealsController::class, 'destroyVoucher'])
+        ->middleware('can:manageUsers')
+        ->name('deals.vouchers.destroy');
 
     Route::middleware('can:accessCommunityLife')->group(function () {
         Route::get('/fundraising', [FundraisingController::class, 'index'])->name('fundraising');
@@ -320,6 +358,8 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::match(['post', 'patch'], '/billing/autopay', [BillingController::class, 'updateAutoPay'])->name('billing.autopay');
         Route::post('/billing/payment-links', [BillingController::class, 'storePaymentLink'])->name('billing.payment-links.store');
         Route::post('/billing/wallet/topup', [BillingController::class, 'topUpWallet'])->name('billing.wallet.topup');
+        Route::post('/billing/portal', [BillingController::class, 'customerPortal'])->name('billing.portal');
+        Route::post('/billing/prorate', [BillingController::class, 'calculateProration'])->name('billing.prorate');
         /*
          | The master ledger is every household's name, lot, amount and notes
          | in one CSV. It sat on `accessBilling`, so widening that gate to
@@ -339,6 +379,13 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/billing/invoices/{invoice}/stripe-checkout', [StripeCheckoutController::class, 'checkout'])->name('billing.stripe.checkout');
         Route::get('/billing/invoices/{invoice}/stripe-success', [StripeCheckoutController::class, 'success'])->name('billing.stripe.success');
         Route::get('/billing/invoices/{invoice}/stripe-cancel', [StripeCheckoutController::class, 'cancel'])->name('billing.stripe.cancel');
+        Route::middleware('can:manageBilling')->group(function () {
+            Route::post('/billing/channels/{channel}/validate', [BillingController::class, 'validateChannel'])->name('billing.channels.validate');
+            Route::post('/billing/channels/{channel}/toggle', [BillingController::class, 'toggleChannel'])->name('billing.channels.toggle');
+            Route::post('/billing/payment-plans', [BillingController::class, 'storePaymentPlan'])->name('billing.payment-plans.store');
+            Route::post('/billing/reconciliations', [BillingController::class, 'storeReconciliation'])->name('billing.reconciliations.store');
+        });
+        Route::get('/billing/transactions/{transaction}/receipt', [BillingController::class, 'downloadReceipt'])->name('billing.transactions.receipt');
         Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])
             ->middleware('can:manageBilling')
             ->name('billing.transactions.refund');
@@ -350,5 +397,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/fundraising/{fundraiser}/updates', [FundraisingController::class, 'addUpdate'])
             ->middleware('can:manageFundraisers')
             ->name('fundraising.updates.store');
+        Route::post('/fundraising/donations/{donation}/refund', [FundraisingController::class, 'refund'])
+            ->middleware('can:manageFundraisers')
+            ->name('fundraising.donations.refund');
+        Route::get('/fundraising/export/donations', [FundraisingController::class, 'exportDonations'])
+            ->middleware('can:manageFundraisers')
+            ->name('fundraising.donations.export');
     });
 });

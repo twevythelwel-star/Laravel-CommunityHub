@@ -163,13 +163,20 @@ export interface GatePassValidationReport {
   passStatus?: PassStatus | null;
   primaryReason: string;
   category: PassCategory;
+  profile?: string;
   shape: QRShape;
   communityId: string;
   accessZone: string;
   passId: string;
   property: string;
   userName: string;
+  person?: string;
+  host?: string;
+  passType?: string;
+  gate?: string;
   gateChecked: GateId;
+  validUntil?: string;
+  photoUrl?: string | null;
   stages: {
     structure: ValidationStageResult;
     cryptography: ValidationStageResult;

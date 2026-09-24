@@ -398,6 +398,18 @@ class GatePassEngine
         $report['passStatus'] = $pass->status->value;
         $report['holderType'] = $pass->visitor_id ? 'VISITOR' : 'ACCOUNT';
         $report['visitorId'] = $pass->visitor_id;
+        $report['person'] = $pass->holder_name ?: ($payload['nam'] ?? 'Unknown');
+        $report['userName'] = $report['person'];
+        $report['profile'] = $pass->category->label();
+        $report['property'] = $pass->property ?: ($payload['prop'] ?? 'Unassigned');
+        $report['host'] = $pass->visitor?->homeowner_name
+            ?? $pass->visitor?->homeowner?->name
+            ?? ($pass->user?->name ? 'Self ('.$pass->user->name.')' : 'Resident Host');
+        $report['passType'] = $pass->visitor?->type
+            ?? ($pass->single_entry ? 'Single Entry' : 'Multi-Entry');
+        $report['gate'] = $currentGate->value;
+        $report['validUntil'] = $pass->valid_until?->toIso8601String() ?? $report['expiresAt'];
+        $report['photoUrl'] = $pass->visitor?->id_image_url ?? $pass->user?->avatar ?? null;
 
         // Rotation: a token minted before the pass rotated is superseded.
         if ((int) ($payload['seq'] ?? 0) !== $pass->rotation_seq) {
@@ -915,6 +927,7 @@ class GatePassEngine
             'denyReason' => null,
             'primaryReason' => '',
             'category' => $category->value,
+            'profile' => $category->label(),
             'shape' => $category->shape()->value,
             'communityId' => $payload['cid'] ?? config('gatepass.default_community_id'),
             'accessZone' => $payload['zone'] ?? 'ZONE-UNKNOWN',
@@ -924,7 +937,13 @@ class GatePassEngine
             'visitorId' => null,
             'property' => $payload['prop'] ?? 'UNKNOWN',
             'userName' => $payload['nam'] ?? 'Unknown Visitor',
+            'person' => $payload['nam'] ?? 'Unknown Visitor',
+            'host' => 'Resident Host',
+            'passType' => 'Standard Access',
+            'gate' => $gate->value,
             'gateChecked' => $gate->value,
+            'validUntil' => $expiresAt->toIso8601String(),
+            'photoUrl' => null,
             'stages' => [
                 'structure' => $this->stage(false, 'STRUCTURE', 'Not evaluated.', $now),
                 'cryptography' => $this->stage(false, 'SIGNATURE', 'Signature could not be evaluated.', $now),

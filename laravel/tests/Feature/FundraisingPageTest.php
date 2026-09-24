@@ -295,4 +295,224 @@ class FundraisingPageTest extends TestCase
 
         $this->assertSame('Upcoming', $fundraiser->fresh()->status);
     }
+
+    // ── Campaign Dashboard, Reporting, Reconciliation & Refunds ──────
+
+    public function test_admin_receives_campaign_dashboard_reporting_props(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+
+        $fundraiser->donations()->create([
+            'user_id' => $donor->id,
+            'amount_minor' => 10000,
+            'currency' => 'JMD',
+            'donor_name' => 'Marcus V.',
+            'is_anonymous' => false,
+            'donated_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin())
+            ->get('/dashboard/fundraising')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dashboard/Fundraising')
+                ->where('canManage', true)
+                ->has('adminStats')
+                ->where('adminStats.totalCampaigns', 1)
+                ->where('adminStats.totalRaised', fn ($v) => (float) $v === 100.0)
+                ->has('donorReports', 1)
+                ->where('donorReports.0.donorName', 'Marcus V.')
+                ->has('reconciliation')
+            );
+    }
+
+    public function test_resident_receives_their_own_donations_with_receipts(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+        $otherDonor = $this->resident();
+
+        $myDonation = $fundraiser->donations()->create([
+            'user_id' => $donor->id,
+            'amount_minor' => 5000,
+            'currency' => 'JMD',
+            'donor_name' => 'My Name',
+            'is_anonymous' => false,
+            'donated_at' => now(),
+        ]);
+
+        $fundraiser->donations()->create([
+            'user_id' => $otherDonor->id,
+            'amount_minor' => 7500,
+            'currency' => 'JMD',
+            'donor_name' => 'Other Person',
+            'is_anonymous' => false,
+            'donated_at' => now(),
+        ]);
+
+        $this->actingAs($donor)
+            ->get('/dashboard/fundraising')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dashboard/Fundraising')
+                ->where('canManage', false)
+                ->has('userDonations', 1)
+                ->where('userDonations.0.id', $myDonation->id)
+                ->where('userDonations.0.amount', fn ($v) => (float) $v === 50.0)
+            );
+    }
+
+    public function test_administrator_can_refund_a_donation(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+
+        $donation = $fundraiser->donations()->create([
+            'user_id' => $donor->id,
+            'amount_minor' => 25000,
+            'currency' => 'JMD',
+            'donor_name' => 'John D.',
+            'receipt_number' => 'DON-REC-TEST-001',
+            'payment_channel' => 'card',
+            'donated_at' => now(),
+            'status' => 'completed',
+        ]);
+
+        $this->assertSame(250.0, $fundraiser->fresh()->raised());
+
+        $this->actingAs($this->admin())
+            ->post("/dashboard/fundraising/donations/{$donation->id}/refund", [
+                'reason' => 'Duplicate transaction entered in error',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame('refunded', $donation->fresh()->status);
+        $this->assertNotNull($donation->fresh()->refunded_at);
+        $this->assertSame('Duplicate transaction entered in error', $donation->fresh()->refund_reason);
+
+        // Deducted from raised total
+        $this->assertSame(0.0, $fundraiser->fresh()->raised());
+
+        // Master Ledger transaction recorded
+        $this->assertDatabaseHas('transactions', [
+            'user_id' => $donor->id,
+            'fundraiser_id' => $fundraiser->id,
+            'status' => 'refunded',
+            'amount_minor' => 25000,
+        ]);
+    }
+
+    public function test_an_already_refunded_donation_cannot_be_refunded_again(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+
+        $donation = $fundraiser->donations()->create([
+            'user_id' => $donor->id,
+            'amount_minor' => 25000,
+            'currency' => 'JMD',
+            'donor_name' => 'John D.',
+            'status' => 'refunded',
+            'refunded_at' => now(),
+            'donated_at' => now(),
+        ]);
+
+        $this->actingAs($this->admin())
+            ->post("/dashboard/fundraising/donations/{$donation->id}/refund", [
+                'reason' => 'Trying to refund again',
+            ])
+            ->assertSessionHasErrors('refund');
+    }
+
+    public function test_a_resident_cannot_refund_a_donation(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+
+        $donation = $fundraiser->donations()->create([
+            'user_id' => $donor->id,
+            'amount_minor' => 10000,
+            'currency' => 'JMD',
+            'donor_name' => 'Resident Donor',
+            'donated_at' => now(),
+        ]);
+
+        $this->actingAs($donor)
+            ->post("/dashboard/fundraising/donations/{$donation->id}/refund", [
+                'reason' => 'Unauthorized resident refund attempt',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('completed', $donation->fresh()->status ?? 'completed');
+    }
+
+    public function test_administrator_can_export_donations_csv(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+
+        $fundraiser->donations()->create([
+            'user_id' => $donor->id,
+            'amount_minor' => 15000,
+            'currency' => 'JMD',
+            'donor_name' => 'Export Tester',
+            'receipt_number' => 'DON-EXPORT-1',
+            'donated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($this->admin())
+            ->get('/dashboard/fundraising/export/donations');
+
+        $response->assertOk();
+        $this->assertStringContainsString('text/csv', (string) $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('attachment; filename="fundraising-donations-', (string) $response->headers->get('Content-Disposition'));
+    }
+
+    public function test_a_resident_cannot_export_donations(): void
+    {
+        $this->actingAs($this->resident())
+            ->get('/dashboard/fundraising/export/donations')
+            ->assertForbidden();
+    }
+
+    public function test_a_recurring_donation_records_frequency(): void
+    {
+        $fundraiser = $this->fundraiser();
+        $donor = $this->resident();
+
+        $this->actingAs($donor)
+            ->post("/dashboard/fundraising/{$fundraiser->id}/donate", [
+                'amount' => 50,
+                'is_recurring' => true,
+                'frequency' => 'quarterly',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $donation = $fundraiser->donations()->firstOrFail();
+        $this->assertTrue($donation->is_recurring);
+        $this->assertSame('quarterly', $donation->frequency);
+    }
+
+    public function test_administrator_can_post_campaign_update_with_image(): void
+    {
+        $fundraiser = $this->fundraiser();
+
+        $this->actingAs($this->admin())
+            ->post("/dashboard/fundraising/{$fundraiser->id}/updates", [
+                'title' => 'Foundation Laid',
+                'content' => 'The playground foundation cement has dried perfectly.',
+                'image_url' => 'https://images.unsplash.com/photo-1541888946425-d0fbb186156a',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('fundraiser_updates', [
+            'fundraiser_id' => $fundraiser->id,
+            'title' => 'Foundation Laid',
+            'image_url' => 'https://images.unsplash.com/photo-1541888946425-d0fbb186156a',
+        ]);
+    }
 }

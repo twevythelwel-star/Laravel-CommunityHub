@@ -49,6 +49,14 @@ return [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
         ],
+        'slack' => [
+            'driver' => 'slack',
+            'url' => env('LOG_SLACK_WEBHOOK_URL'),
+            'username' => env('LOG_SLACK_USERNAME', 'Community Hub Alerts'),
+            'emoji' => env('LOG_SLACK_EMOJI', ':boom:'),
+            'level' => env('LOG_SLACK_LEVEL', 'critical'),
+            'replace_placeholders' => true,
+        ],
         'emergency' => ['path' => storage_path('logs/laravel.log')],
     ],
 ];

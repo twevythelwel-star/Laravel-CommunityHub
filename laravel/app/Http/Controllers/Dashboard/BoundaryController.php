@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\BoundaryAuditLog;
+use App\Models\BoundaryConfig;
 use App\Models\Community;
 use App\Services\GeofenceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Backs src/components/dashboard/boundary-point-manager.tsx (1,439 lines) and
@@ -79,6 +82,25 @@ class BoundaryController extends Controller
                     'perimeterMeters' => $l->perimeter_meters,
                 ])
                 : [],
+            'previousVersions' => $community->boundaryConfigs()
+                ->with('points')
+                ->orderByDesc('version')
+                ->get()
+                ->map(fn ($b) => [
+                    'id' => $b->id,
+                    'version' => $b->version,
+                    'status' => $b->status,
+                    'pointsCount' => $b->points->count(),
+                    'publishedAt' => $b->last_published_at?->toIso8601String(),
+                    'publishedBy' => $b->last_published_by,
+                    'points' => $b->points->map(fn ($p) => [
+                        'id' => $p->point_index,
+                        'label' => $p->label,
+                        'lat' => $p->lat,
+                        'lng' => $p->lng,
+                        'isOptional' => $p->is_optional,
+                    ]),
+                ]),
         ]);
     }
 
@@ -97,6 +119,162 @@ class BoundaryController extends Controller
         );
 
         return response()->json($this->geofence->validateBoundary($polygon));
+    }
+
+    /** Export active or draft boundary as standard GeoJSON */
+    public function exportGeoJson(Request $request): StreamedResponse|JsonResponse
+    {
+        $this->authorize('viewBoundary');
+        $community = Community::default();
+        $target = $community->publishedBoundary() ?? $community->draftBoundary();
+
+        if (! $target) {
+            return response()->json(['error' => 'No boundary configuration found to export.'], 404);
+        }
+
+        $coordinates = $target->points->map(fn ($p) => [(float) $p->lng, (float) $p->lat])->values()->all();
+
+        // GeoJSON polygon must close with identical start and end point
+        if (count($coordinates) >= 3) {
+            $coordinates[] = $coordinates[0];
+        }
+
+        $metrics = $this->geofence->polygonMetrics($target->coordinatePairs());
+
+        $geoJson = [
+            'type' => 'FeatureCollection',
+            'features' => [
+                [
+                    'type' => 'Feature',
+                    'geometry' => [
+                        'type' => 'Polygon',
+                        'coordinates' => [$coordinates],
+                    ],
+                    'properties' => [
+                        'community' => $community->name,
+                        'code' => $community->code,
+                        'version' => $target->version,
+                        'status' => $target->status,
+                        'pointCount' => $target->points->count(),
+                        'areaAcres' => $metrics['areaAcres'],
+                        'perimeterMeters' => $metrics['perimeterMeters'],
+                        'exportedAt' => now()->toIso8601String(),
+                    ],
+                ],
+            ],
+        ];
+
+        $filename = Str::slug($community->code ?: 'community')."-boundary-v{$target->version}.geojson";
+
+        return response()->streamDownload(function () use ($geoJson) {
+            echo json_encode($geoJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        }, $filename, [
+            'Content-Type' => 'application/geo+json',
+        ]);
+    }
+
+    /** Import polygon coordinates from uploaded or pasted GeoJSON */
+    public function importGeoJson(Request $request): JsonResponse
+    {
+        $this->authorize('manageBoundary');
+
+        $geojsonRaw = null;
+        if ($request->hasFile('file')) {
+            $geojsonRaw = file_get_contents($request->file('file')->getRealPath());
+        } elseif ($request->filled('geojson')) {
+            $geojsonRaw = is_string($request->input('geojson'))
+                ? $request->input('geojson')
+                : json_encode($request->input('geojson'));
+        }
+
+        if (! $geojsonRaw) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No GeoJSON file or payload provided.',
+            ], 422);
+        }
+
+        $data = json_decode($geojsonRaw, true);
+        if (! is_array($data)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid JSON structure.',
+            ], 422);
+        }
+
+        $rings = null;
+        if (isset($data['type'])) {
+            if ($data['type'] === 'FeatureCollection' && ! empty($data['features'])) {
+                $geom = $data['features'][0]['geometry'] ?? null;
+                if ($geom && $geom['type'] === 'Polygon') {
+                    $rings = $geom['coordinates'][0] ?? null;
+                }
+            } elseif ($data['type'] === 'Feature' && isset($data['geometry'])) {
+                if ($data['geometry']['type'] === 'Polygon') {
+                    $rings = $data['geometry']['coordinates'][0] ?? null;
+                }
+            } elseif ($data['type'] === 'Polygon') {
+                $rings = $data['coordinates'][0] ?? null;
+            }
+        }
+
+        if (! is_array($rings) || count($rings) < 4) {
+            return response()->json([
+                'success' => false,
+                'message' => 'GeoJSON does not contain a valid polygon ring with at least 4 coordinates.',
+            ], 422);
+        }
+
+        $first = $rings[0];
+        $last = end($rings);
+        if (count($rings) > 3 && is_array($first) && is_array($last) && $first[0] == $last[0] && $first[1] == $last[1]) {
+            array_pop($rings);
+        }
+
+        if (count($rings) > 8) {
+            $step = count($rings) / 8;
+            $sampled = [];
+            for ($i = 0; $i < 8; $i++) {
+                $sampled[] = $rings[(int) floor($i * $step)];
+            }
+            $rings = $sampled;
+        }
+
+        $points = [];
+        $polygon = [];
+        foreach ($rings as $index => $coord) {
+            if (! is_array($coord) || count($coord) < 2) {
+                continue;
+            }
+            $lng = (float) $coord[0];
+            $lat = (float) $coord[1];
+            $pointIndex = $index + 1;
+
+            $points[] = [
+                'id' => $pointIndex,
+                'label' => "Imported P{$pointIndex}",
+                'lat' => $lat,
+                'lng' => $lng,
+                'isOptional' => $pointIndex > 4,
+            ];
+            $polygon[] = [$lat, $lng];
+        }
+
+        if (count($points) < 4) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Could not extract at least 4 valid coordinates.',
+            ], 422);
+        }
+
+        $validation = $this->geofence->validateBoundary($polygon);
+
+        return response()->json([
+            'success' => true,
+            'points' => $points,
+            'validation' => $validation,
+            'message' => 'GeoJSON boundary imported successfully.',
+        ]);
     }
 
     public function saveDraft(Request $request): RedirectResponse
@@ -231,6 +409,107 @@ class BoundaryController extends Controller
         });
 
         return back()->with('success', 'Boundary published to the whole community.');
+    }
+
+    public function replace(Request $request, BoundaryConfig $boundaryConfig): RedirectResponse
+    {
+        $this->authorize('manageBoundary');
+        $community = Community::default();
+        $user = $request->user();
+
+        if ($boundaryConfig->community_id !== $community->id) {
+            abort(404, 'Boundary configuration does not belong to this community.');
+        }
+
+        DB::transaction(function () use ($boundaryConfig, $community, $user) {
+            $latestVersion = ($community->boundaryConfigs()->max('version') ?? 0) + 1;
+            $currentPublished = $community->publishedBoundary();
+            $currentPublished?->update(['status' => 'SUPERSEDED']);
+
+            $newConfig = $community->boundaryConfigs()->create([
+                'version' => $latestVersion,
+                'status' => 'PUBLISHED',
+                'published_coordinates' => $boundaryConfig->coordinatePairs(),
+                'last_published_at' => now(),
+                'last_published_by' => $user->display_name,
+            ]);
+
+            foreach ($boundaryConfig->points as $p) {
+                $newConfig->points()->create([
+                    'point_index' => $p->point_index,
+                    'label' => $p->label,
+                    'lat' => $p->lat,
+                    'lng' => $p->lng,
+                    'is_optional' => $p->is_optional,
+                ]);
+            }
+
+            $metrics = $this->geofence->polygonMetrics($boundaryConfig->coordinatePairs());
+
+            $newConfig->auditLogs()->create([
+                'community' => $community->name,
+                'action' => 'Boundary Replaced / Restored',
+                'changed_by' => $user->display_name,
+                'role' => $user->role->value,
+                'previous_version' => $currentPublished?->version ?? $boundaryConfig->version,
+                'new_version' => $latestVersion,
+                'points_count' => $boundaryConfig->points()->count(),
+                'published' => true,
+                'notes' => "Active boundary replaced/restored with snapshot from version {$boundaryConfig->version}",
+                'area_acres' => $metrics['areaAcres'],
+                'perimeter_meters' => $metrics['perimeterMeters'],
+                'occurred_at' => now(),
+            ]);
+
+            // Discard any stale drafts now that replacement is published
+            $community->boundaryConfigs()
+                ->where('status', 'DRAFT')
+                ->where('version', '<', $latestVersion)
+                ->delete();
+        });
+
+        return back()->with('success', "Boundary successfully replaced with Version {$boundaryConfig->version}.");
+    }
+
+    public function destroy(Request $request, BoundaryConfig $boundaryConfig): RedirectResponse
+    {
+        $this->authorize('manageBoundary');
+        $community = Community::default();
+        $user = $request->user();
+
+        if ($boundaryConfig->community_id !== $community->id) {
+            abort(404, 'Boundary configuration does not belong to this community.');
+        }
+
+        if ($boundaryConfig->status === 'PUBLISHED') {
+            return back()->withErrors(['boundary' => 'The active published boundary cannot be deleted.']);
+        }
+
+        DB::transaction(function () use ($boundaryConfig, $community, $user) {
+            $version = $boundaryConfig->version;
+            $status = $boundaryConfig->status;
+
+            BoundaryAuditLog::create([
+                'boundary_config_id' => null,
+                'community' => $community->name,
+                'action' => "Boundary {$status} v{$version} Deleted",
+                'changed_by' => $user->display_name,
+                'role' => $user->role->value,
+                'previous_version' => $version,
+                'new_version' => $version,
+                'points_count' => $boundaryConfig->points()->count(),
+                'published' => false,
+                'notes' => "Deleted boundary configuration v{$version} ({$status})",
+                'area_acres' => null,
+                'perimeter_meters' => null,
+                'occurred_at' => now(),
+            ]);
+
+            $boundaryConfig->points()->delete();
+            $boundaryConfig->delete();
+        });
+
+        return back()->with('success', 'Boundary configuration deleted.');
     }
 
     private function validatePoints(Request $request): array

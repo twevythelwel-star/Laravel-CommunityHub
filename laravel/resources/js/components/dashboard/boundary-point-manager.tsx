@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { router } from '@inertiajs/react';
 import { 
   ShieldCheck, 
   MapPin, 
@@ -49,7 +50,13 @@ import {
   MousePointerClick,
   Check,
   Edit3,
-  Crosshair
+  Crosshair,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  Landmark,
+  Download,
+  Upload
 } from 'lucide-react';
 
 // Dynamic import for Leaflet boundary map
@@ -83,12 +90,23 @@ export type BoundaryPointManagerProps = {
   community: CommunityInfo;
   /** Whether the viewer holds `manageBoundary`. */
   canManage?: boolean;
+  /** Historical versions for rollback/replace. */
+  previousVersions?: {
+    id: number;
+    version: number;
+    status: string;
+    pointsCount: number;
+    publishedAt: string | null;
+    publishedBy: string | null;
+    points: BoundaryPoint[];
+  }[];
 };
 
 export default function BoundaryPointManager({
   initialConfig,
   community,
   canManage = false,
+  previousVersions = [],
 }: BoundaryPointManagerProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -113,6 +131,9 @@ export default function BoundaryPointManager({
   // Interactive map modes
   const [isClickToPlaceActive, setIsClickToPlaceActive] = useState<boolean>(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importGeoJsonText, setImportGeoJsonText] = useState<string>('');
+  const [isImporting, setIsImporting] = useState<boolean>(false);
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
   const [bulkText, setBulkText] = useState<string>('');
 
@@ -492,6 +513,67 @@ export default function BoundaryPointManager({
     });
   };
 
+  // Reorder point up or down (4-8 boundary points)
+  const handleMovePoint = (index: number, direction: 'up' | 'down') => {
+    if (!canEditBoundary) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= points.length) return;
+
+    const nextPts = [...points];
+    const temp = nextPts[index];
+    nextPts[index] = nextPts[targetIndex];
+    nextPts[targetIndex] = temp;
+
+    // Re-index point IDs and optionality while preserving vertex coordinates
+    const reindexed = nextPts.map((p, i) => ({
+      ...p,
+      id: i + 1,
+      label: `Point ${i + 1}`,
+      isOptional: i >= 4,
+    }));
+
+    setPoints(reindexed);
+    syncInputBufferFromPoints(reindexed);
+    setSelectedPointIndex(targetIndex);
+
+    const updatedCfg: BoundaryConfig = { ...config, points: reindexed, status: 'DRAFT' };
+    setConfig(updatedCfg);
+    saveDraftDebounced(updatedCfg.points);
+
+    toast({
+      title: 'Points Reordered',
+      description: `Point ${index + 1} moved to position ${targetIndex + 1}. Polygon recalculated.`,
+    });
+  };
+
+  // Insert Community Reference Benchmark coordinate (18.4766, -77.9257)
+  const handleInsertReferenceCoord = () => {
+    if (!canEditBoundary) return;
+    const refLat = community.referenceCoord.lat || 18.4766;
+    const refLng = community.referenceCoord.lng || -77.9257;
+
+    const targetIdx = selectedPointIndex ?? 0;
+    commitPointCoordinates(targetIdx, refLat, refLng, 'Benchmark coordinate applied');
+    toast({
+      title: 'Reference Benchmark Coordinate Applied',
+      description: `Inserted ${refLat}, ${refLng} (${community.referenceCoord.description || 'Community Datum Reference'}) into Point ${targetIdx + 1}.`,
+    });
+  };
+
+  // Replace/rollback active boundary to a previous version snapshot
+  const handleReplaceWithVersion = (versionId: number, versionNum: number) => {
+    if (!canEditBoundary) return;
+    router.post(route('boundary.replace', versionId), {}, {
+      preserveScroll: true,
+      onSuccess: () => {
+        toast({
+          title: `Boundary Replaced with v${versionNum}`,
+          description: `The active estate perimeter has been replaced and published with snapshot from Version ${versionNum}.`,
+        });
+      },
+    });
+  };
+
   // Load Preset
   const handleLoadPreset = (presetType: 'montego' | 'quad' | 'octagon') => {
     if (!canEditBoundary) return;
@@ -568,6 +650,84 @@ export default function BoundaryPointManager({
     const formatted = points.map(p => `${p.label}: ${p.lat}, ${p.lng}`).join('\n');
     setBulkText(formatted);
     setIsBulkModalOpen(true);
+  };
+
+  // Export GeoJSON
+  const handleExportGeoJson = () => {
+    window.location.href = '/map/boundary/export';
+  };
+
+  // Import GeoJSON
+  const handleImportGeoJson = async () => {
+    if (!importGeoJsonText.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Empty GeoJSON',
+        description: 'Please paste GeoJSON text or choose a GeoJSON file.',
+      });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const csrfToken = (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement)?.content;
+      const res = await fetch('/map/boundary/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken || '',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ geojson: importGeoJsonText }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to parse GeoJSON boundary.');
+      }
+
+      setPoints(data.points);
+      syncInputBufferFromPoints(data.points);
+      setSelectedPointIndex(0);
+
+      const updatedCfg: BoundaryConfig = { ...config, points: data.points, status: 'DRAFT' };
+      setConfig(updatedCfg);
+      saveDraftDebounced(updatedCfg.points);
+
+      if (data.points[0]) {
+        setFocusTarget({ lat: data.points[0].lat, lng: data.points[0].lng, zoom: 17, timestamp: Date.now() });
+      }
+
+      setIsImportModalOpen(false);
+      setImportGeoJsonText('');
+      toast({
+        title: 'GeoJSON Imported',
+        description: `Successfully loaded ${data.points.length} boundary points.`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Import Failed',
+        description: err.message || 'Unable to import GeoJSON polygon.',
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setImportGeoJsonText(content);
+      }
+    };
+    reader.readAsText(file);
   };
 
   // Save Draft
@@ -673,16 +833,40 @@ export default function BoundaryPointManager({
         </div>
 
         <div className="flex items-center gap-2 self-stretch md:self-auto flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportGeoJson}
+            className="text-xs h-8 gap-1.5 font-medium border-border"
+            title="Download GeoJSON feature for GIS / CAD mapping"
+          >
+            <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Export GeoJSON</span>
+          </Button>
+
           {isSystemAdmin && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleOpenBulkEditor}
-              className="text-xs h-8 gap-1.5 font-medium border-border"
-            >
-              <FileText className="h-3.5 w-3.5 text-primary" />
-              <span>Bulk Paste Coordinates</span>
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsImportModalOpen(true)}
+                className="text-xs h-8 gap-1.5 font-medium border-border"
+                title="Import polygon boundary from GeoJSON file or text"
+              >
+                <Upload className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                <span>Import GeoJSON</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenBulkEditor}
+                className="text-xs h-8 gap-1.5 font-medium border-border"
+              >
+                <FileText className="h-3.5 w-3.5 text-primary" />
+                <span>Bulk Paste Coordinates</span>
+              </Button>
+            </>
           )}
 
           <Button
@@ -738,9 +922,65 @@ export default function BoundaryPointManager({
         </DialogContent>
       </Dialog>
 
+      {/* ── GeoJSON Import Modal ── */}
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600">
+                <Upload className="h-5 w-5" />
+              </span>
+              <DialogTitle className="text-lg font-bold">Import Boundary from GeoJSON</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs">
+              Upload a <code>.geojson</code> file or paste a GeoJSON Polygon / FeatureCollection below. Coordinates will be parsed, scaled to 4–8 perimeter vertices, and populated into your editor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-semibold mb-1.5 block">Upload File</Label>
+              <Input
+                type="file"
+                accept=".geojson,.json"
+                onChange={handleFileUpload}
+                className="text-xs cursor-pointer file:cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Or Paste GeoJSON Text</Label>
+              <Textarea
+                rows={7}
+                value={importGeoJsonText}
+                onChange={(e) => setImportGeoJsonText(e.target.value)}
+                placeholder={`{\n  "type": "FeatureCollection",\n  "features": [\n    {\n      "type": "Feature",\n      "geometry": {\n        "type": "Polygon",\n        "coordinates": [[[-77.926, 18.476], ...]]\n      }\n    }\n  ]\n}`}
+                className="font-mono text-xs leading-relaxed"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setIsImportModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleImportGeoJson}
+              disabled={isImporting}
+              className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Check className="h-4 w-4" />
+              <span>{isImporting ? 'Importing...' : 'Parse & Apply Polygon'}</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {activeTab === 'audit' ? (
-        /* ── Audit History View ── */
-        <Card className="border shadow-md">
+        <div className="space-y-6">
+          {/* ── Audit History View ── */}
+          <Card className="border shadow-md">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -803,6 +1043,92 @@ export default function BoundaryPointManager({
             </div>
           </CardContent>
         </Card>
+
+        {/* ── Historical Versions & Rollback / Replace Section ── */}
+        <Card className="border shadow-md">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-bold flex items-center gap-2">
+                  <RotateCcw className="h-5 w-5 text-indigo-600" />
+                  <span>Boundary Version History &amp; Snapshot Rollback</span>
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Restore or replace the live community boundary with any previously published cryptographic snapshot.
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="font-mono text-xs">
+                {previousVersions.length} Archived Versions
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {previousVersions.length === 0 ? (
+              <div className="p-8 text-center rounded-xl border border-dashed text-muted-foreground">
+                <RotateCcw className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="font-medium text-sm">No historical version snapshots archived yet.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When you publish revisions to the boundary, immutable snapshots will appear here for 1-click restore.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl border overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-muted/60 text-muted-foreground font-semibold border-b">
+                    <tr>
+                      <th className="p-3">Version</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Vertices</th>
+                      <th className="p-3">Published At</th>
+                      <th className="p-3">Published By</th>
+                      <th className="p-3 text-right">Rollback / Replace</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {previousVersions.map((ver) => (
+                      <tr key={ver.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="p-3 font-mono font-bold text-foreground">
+                          Version {ver.version}
+                        </td>
+                        <td className="p-3">
+                          <Badge 
+                            variant="outline" 
+                            className={`font-mono text-[10px] ${
+                              ver.status === 'PUBLISHED' 
+                                ? 'border-emerald-500/40 text-emerald-600 bg-emerald-500/10' 
+                                : 'border-amber-500/40 text-amber-600 bg-amber-500/10'
+                            }`}
+                          >
+                            {ver.status}
+                          </Badge>
+                        </td>
+                        <td className="p-3 font-mono">{ver.pointsCount} Points</td>
+                        <td className="p-3 text-muted-foreground font-mono">{ver.publishedAt || 'Draft'}</td>
+                        <td className="p-3 font-medium text-foreground">{ver.publishedBy || 'System Admin'}</td>
+                        <td className="p-3 text-right">
+                          {canEditBoundary && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleReplaceWithVersion(ver.id, ver.version)}
+                              className="h-7 text-xs gap-1.5 font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                              title={`Restore active boundary to Version ${ver.version}`}
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              <span>Replace with v{ver.version}</span>
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       ) : (
         /* ── Main Boundary Point Manager ── */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -974,17 +1300,31 @@ export default function BoundaryPointManager({
                         </div>
                       </div>
 
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleFocusPoint(selectedPointIndex ?? 0)}
-                        className="h-7 text-xs gap-1 font-semibold text-primary border-primary/30 hover:bg-primary/10"
-                        title="Center map on currently selected point"
-                      >
-                        <Crosshair className="h-3.5 w-3.5" />
-                        <span>Focus Point {(selectedPointIndex ?? 0) + 1} on Map</span>
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleInsertReferenceCoord}
+                          className="h-7 text-xs gap-1 font-semibold text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                          title="Insert Supplied Benchmark Coordinate (18.4766, -77.9257)"
+                        >
+                          <Landmark className="h-3.5 w-3.5" />
+                          <span>Insert Supplied Benchmark</span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleFocusPoint(selectedPointIndex ?? 0)}
+                          className="h-7 text-xs gap-1 font-semibold text-primary border-primary/30 hover:bg-primary/10"
+                          title="Center map on currently selected point"
+                        >
+                          <Crosshair className="h-3.5 w-3.5" />
+                          <span>Focus Point {(selectedPointIndex ?? 0) + 1} on Map</span>
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Point Selectors */}
@@ -1142,6 +1482,39 @@ export default function BoundaryPointManager({
                               <Crosshair className="h-3 w-3" />
                               <span>Focus</span>
                             </Button>
+
+                            {canEditBoundary && (
+                              <div className="flex items-center gap-0.5 border rounded-md p-0.5 bg-background">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={idx === 0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMovePoint(idx, 'up');
+                                  }}
+                                  className="h-5 w-5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                  title={`Move Point ${idx + 1} Up`}
+                                >
+                                  <ArrowUp className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={idx === points.length - 1}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMovePoint(idx, 'down');
+                                  }}
+                                  className="h-5 w-5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                  title={`Move Point ${idx + 1} Down`}
+                                >
+                                  <ArrowDown className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
 
                             <Badge 
                               variant={isRequired ? 'default' : 'secondary'} 

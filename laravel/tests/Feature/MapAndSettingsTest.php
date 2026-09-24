@@ -133,7 +133,7 @@ class MapAndSettingsTest extends TestCase
             ]);
         }
 
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+        $this->actingAs(User::factory()->role(UserRole::SystemAdmin)->create())
             ->get('/dashboard/map')
             ->assertInertia(fn (Assert $page) => $page
                 ->where('boundaryConfig.version', 3)
@@ -162,9 +162,9 @@ class MapAndSettingsTest extends TestCase
     public function test_publishing_supersedes_the_previous_version(): void
     {
         $community = Community::default();
-        $admin = User::factory()->role(UserRole::Admin)->create();
+        $sysAdmin = User::factory()->role(UserRole::SystemAdmin)->create();
 
-        $this->actingAs($admin)
+        $this->actingAs($sysAdmin)
             ->post('/dashboard/map/boundary/publish', [
                 'points' => $this->pointsPayload($this->validPolygon()),
             ])
@@ -176,7 +176,7 @@ class MapAndSettingsTest extends TestCase
         // A second publish moves the estate to v2 and retires v1.
         $shifted = array_map(fn ($p) => [$p[0] + 0.001, $p[1]], $this->validPolygon());
 
-        $this->actingAs($admin)
+        $this->actingAs($sysAdmin)
             ->post('/dashboard/map/boundary/publish', ['points' => $this->pointsPayload($shifted)])
             ->assertSessionHasNoErrors();
 
@@ -197,7 +197,7 @@ class MapAndSettingsTest extends TestCase
             [18.4790, -77.9284],
         ];
 
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+        $this->actingAs(User::factory()->role(UserRole::SystemAdmin)->create())
             ->post('/dashboard/map/boundary/publish', ['points' => $this->pointsPayload($bowTie)])
             ->assertSessionHasErrors('points');
 
@@ -207,9 +207,9 @@ class MapAndSettingsTest extends TestCase
     public function test_a_draft_does_not_change_what_the_gates_see(): void
     {
         $community = Community::default();
-        $admin = User::factory()->role(UserRole::Admin)->create();
+        $sysAdmin = User::factory()->role(UserRole::SystemAdmin)->create();
 
-        $this->actingAs($admin)
+        $this->actingAs($sysAdmin)
             ->post('/dashboard/map/boundary/draft', [
                 'points' => $this->pointsPayload($this->validPolygon()),
             ])
@@ -218,6 +218,17 @@ class MapAndSettingsTest extends TestCase
         // Saved, but not in force.
         $this->assertNotNull($community->fresh()->draftBoundary());
         $this->assertNull($community->fresh()->publishedBoundary());
+    }
+
+    public function test_an_admin_cannot_publish_a_boundary(): void
+    {
+        Community::default();
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post('/dashboard/map/boundary/publish', [
+                'points' => $this->pointsPayload($this->validPolygon()),
+            ])
+            ->assertForbidden();
     }
 
     public function test_a_resident_cannot_publish_a_boundary(): void
@@ -384,5 +395,74 @@ class MapAndSettingsTest extends TestCase
                 'password_confirmation' => 'Str0ng-New-Password!23',
             ])
             ->assertSessionHasErrors('current_password');
+    }
+
+    public function test_export_geojson_returns_valid_features(): void
+    {
+        $community = Community::default();
+        $sysAdmin = User::factory()->role(UserRole::SystemAdmin)->create();
+
+        $config = $community->boundaryConfigs()->create([
+            'version' => 1,
+            'status' => 'PUBLISHED',
+            'published_coordinates' => $this->validPolygon(),
+            'last_published_at' => now(),
+            'last_published_by' => $sysAdmin->display_name,
+        ]);
+
+        foreach ($this->validPolygon() as $index => $pair) {
+            $config->points()->create([
+                'point_index' => $index + 1,
+                'label' => 'Point '.($index + 1),
+                'lat' => $pair[0],
+                'lng' => $pair[1],
+                'is_optional' => $index >= 4,
+            ]);
+        }
+
+        $response = $this->actingAs($sysAdmin)
+            ->get('/dashboard/map/boundary/export')
+            ->assertOk();
+
+        $this->assertStringContainsString('attachment;', $response->headers->get('content-disposition'));
+        $this->assertStringContainsString('.geojson', $response->headers->get('content-disposition'));
+    }
+
+    public function test_import_geojson_parses_polygon(): void
+    {
+        $sysAdmin = User::factory()->role(UserRole::SystemAdmin)->create();
+
+        $geojson = [
+            'type' => 'FeatureCollection',
+            'features' => [
+                [
+                    'type' => 'Feature',
+                    'geometry' => [
+                        'type' => 'Polygon',
+                        'coordinates' => [
+                            [
+                                [-77.930, 18.470],
+                                [-77.930, 18.480],
+                                [-77.920, 18.480],
+                                [-77.920, 18.470],
+                                [-77.930, 18.470],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $response = $this->actingAs($sysAdmin)
+            ->postJson('/dashboard/map/boundary/import', [
+                'geojson' => $geojson,
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $points = $response->json('points');
+        $this->assertCount(4, $points);
+        $this->assertSame(18.470, $points[0]['lat']);
+        $this->assertSame(-77.930, $points[0]['lng']);
     }
 }

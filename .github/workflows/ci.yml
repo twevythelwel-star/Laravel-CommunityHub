@@ -1,15 +1,14 @@
 # Runs on every push and pull request. Branch protection on `main` should
-# require both jobs so a red build cannot be merged.
+# require the gate job so a red build cannot be merged.
 name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: pr-ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -20,61 +19,102 @@ defaults:
     working-directory: laravel
 
 jobs:
-  backend:
-    name: PHP tests, style and audit
+  # ── 1. Composer Install & Validation ────────────────────────────────
+  composer-install:
+    name: Composer Install
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          # gd for dompdf and the visitor-pass QR images (QrCodePng);
-          # pdo_sqlite for the in-memory test database set in phpunit.xml.
           extensions: mbstring, dom, gd, intl, bcmath, zip, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
 
-      - name: Cache Composer downloads
+      - name: Cache Composer dependencies
         uses: actions/cache@v4
         with:
           path: ~/.composer/cache/files
           key: composer-${{ hashFiles('laravel/composer.lock') }}
           restore-keys: composer-
 
-      # Fails if composer.json and composer.lock disagree, which is how a
-      # package gets added to one without the other.
       - name: Validate composer.json and composer.lock
         run: composer validate --no-check-publish --no-check-all
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+  # ── 2. PHP Tests ───────────────────────────────────────────────────
+  php-tests:
+    name: PHP Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [composer-install]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, gd, intl, bcmath, zip, pdo_sqlite, sqlite3
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('laravel/composer.lock') }}
+          restore-keys: composer-
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      # Tests read their settings from phpunit.xml (SQLite in memory, sync
-      # queue, a throwaway GATE_ENGINE_SECRET) and TestCase calls
-      # withoutVite(), so no frontend build is needed here. The app still
-      # needs a key.
       - name: Prepare environment
         run: |
           cp .env.example .env
           php artisan key:generate --ansi
 
-      - name: Run test suite
+      - name: Execute test suite
         run: php artisan test
 
-      - name: Check code style (Pint)
+  # ── 3. Pint Code Style ──────────────────────────────────────────────
+  pint:
+    name: Pint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [composer-install]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('laravel/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Check code style with Pint
         run: vendor/bin/pint --test
 
-      - name: Audit PHP dependencies
-        run: composer audit --no-interaction
-
-  frontend:
-    name: TypeScript, build and audit
+  # ── 4. TypeScript Validation ────────────────────────────────────────
+  typescript:
+    name: TypeScript
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -84,15 +124,161 @@ jobs:
           cache: npm
           cache-dependency-path: laravel/package-lock.json
 
-      - name: Install JS dependencies
+      - name: Install JavaScript dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Type check
+      - name: Validate TypeScript types
         run: npm run typecheck
 
-      - name: Production build
+  # ── 5. NPM Build ────────────────────────────────────────────────────
+  npm-build:
+    name: NPM Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Install JavaScript dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Compile production assets
         run: npm run build
 
-      # Runtime dependencies only; dev tooling never reaches a browser.
-      - name: Audit JS dependencies
+  # ── 6. Security Audit (PHP & Node) ──────────────────────────────────
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom
+          coverage: none
+          tools: composer:v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: laravel/package-lock.json
+
+      - name: Audit PHP dependencies
+        run: composer audit --no-interaction
+
+      - name: Install JS dependencies for audit
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit JavaScript dependencies
         run: npm audit --omit=dev --audit-level=high
+
+  # ── 7. Migration Check ──────────────────────────────────────────────
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [composer-install]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, gd, intl, bcmath, zip, pdo_sqlite, sqlite3
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('laravel/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Prepare test environment & SQLite database
+        run: |
+          cp .env.example .env
+          php artisan key:generate --ansi
+          touch database/database.sqlite
+
+      - name: Execute migrations on fresh database
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate:fresh --force
+
+      - name: Verify migration status
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate:status
+
+      - name: Test migration rollback (idempotency check)
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate:rollback --step=1
+
+      - name: Re-apply rolled back migration
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan migrate --force
+
+      - name: Verify database seeders run cleanly
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
+        run: php artisan db:seed --force
+
+  # ── 8. Pull Request Gate (Required for Merge) ───────────────────────
+  ci-gate:
+    name: Pull Request Gate (PASS / FAIL)
+    runs-on: ubuntu-latest
+    needs:
+      - composer-install
+      - php-tests
+      - pint
+      - typescript
+      - npm-build
+      - security-audit
+      - migration-check
+    if: always()
+    steps:
+      - name: Verify all required pipeline checks passed
+        run: |
+          echo "=========================================================="
+          echo "           CI PIPELINE STATUS VERIFICATION                "
+          echo "=========================================================="
+          echo "Composer Install: ${{ needs.composer-install.result }}"
+          echo "PHP Tests:        ${{ needs.php-tests.result }}"
+          echo "Pint Style:       ${{ needs.pint.result }}"
+          echo "TypeScript:       ${{ needs.typescript.result }}"
+          echo "NPM Build:        ${{ needs.npm-build.result }}"
+          echo "Security Audit:   ${{ needs.security-audit.result }}"
+          echo "Migration Check:  ${{ needs.migration-check.result }}"
+          echo "=========================================================="
+
+          if [ "${{ needs.composer-install.result }}" != "success" ] || \
+             [ "${{ needs.php-tests.result }}" != "success" ] || \
+             [ "${{ needs.pint.result }}" != "success" ] || \
+             [ "${{ needs.typescript.result }}" != "success" ] || \
+             [ "${{ needs.npm-build.result }}" != "success" ] || \
+             [ "${{ needs.security-audit.result }}" != "success" ] || \
+             [ "${{ needs.migration-check.result }}" != "success" ]; then
+            echo "FAILED: One or more required checks failed. Blocking merge."
+            exit 1
+          fi
+
+          echo "PASSED: All 7 required checks succeeded. Pull request is eligible for merge."

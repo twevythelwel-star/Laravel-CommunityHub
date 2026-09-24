@@ -38,7 +38,10 @@ class AuthServiceProvider extends ServiceProvider
             true,
         ));
 
-        Gate::define('manageBoundary', fn (User $user) => $user->role->isAdministrative());
+        Gate::define('manageBoundary', fn (User $user) => $user->role === UserRole::SystemAdmin);
+        Gate::define('manageLandmarks', fn (User $user) => $user->role->isAdministrative());
+        Gate::define('viewBoundary', fn (User $user) => $user->role->isAdministrative()
+            || $user->role === UserRole::Security);
 
         /*
          | The estate's own information: the map, the perks directory, the

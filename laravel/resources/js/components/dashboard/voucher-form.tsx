@@ -52,7 +52,11 @@ export function VoucherForm({ children, open, onOpenChange, onSave, businesses, 
   useEffect(() => {
     if (open) {
       if (voucher) {
-        form.reset(voucher);
+        form.reset({
+          title: voucher.title,
+          description: voucher.description,
+          businessId: String(voucher.businessId ?? ''),
+        });
       } else {
         form.reset({ title: '', description: '', businessId: undefined });
       }
@@ -91,7 +95,7 @@ export function VoucherForm({ children, open, onOpenChange, onSave, businesses, 
                     </FormControl>
                     <SelectContent>
                       {businesses.map(business => (
-                        <SelectItem key={business.id} value={business.id}>{business.name}</SelectItem>
+                        <SelectItem key={business.id} value={String(business.id)}>{business.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

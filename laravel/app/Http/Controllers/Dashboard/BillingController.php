@@ -6,17 +6,25 @@ use App\Http\Controllers\Controller;
 use App\Models\AutoPaySetting;
 use App\Models\BankReconciliation;
 use App\Models\BillingSetting;
+use App\Models\Community;
 use App\Models\Fundraiser;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
+use App\Models\PaymentPlan;
 use App\Models\Payout;
+use App\Models\StripeEvent;
 use App\Models\Transaction;
 use App\Models\Wallet;
 use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\StripePaymentService;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -283,6 +291,95 @@ class BillingController extends Controller
             'notes' => $r->notes,
         ]) : [];
 
+        // 3. 10 Dedicated Billing Subsystem Datasets (Strictly Scoped for Privacy)
+        $outstandingQuery = $isAdmin ? Invoice::outstanding() : $user->invoices()->outstanding();
+        $outstandingInvoices = $outstandingQuery
+            ->with('user:id,display_name,lot')
+            ->latest('due_on')
+            ->take(50)
+            ->get()
+            ->map(fn (Invoice $inv) => [
+                'id' => $inv->id,
+                'reference' => $inv->reference,
+                'homeowner' => $inv->user?->display_name ?? 'Resident',
+                'lot' => $inv->user?->lot ?? 'N/A',
+                'amount' => (float) ($inv->amount_minor / 100),
+                'currency' => $inv->currency,
+                'dueOn' => $inv->due_on->format('M d, Y'),
+                'daysOverdue' => max(0, (int) now()->diffInDays($inv->due_on, false) * -1),
+                'status' => $inv->isOverdue() ? 'Overdue' : $inv->status,
+            ]);
+
+        $plansQuery = $isAdmin ? PaymentPlan::query() : PaymentPlan::where('user_id', $user->id);
+        $paymentPlans = $plansQuery
+            ->with(['user:id,display_name,lot', 'invoice:id,reference,due_on'])
+            ->latest()
+            ->take(50)
+            ->get()
+            ->map(fn (PaymentPlan $plan) => [
+                'id' => $plan->id,
+                'invoiceId' => $plan->invoice_id,
+                'invoiceReference' => $plan->invoice?->reference ?? 'INV-N/A',
+                'homeowner' => $plan->user?->display_name ?? 'Resident',
+                'lot' => $plan->user?->lot ?? 'N/A',
+                'totalInstallments' => $plan->total_installments,
+                'remainingInstallments' => $plan->remaining_installments,
+                'installmentAmount' => (float) ($plan->installment_amount_minor / 100),
+                'frequency' => ucfirst($plan->frequency),
+                'status' => $plan->status,
+            ]);
+
+        $receiptsQuery = Transaction::where('status', 'completed')
+            ->unless($isAdmin, fn ($q) => $q->where('user_id', $user->id));
+        $receipts = $receiptsQuery
+            ->with('user:id,display_name,lot')
+            ->latest()
+            ->take(50)
+            ->get()
+            ->map(fn (Transaction $tx) => [
+                'id' => $tx->id,
+                'receiptNumber' => $tx->receipt_number ?? ('REC-'.str_pad($tx->id, 6, '0', STR_PAD_LEFT)),
+                'reference' => $tx->reference,
+                'homeowner' => $tx->user?->display_name ?? 'Resident',
+                'lot' => $tx->user?->lot ?? 'N/A',
+                'amount' => (float) ($tx->amount_minor / 100),
+                'currency' => $tx->currency,
+                'channel' => str_replace('_', ' ', $tx->payment_channel),
+                'date' => $tx->created_at->format('M d, Y h:i A'),
+                'receiptUrl' => route('dashboard.billing.transactions.receipt', $tx->id),
+            ]);
+
+        $refundsQuery = Transaction::where('status', 'refunded')
+            ->unless($isAdmin, fn ($q) => $q->where('user_id', $user->id));
+        $refundsList = $refundsQuery
+            ->with('user:id,display_name,lot')
+            ->latest()
+            ->take(50)
+            ->get()
+            ->map(fn (Transaction $tx) => [
+                'id' => $tx->id,
+                'reference' => $tx->reference,
+                'homeowner' => $tx->user?->display_name ?? 'Resident',
+                'lot' => $tx->user?->lot ?? 'N/A',
+                'amount' => (float) ($tx->amount_minor / 100),
+                'currency' => $tx->currency,
+                'channel' => str_replace('_', ' ', $tx->payment_channel),
+                'date' => $tx->updated_at->format('M d, Y h:i A'),
+                'notes' => $tx->notes,
+            ]);
+
+        $autoPayPortfolio = $isAdmin ? [
+            'enrolledCount' => AutoPaySetting::where('is_active', true)->count(),
+            'cadenceBreakdown' => [
+                'monthly' => AutoPaySetting::where('is_active', true)->where('cadence', 'monthly')->count(),
+                'quarterly' => AutoPaySetting::where('is_active', true)->where('cadence', 'quarterly')->count(),
+                'annual' => AutoPaySetting::where('is_active', true)->where('cadence', 'annual')->count(),
+            ],
+            'nextRunDate' => now()->startOfMonth()->addDays((int) ($autoPay->charge_day_of_month ?: 1) - 1)->format('M d, Y'),
+        ] : null;
+
+        $paymentChannels = $isAdmin ? $this->orchestrator->getChannelReadinessReport() : [];
+
         return Inertia::render('Dashboard/Billing', [
             'settings' => [
                 'monthlyFee' => $settings->monthlyFee(),
@@ -314,6 +411,22 @@ class BillingController extends Controller
             'transactions' => $transactions,
             'payouts' => $payouts,
             'reconciliations' => $reconciliations,
+            'paymentEvents' => $isAdmin ? StripeEvent::latest()->take(25)->get()->map(fn ($e) => [
+                'id' => $e->id,
+                'eventId' => $e->event_id,
+                'type' => $e->type,
+                'status' => $e->status ?? 'processed',
+                'errorMessage' => $e->error_message,
+                'date' => $e->created_at->format('M d, Y h:i:s A'),
+            ]) : [],
+
+            // 10 Views & Payment Orchestration Engine props
+            'outstanding' => $outstandingInvoices,
+            'paymentPlans' => $paymentPlans,
+            'receipts' => $receipts,
+            'refundsList' => $refundsList,
+            'autoPayPortfolio' => $autoPayPortfolio,
+            'paymentChannels' => $paymentChannels,
         ]);
     }
 
@@ -642,5 +755,203 @@ class BillingController extends Controller
                 ? route('dashboard.billing.stripe.checkout', $invoice->id)
                 : null,
         ];
+    }
+
+    /**
+     * Validate an individual payment channel integration technical readiness.
+     */
+    public function validateChannel(Request $request, string $channel): RedirectResponse|JsonResponse
+    {
+        $report = $this->orchestrator->validateChannelIntegration($channel);
+
+        if ($request->wantsJson()) {
+            return response()->json($report);
+        }
+
+        $statusMsg = $report['is_ready'] ? 'Technical validation PASSED. Ready for production.' : 'Technical validation requires configuration.';
+
+        return back()->with('success', "Channel [{$report['label']}]: {$statusMsg}");
+    }
+
+    /**
+     * Enable or disable a payment channel for production (enforces pre-flight technical validation).
+     */
+    public function toggleChannel(Request $request, string $channel): RedirectResponse
+    {
+        $setting = PaymentChannelSetting::where('channel_key', $channel)->first();
+        $targetEnabled = ! ($setting ? $setting->enabled : true);
+
+        if ($targetEnabled) {
+            $validation = $this->orchestrator->validateChannelIntegration($channel);
+            if (! $validation['is_ready']) {
+                return back()->withErrors([
+                    'channel' => "Cannot enable [{$validation['label']}] for production: technical integration requirements not met.",
+                ]);
+            }
+        }
+
+        PaymentChannelSetting::updateOrCreate(
+            ['channel_key' => $channel],
+            ['enabled' => $targetEnabled]
+        );
+
+        $statusWord = $targetEnabled ? 'enabled for production' : 'disabled';
+        $request->user()->recordActivity("Payment channel {$channel} {$statusWord}");
+
+        return back()->with('success', "Payment channel {$channel} has been {$statusWord}.");
+    }
+
+    /**
+     * Configure a structured installment payment plan for an invoice.
+     */
+    public function storePaymentPlan(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'invoice_id' => ['required', 'exists:invoices,id'],
+            'total_installments' => ['required', 'integer', 'between:2,12'],
+            'frequency' => ['required', 'string', 'in:monthly,biweekly,weekly'],
+        ]);
+
+        $invoice = Invoice::findOrFail($validated['invoice_id']);
+        $installmentAmountMinor = (int) ceil($invoice->amount_minor / $validated['total_installments']);
+
+        PaymentPlan::updateOrCreate(
+            ['invoice_id' => $invoice->id],
+            [
+                'user_id' => $invoice->user_id,
+                'total_installments' => $validated['total_installments'],
+                'remaining_installments' => $validated['total_installments'],
+                'installment_amount_minor' => $installmentAmountMinor,
+                'frequency' => $validated['frequency'],
+                'status' => 'Active',
+            ]
+        );
+
+        $request->user()->recordActivity("Created {$validated['total_installments']}-part payment plan for invoice {$invoice->reference}");
+
+        return back()->with('success', "Payment plan configured for invoice {$invoice->reference}.");
+    }
+
+    /**
+     * Download official PDF receipt for a completed transaction.
+     */
+    public function downloadReceipt(Request $request, Transaction $transaction): \Illuminate\Http\Response
+    {
+        $user = $request->user();
+        abort_unless(
+            $transaction->user_id === $user->id || $user->can('manageBilling'),
+            403,
+            'You can only download your own payment receipts.'
+        );
+
+        $transaction->load(['user', 'invoice']);
+        $community = Community::first();
+
+        $pdf = Pdf::loadView('pdf.transaction-receipt', [
+            'transaction' => $transaction,
+            'community' => $community,
+        ])->setPaper('a4', 'portrait');
+
+        $ref = $transaction->receipt_number ?? $transaction->reference;
+
+        return $pdf->download("receipt-{$ref}.pdf");
+    }
+
+    /**
+     * Perform an automated estate bank reconciliation against the general ledger.
+     */
+    public function storeReconciliation(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'bank_statement_date' => ['required', 'date'],
+            'statement_balance' => ['required', 'numeric', 'min:0'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $date = $validated['bank_statement_date'];
+        $statementBalanceMinor = (int) round(((float) $validated['statement_balance']) * 100);
+
+        // Ledger balance = sum(completed payments up to statement date) - sum(refunds up to statement date)
+        $completedMinor = Transaction::where('status', 'completed')
+            ->whereDate('created_at', '<=', $date)
+            ->sum('amount_minor');
+
+        $refundedMinor = Transaction::where('status', 'refunded')
+            ->whereDate('created_at', '<=', $date)
+            ->sum('amount_minor');
+
+        $ledgerBalanceMinor = (int) ($completedMinor - $refundedMinor);
+        $diffMinor = $statementBalanceMinor - $ledgerBalanceMinor;
+        $status = ($diffMinor === 0) ? 'Reconciled' : 'Discrepancy';
+
+        BankReconciliation::create([
+            'bank_statement_date' => $date,
+            'statement_balance_minor' => $statementBalanceMinor,
+            'ledger_balance_minor' => $ledgerBalanceMinor,
+            'difference_minor' => $diffMinor,
+            'reconciled_by' => $request->user()->id,
+            'status' => $status,
+            'notes' => $validated['notes'] ?? null,
+        ]);
+
+        $statusWord = $status === 'Reconciled' ? 'balanced perfectly' : 'has a variance of J$'.number_format($diffMinor / 100, 2);
+        $request->user()->recordActivity("Completed bank reconciliation for {$date}: {$statusWord}");
+
+        return back()->with('success', "Bank reconciliation recorded. Status: {$status} ({$statusWord}).");
+    }
+
+    /**
+     * Redirect user to Stripe's hosted Billing Customer Portal.
+     */
+    public function customerPortal(Request $request, StripePaymentService $stripe): RedirectResponse|\Symfony\Component\HttpFoundation\Response
+    {
+        $user = $request->user();
+
+        if (! $stripe->isLive()) {
+            return back()->with('error', 'Stripe payment processor is not configured or in test mode. Self-service billing portal is currently unavailable.');
+        }
+
+        try {
+            $returnUrl = route('dashboard.billing');
+            $url = $stripe->createCustomerPortalSession($user, $returnUrl);
+
+            return Inertia::location($url);
+        } catch (\Throwable $e) {
+            Log::warning("Could not launch customer portal: {$e->getMessage()}");
+
+            return back()->with('error', 'Unable to initiate Stripe customer portal at this time: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Calculate prorated assessment dues for partial month move-in or lease terms.
+     */
+    public function calculateProration(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'monthly_rate' => ['required', 'numeric', 'min:0'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ]);
+
+        $start = Carbon::parse($validated['start_date']);
+        $daysInMonth = $start->daysInMonth;
+
+        $end = ! empty($validated['end_date'])
+            ? Carbon::parse($validated['end_date'])
+            : $start->copy()->endOfMonth();
+
+        $billedDays = min($daysInMonth, max(1, $start->diffInDays($end) + 1));
+        $dailyRate = $validated['monthly_rate'] / $daysInMonth;
+        $proratedAmount = round($dailyRate * $billedDays, 2);
+
+        return response()->json([
+            'monthlyRate' => (float) $validated['monthly_rate'],
+            'daysInMonth' => $daysInMonth,
+            'billedDays' => $billedDays,
+            'dailyRate' => round($dailyRate, 2),
+            'proratedAmount' => $proratedAmount,
+            'currency' => 'USD',
+        ]);
     }
 }

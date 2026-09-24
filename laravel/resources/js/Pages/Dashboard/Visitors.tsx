@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera, ShieldOff, Share2, FileDown, Copy, Edit, ShieldAlert, MessageSquare } from 'lucide-react';
+import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera, ShieldOff, Share2, FileDown, Copy, Edit, ShieldAlert, MessageSquare, Users, Car, Search, Send, Clock, Link as LinkIcon, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -114,11 +114,20 @@ type Props = {
   visitors: Paginated<VisitorRow>;
   filters: { status?: string; search?: string; tab?: string };
   tabCounts?: {
+    scan?: number;
     expected: number;
     inside: number;
     checkedOut: number;
     rejected: number;
     history: number;
+  };
+  securityStats?: {
+    visitorsToday: number;
+    expected: number;
+    currentlyInside: number;
+    checkedOut: number;
+    rejected: number;
+    suspiciousAttempts: number;
   };
   activeTab?: string;
   canManage: boolean;
@@ -160,6 +169,7 @@ export default function VisitorsPage({
   visitors,
   filters,
   tabCounts,
+  securityStats,
   activeTab = 'all',
   canManage,
   canRegister,
@@ -181,6 +191,78 @@ export default function VisitorsPage({
   const [hour, setHour] = useState('10');
   const [minute, setMinute] = useState('00');
   const [meridiem, setMeridiem] = useState('AM');
+
+  // Bulk Event Passes & Plate Search State
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [bulkDate, setBulkDate] = useState<Date | undefined>(new Date());
+  const [bulkHour, setBulkHour] = useState('10');
+  const [bulkMinute, setBulkMinute] = useState('00');
+  const [bulkMeridiem, setBulkMeridiem] = useState('AM');
+  const [bulkCategory, setBulkCategory] = useState<'VISITOR' | 'CONTRACTOR'>('VISITOR');
+  const [bulkText, setBulkText] = useState('');
+  const [plateQuery, setPlateQuery] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
+  const [rsvpDialogOpen, setRsvpDialogOpen] = useState(false);
+  const [rsvpTitle, setRsvpTitle] = useState('');
+  const [rsvpDate, setRsvpDate] = useState<Date | undefined>(new Date());
+  const [rsvpHour, setRsvpHour] = useState('12');
+  const [rsvpMinute, setRsvpMinute] = useState('00');
+  const [rsvpMeridiem, setRsvpMeridiem] = useState('PM');
+  const [rsvpMaxGuests, setRsvpMaxGuests] = useState('50');
+  const [rsvpNotes, setRsvpNotes] = useState('');
+  const [rsvpGeneratedUrl, setRsvpGeneratedUrl] = useState<string | null>(null);
+  const [rsvpCopied, setRsvpCopied] = useState(false);
+  const [rsvpSubmitting, setRsvpSubmitting] = useState(false);
+
+  const handleCreateRsvpInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rsvpTitle.trim()) {
+      toast({ variant: 'destructive', title: 'Title required', description: 'Please enter an event or gathering title.' });
+      return;
+    }
+
+    const expectedAt = toIsoDateTime(rsvpDate, rsvpHour, rsvpMinute, rsvpMeridiem);
+    setRsvpSubmitting(true);
+    router.post('/dashboard/visitors/invites', {
+      title: rsvpTitle,
+      expected_at: expectedAt,
+      max_guests: parseInt(rsvpMaxGuests, 10) || 50,
+      notes: rsvpNotes || null,
+    }, {
+      preserveScroll: true,
+      onSuccess: (page) => {
+        setRsvpSubmitting(false);
+        const url = (page.props as any).flash?.rsvp_url || null;
+        if (url) {
+          setRsvpGeneratedUrl(url);
+        } else {
+          setRsvpDialogOpen(false);
+        }
+        toast({ title: 'RSVP Invite Created', description: 'Share the link with your attendees.' });
+      },
+      onError: (errs) => {
+        setRsvpSubmitting(false);
+        toast({ variant: 'destructive', title: 'Creation failed', description: (Object.values(errs)[0] as string) || 'Error generating RSVP link' });
+      }
+    });
+  };
+
+  const handleServerResend = (visitor: VisitorRow, channel: 'sms' | 'whatsapp' | 'email') => {
+    router.post(`/dashboard/visitors/${visitor.id}/resend`, { channel }, {
+      preserveScroll: true,
+      onSuccess: () => toast({ title: 'Pass Dispatched', description: `Pass sent to ${visitor.name} via ${channel.toUpperCase()}.` }),
+      onError: (errs) => toast({ variant: 'destructive', title: 'Dispatch Failed', description: (Object.values(errs)[0] as string) || 'Unable to send pass.' }),
+    });
+  };
+
+  const handleExtendPass = (visitor: VisitorRow, hours: number) => {
+    router.post(`/dashboard/visitors/${visitor.id}/extend`, { hours }, {
+      preserveScroll: true,
+      onSuccess: () => toast({ title: 'Pass Extended', description: `Validity for ${visitor.name} extended by +${hours} hours.` }),
+      onError: (errs) => toast({ variant: 'destructive', title: 'Extension Failed', description: (Object.values(errs)[0] as string) || 'Unable to extend pass.' }),
+    });
+  };
 
   /*
    * The registration form previously had no state at all: every input was
@@ -242,6 +324,64 @@ export default function VisitorsPage({
       },
       // A blocklist hit comes back as a validation error on `name`, so it is
       // surfaced inline by the field rather than swallowed.
+    });
+  };
+
+  const handleBulkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkText.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Empty attendee list',
+        description: 'Enter at least one visitor (Name, Phone/Email, Vehicle Plate).',
+      });
+      return;
+    }
+
+    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsedVisitors = lines.map(line => {
+      const parts = line.split(/[,;\t]/).map(p => p.trim());
+      return {
+        name: parts[0] || 'Guest',
+        contact: parts[1] || null,
+        vehicle: parts[2] || null,
+      };
+    });
+
+    if (parsedVisitors.length === 0) {
+      toast({ variant: 'destructive', title: 'Invalid format', description: 'Could not parse any visitors.' });
+      return;
+    }
+
+    const expectedAt = toIsoDateTime(bulkDate, bulkHour, bulkMinute, bulkMeridiem);
+
+    setBulkSubmitting(true);
+    router.post('/dashboard/visitors/bulk', {
+      expected_at: expectedAt,
+      pass_category: bulkCategory,
+      visitors: parsedVisitors,
+      notify_email: form.data.notify_email,
+      notify_sms: form.data.notify_sms,
+      notify_whatsapp: form.data.notify_whatsapp,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => {
+        setBulkSubmitting(false);
+        setBulkDialogOpen(false);
+        setBulkText('');
+        toast({
+          title: 'Bulk Event Passes Created',
+          description: `Registered ${parsedVisitors.length} attendees with digital passes.`,
+        });
+      },
+      onError: (errors) => {
+        setBulkSubmitting(false);
+        toast({
+          variant: 'destructive',
+          title: 'Registration Error',
+          description: (Object.values(errors)[0] as string) || 'Failed to register bulk attendees.',
+        });
+      },
     });
   };
 
@@ -478,15 +618,20 @@ export default function VisitorsPage({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Prominent SCAN QR CODE Button */}
+            {/* High-Visibility Security Operator SCAN QR CODE Button */}
             {canManage && (
               <Button
                 size="lg"
                 onClick={() => setScannerOpen(true)}
-                className="h-11 px-5 rounded-xl font-black text-xs sm:text-sm tracking-wide bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/25 gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="h-14 px-6 rounded-2xl font-black text-sm sm:text-base tracking-wide bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-xl shadow-emerald-600/30 gap-2.5 transition-all hover:scale-[1.02] active:scale-[0.98] border-2 border-emerald-400/40 cursor-pointer focus-visible:ring-4 focus-visible:ring-emerald-400"
+                aria-label="Open Gate Pass QR Camera Scanner. Press Space or Click to Launch."
+                title="Open Gate Pass Scanner (Shortcut: S)"
               >
-                <Camera className="w-4 h-4 animate-pulse text-white" />
-                <span>📷 SCAN QR CODE</span>
+                <Camera className="w-5 h-5 animate-pulse text-white" />
+                <span className="uppercase tracking-wider">Scan Gate Pass</span>
+                <span className="hidden sm:inline-block ml-1 px-2 py-0.5 rounded-md bg-black/25 text-[11px] font-mono text-emerald-100 font-bold border border-white/20">
+                  [S]
+                </span>
               </Button>
             )}
 
@@ -796,6 +941,245 @@ export default function VisitorsPage({
                 </DialogContent>
               </Dialog>
             )}
+
+            {canRegister && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBulkDialogOpen(true)}
+                  className="gap-1.5 h-11 rounded-xl border-dashed"
+                  title="Register a batch of guests or contractors for an event"
+                >
+                  <Users className="h-4 w-4 text-primary" />
+                  <span>Bulk Event Passes</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRsvpGeneratedUrl(null);
+                    setRsvpDialogOpen(true);
+                  }}
+                  className="gap-1.5 h-11 rounded-xl border-dashed"
+                  title="Generate a self-service RSVP link for guests to pre-register themselves"
+                >
+                  <LinkIcon className="h-4 w-4 text-primary" />
+                  <span>Event RSVP Link</span>
+                </Button>
+
+                <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+                  <DialogContent className="sm:max-w-[540px]">
+                    <form onSubmit={handleBulkSubmit}>
+                      <DialogHeader>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                            <Users className="h-5 w-5" />
+                          </span>
+                          <DialogTitle className="text-lg font-bold">Bulk Event Guest Clearance</DialogTitle>
+                        </div>
+                        <DialogDescription className="text-xs">
+                          Pre-clear a batch of attendees for private events, dinner parties, or contractor teams. Each attendee receives an individual digital gate pass.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4 py-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Pass Category</Label>
+                            <Select
+                              value={bulkCategory}
+                              onValueChange={(val: 'VISITOR' | 'CONTRACTOR') => setBulkCategory(val)}
+                            >
+                              <SelectTrigger className="h-9 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="VISITOR">Visitor (Immediate Pre-clear)</SelectItem>
+                                <SelectItem value="CONTRACTOR">Contractor (Security Review)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold">Expected Arrival</Label>
+                            <Input
+                              type="date"
+                              value={bulkDate ? format(bulkDate, 'yyyy-MM-dd') : ''}
+                              onChange={(e) => setBulkDate(e.target.value ? new Date(e.target.value) : undefined)}
+                              className="h-9 text-xs font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs font-semibold">Attendee List (1 per line)</Label>
+                            <span className="text-[10px] text-muted-foreground font-mono">Format: Name, Phone/Email, License Plate</span>
+                          </div>
+                          <textarea
+                            rows={6}
+                            value={bulkText}
+                            onChange={(e) => setBulkText(e.target.value)}
+                            placeholder={`Marcus Wright, 876-555-0192, 4821-JC\nElena Rostova, elena@example.com, 9012-AB\nDavid Chen, 876-555-8833`}
+                            className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-xs font-mono shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                          <p className="text-[11px] text-muted-foreground">
+                            Tip: Comma or tab separated. Phone and vehicle plates are optional.
+                          </p>
+                        </div>
+                      </div>
+
+                      <DialogFooter className="gap-2 sm:gap-0">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setBulkDialogOpen(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" size="sm" disabled={bulkSubmitting} className="gap-1.5">
+                          <Users className="h-4 w-4" />
+                          <span>{bulkSubmitting ? 'Issuing Passes...' : 'Generate Batch Passes'}</span>
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={rsvpDialogOpen} onOpenChange={setRsvpDialogOpen}>
+                  <DialogContent className="sm:max-w-[500px]">
+                    {rsvpGeneratedUrl ? (
+                      <div className="space-y-4 py-4 text-center">
+                        <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                          <Check className="h-6 w-6" />
+                        </div>
+                        <DialogTitle className="text-xl font-bold">Event RSVP Link Ready!</DialogTitle>
+                        <DialogDescription className="text-xs">
+                          Share this link with your event guests. They can pre-clear themselves and receive instant digital QR gate passes via SMS before arriving.
+                        </DialogDescription>
+                        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/60 border font-mono text-xs text-foreground">
+                          <span className="truncate flex-1 text-left">{rsvpGeneratedUrl}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              navigator.clipboard.writeText(rsvpGeneratedUrl);
+                              setRsvpCopied(true);
+                              setTimeout(() => setRsvpCopied(false), 2000);
+                              toast({ title: 'Copied!', description: 'RSVP link copied to clipboard.' });
+                            }}
+                            className="gap-1 h-8"
+                          >
+                            {rsvpCopied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                            <span>{rsvpCopied ? 'Copied' : 'Copy'}</span>
+                          </Button>
+                        </div>
+                        <DialogFooter className="pt-2">
+                          <Button
+                            type="button"
+                            className="w-full"
+                            onClick={() => {
+                              setRsvpDialogOpen(false);
+                              setRsvpGeneratedUrl(null);
+                            }}
+                          >
+                            Done
+                          </Button>
+                        </DialogFooter>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleCreateRsvpInvite}>
+                        <DialogHeader>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                              <LinkIcon className="h-5 w-5" />
+                            </span>
+                            <DialogTitle className="text-lg font-bold">Create Event RSVP Link</DialogTitle>
+                          </div>
+                          <DialogDescription className="text-xs">
+                            Generate a self-service registration link for guests attending your private party, dinner, or family gathering.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4 py-3">
+                          <div className="space-y-1.5">
+                            <Label htmlFor="rsvp-title" className="text-xs font-semibold">Event Name / Occasion</Label>
+                            <Input
+                              id="rsvp-title"
+                              placeholder="e.g. Birthday Party, Dinner Gathering"
+                              value={rsvpTitle}
+                              onChange={(e) => setRsvpTitle(e.target.value)}
+                              required
+                              className="h-9 text-xs"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold">Arrival Date</Label>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className={cn('w-full justify-start text-left font-normal h-9 text-xs', !rsvpDate && 'text-muted-foreground')}
+                                  >
+                                    <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                                    {rsvpDate ? format(rsvpDate, 'MMM d, yyyy') : <span>Pick date</span>}
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                  <Calendar
+                                    mode="single"
+                                    selected={rsvpDate}
+                                    onSelect={setRsvpDate}
+                                    initialFocus
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold">Max Guests</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                max="200"
+                                value={rsvpMaxGuests}
+                                onChange={(e) => setRsvpMaxGuests(e.target.value)}
+                                className="h-9 text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <Label htmlFor="rsvp-notes" className="text-xs font-semibold">Notes for Attendees (Optional)</Label>
+                            <Input
+                              id="rsvp-notes"
+                              placeholder="e.g. Park in visitor bay on North driveway"
+                              value={rsvpNotes}
+                              onChange={(e) => setRsvpNotes(e.target.value)}
+                              className="h-9 text-xs"
+                            />
+                          </div>
+                        </div>
+
+                        <DialogFooter className="gap-2 sm:gap-0">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setRsvpDialogOpen(false)}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" size="sm" disabled={rsvpSubmitting} className="gap-1.5">
+                            <LinkIcon className="h-4 w-4" />
+                            <span>{rsvpSubmitting ? 'Creating Link...' : 'Generate RSVP Link'}</span>
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    )}
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
           </div>
         </div>
 
@@ -818,11 +1202,23 @@ export default function VisitorsPage({
         )}
 
         {/* ════════════════════════════════════════════════════════════════
-            SECURITY VISITORS DASHBOARD: TOP LIVE COUNTERS
+        {/* ════════════════════════════════════════════════════════════════
+            SECURITY DASHBOARD: TOP LIVE COUNTERS
            ════════════════════════════════════════════════════════════════ */}
-        {canManage && tabCounts && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            {/* Counter 1: EXPECTED */}
+        {canManage && (tabCounts || securityStats) && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            {/* Counter 1: VISITORS TODAY */}
+            <div className="p-4 sm:p-5 rounded-2xl border bg-card text-left shadow-xs">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold block">
+                Visitors Today
+              </span>
+              <span className="text-3xl sm:text-4xl font-black text-foreground mt-1 block">
+                {securityStats?.visitorsToday ?? tabCounts?.history ?? 0}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-1 block">Scheduled or active</span>
+            </div>
+
+            {/* Counter 2: EXPECTED */}
             <button
               type="button"
               onClick={() => handleTabChange('expected')}
@@ -834,15 +1230,15 @@ export default function VisitorsPage({
               )}
             >
               <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold block">
-                EXPECTED
+                Expected
               </span>
               <span className="text-3xl sm:text-4xl font-black text-amber-600 dark:text-amber-400 mt-1 block">
-                {tabCounts.expected}
+                {securityStats?.expected ?? tabCounts?.expected ?? 0}
               </span>
               <span className="text-[10px] text-muted-foreground mt-1 block">Scheduled clearances</span>
             </button>
 
-            {/* Counter 2: INSIDE */}
+            {/* Counter 3: CURRENTLY INSIDE */}
             <button
               type="button"
               onClick={() => handleTabChange('inside')}
@@ -854,15 +1250,15 @@ export default function VisitorsPage({
               )}
             >
               <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold block">
-                INSIDE
+                Currently Inside
               </span>
               <span className="text-3xl sm:text-4xl font-black text-emerald-600 dark:text-emerald-400 mt-1 block">
-                {tabCounts.inside}
+                {securityStats?.currentlyInside ?? tabCounts?.inside ?? 0}
               </span>
               <span className="text-[10px] text-muted-foreground mt-1 block">Currently on-site</span>
             </button>
 
-            {/* Counter 3: CHECKED OUT */}
+            {/* Counter 4: CHECKED OUT */}
             <button
               type="button"
               onClick={() => handleTabChange('checked-out')}
@@ -874,15 +1270,15 @@ export default function VisitorsPage({
               )}
             >
               <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold block">
-                CHECKED OUT
+                Checked Out
               </span>
               <span className="text-3xl sm:text-4xl font-black text-blue-600 dark:text-blue-400 mt-1 block">
-                {tabCounts.checkedOut}
+                {securityStats?.checkedOut ?? tabCounts?.checkedOut ?? 0}
               </span>
               <span className="text-[10px] text-muted-foreground mt-1 block">Departed estate</span>
             </button>
 
-            {/* Counter 4: REJECTED */}
+            {/* Counter 5: REJECTED */}
             <button
               type="button"
               onClick={() => handleTabChange('rejected')}
@@ -894,13 +1290,25 @@ export default function VisitorsPage({
               )}
             >
               <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground font-bold block">
-                REJECTED
+                Rejected
               </span>
               <span className="text-3xl sm:text-4xl font-black text-rose-600 dark:text-rose-400 mt-1 block">
-                {tabCounts.rejected}
+                {securityStats?.rejected ?? tabCounts?.rejected ?? 0}
               </span>
-              <span className="text-[10px] text-muted-foreground mt-1 block">Denied / Blocklist</span>
+              <span className="text-[10px] text-muted-foreground mt-1 block">Denied / Lapsed</span>
             </button>
+
+            {/* Counter 6: SUSPICIOUS ATTEMPTS */}
+            <div className="p-4 sm:p-5 rounded-2xl border bg-card text-left shadow-xs border-amber-500/30">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-amber-600 dark:text-amber-400 font-bold block flex items-center justify-between">
+                <span>Suspicious</span>
+                <ShieldAlert className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-3xl sm:text-4xl font-black text-amber-600 dark:text-amber-400 mt-1 block">
+                {securityStats?.suspiciousAttempts ?? 0}
+              </span>
+              <span className="text-[10px] text-muted-foreground mt-1 block">Replay / Tamper alerts</span>
+            </div>
           </div>
         )}
 
@@ -914,10 +1322,10 @@ export default function VisitorsPage({
               variant={currentTab === 'scan' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setScannerOpen(true)}
-              className="rounded-xl font-bold gap-1.5 h-9"
+              className="rounded-xl font-bold gap-1.5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              <Camera className="w-4 h-4 text-emerald-500" />
-              <span>📷 Scan QR</span>
+              <Camera className="w-4 h-4" />
+              <span>SCAN QR</span>
             </Button>
 
             <Button
@@ -927,7 +1335,7 @@ export default function VisitorsPage({
               onClick={() => handleTabChange('expected')}
               className="rounded-xl font-semibold gap-1.5 h-9"
             >
-              <span>Expected Visitors</span>
+              <span>EXPECTED</span>
               {tabCounts && (
                 <Badge variant={currentTab === 'expected' ? "secondary" : "outline"} className="px-1.5 py-0 text-[10px]">
                   {tabCounts.expected}
@@ -942,7 +1350,7 @@ export default function VisitorsPage({
               onClick={() => handleTabChange('inside')}
               className="rounded-xl font-semibold gap-1.5 h-9"
             >
-              <span>Currently Inside</span>
+              <span>INSIDE</span>
               {tabCounts && (
                 <Badge variant={currentTab === 'inside' ? "secondary" : "outline"} className="px-1.5 py-0 text-[10px]">
                   {tabCounts.inside}
@@ -957,7 +1365,7 @@ export default function VisitorsPage({
               onClick={() => handleTabChange('checked-out')}
               className="rounded-xl font-semibold gap-1.5 h-9"
             >
-              <span>Checked Out</span>
+              <span>CHECKED OUT</span>
               {tabCounts && (
                 <Badge variant={currentTab === 'checked-out' ? "secondary" : "outline"} className="px-1.5 py-0 text-[10px]">
                   {tabCounts.checkedOut}
@@ -972,7 +1380,7 @@ export default function VisitorsPage({
               onClick={() => handleTabChange('rejected')}
               className="rounded-xl font-semibold gap-1.5 h-9"
             >
-              <span>Rejected</span>
+              <span>REJECTED</span>
               {tabCounts && (
                 <Badge variant={currentTab === 'rejected' ? "secondary" : "outline"} className="px-1.5 py-0 text-[10px] text-rose-500">
                   {tabCounts.rejected}
@@ -987,7 +1395,7 @@ export default function VisitorsPage({
               onClick={() => handleTabChange('history')}
               className="rounded-xl font-semibold gap-1.5 h-9"
             >
-              <span>Visitor History</span>
+              <span>HISTORY</span>
               {tabCounts && (
                 <Badge variant={currentTab === 'history' ? "secondary" : "outline"} className="px-1.5 py-0 text-[10px]">
                   {tabCounts.history}
@@ -1014,7 +1422,7 @@ export default function VisitorsPage({
            ════════════════════════════════════════════════════════════════ */}
         <Card className="rounded-2xl shadow-xs border">
           <CardHeader className="pb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-xl font-bold">
                   {canManage
@@ -1031,6 +1439,19 @@ export default function VisitorsPage({
                     : 'Visitors registered for your property.'}
                   {visitors.total > 0 && ` Showing ${visitors.from}–${visitors.to} of ${visitors.total}.`}
                 </CardDescription>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Search name, phone, plate..."
+                    value={plateQuery}
+                    onChange={(e) => setPlateQuery(e.target.value)}
+                    className="pl-8 h-8 text-xs rounded-xl"
+                  />
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -1049,19 +1470,43 @@ export default function VisitorsPage({
               </TableHeader>
 
               <TableBody>
-                {visitors.data.length === 0 && (
+                {visitors.data
+                  .filter((v) => {
+                    if (!plateQuery.trim()) return true;
+                    const q = plateQuery.toLowerCase();
+                    return (
+                      v.name.toLowerCase().includes(q) ||
+                      (v.contact && v.contact.toLowerCase().includes(q)) ||
+                      (v.vehicle && v.vehicle.toLowerCase().includes(q)) ||
+                      (v.hostLot && v.hostLot.toLowerCase().includes(q))
+                    );
+                  })
+                  .length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                      {filters.search
-                        ? 'No visitors match that search query.'
-                        : currentTab === 'rejected'
-                          ? 'Zero rejected visitors recorded today.'
-                          : 'No visitors recorded under this category.'}
+                      {plateQuery
+                        ? `No visitors match "${plateQuery}".`
+                        : filters.search
+                          ? 'No visitors match that search query.'
+                          : currentTab === 'rejected'
+                            ? 'Zero rejected visitors recorded today.'
+                            : 'No visitors recorded under this category.'}
                     </TableCell>
                   </TableRow>
                 )}
 
-                {visitors.data.map((visitor) => (
+                {visitors.data
+                  .filter((v) => {
+                    if (!plateQuery.trim()) return true;
+                    const q = plateQuery.toLowerCase();
+                    return (
+                      v.name.toLowerCase().includes(q) ||
+                      (v.contact && v.contact.toLowerCase().includes(q)) ||
+                      (v.vehicle && v.vehicle.toLowerCase().includes(q)) ||
+                      (v.hostLot && v.hostLot.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((visitor) => (
                   <TableRow
                     key={visitor.id}
                     className={cn(
@@ -1227,11 +1672,27 @@ export default function VisitorsPage({
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => shareViaWhatsApp(visitor)}>
                                     <Share2 className="h-4 w-4 mr-2 text-emerald-600" />
-                                    Share WhatsApp
+                                    Open in WhatsApp Web
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => shareViaSms(visitor)}>
+                                  <DropdownMenuItem onClick={() => handleServerResend(visitor, 'sms')}>
+                                    <Send className="h-4 w-4 mr-2 text-primary" />
+                                    Dispatch via Twilio SMS
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleServerResend(visitor, 'whatsapp')}>
+                                    <Share2 className="h-4 w-4 mr-2 text-emerald-600" />
+                                    Dispatch via WhatsApp
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleServerResend(visitor, 'email')}>
                                     <MessageSquare className="h-4 w-4 mr-2 text-blue-500" />
-                                    Share SMS
+                                    Dispatch via Email
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleExtendPass(visitor, 2)}>
+                                    <Clock className="h-4 w-4 mr-2 text-amber-500" />
+                                    Extend Validity (+2h)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleExtendPass(visitor, 24)}>
+                                    <Clock className="h-4 w-4 mr-2 text-amber-600" />
+                                    Extend Validity (+24h)
                                   </DropdownMenuItem>
                                   <DropdownMenuItem asChild>
                                     <a href={`/guest/pass/${visitor.shareToken}/pdf`} target="_blank" rel="noopener noreferrer">

@@ -7,6 +7,7 @@ use App\Models\Community;
 use App\Models\Donation;
 use App\Models\Fundraiser;
 use App\Models\FundraiserUpdate;
+use App\Models\Transaction;
 use App\Services\Payments\PaymentOrchestratorService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +16,7 @@ use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FundraisingController extends Controller
 {
@@ -24,55 +26,164 @@ class FundraisingController extends Controller
 
     public function index(Request $request): Response
     {
-        return Inertia::render('Dashboard/Fundraising', [
-            'fundraisers' => Fundraiser::with(['donations', 'updates'])
-                ->orderByRaw("CASE status WHEN 'Active' THEN 1 WHEN 'Upcoming' THEN 2 WHEN 'Completed' THEN 3 ELSE 4 END")
-                ->orderBy('end_date')
-                ->get()
-                ->map(fn (Fundraiser $f) => [
-                    'id' => $f->id,
-                    'title' => $f->title,
-                    'description' => $f->description,
-                    'beneficiary' => $f->beneficiary ?? 'Community Improvement Fund',
-                    'coverImageUrl' => $f->cover_image_url,
-                    'goal' => $f->goal(),
-                    'raised' => $f->raised(),
-                    'progress' => $f->progressPercent(),
-                    'donorCount' => $f->donorCount(),
-                    'currency' => $f->goal_currency,
-                    'startDate' => $f->start_date->toDateString(),
-                    'endDate' => $f->end_date->toDateString(),
-                    'status' => $f->status,
-                    'isOpen' => $f->isOpen(),
-                    'allowAnonymous' => $f->allow_anonymous,
-                    'allowRecurring' => $f->allow_recurring,
-                    'suggestedAmounts' => $f->suggested_amounts ?? [1000, 2500, 5000, 10000],
-                    'matchingSponsor' => $f->matching_sponsor,
-                    'fundAllocation' => $f->fund_allocation ?? ['Project Execution' => 70, 'Materials & Equipment' => 20, 'Contingency' => 10],
-                    'showLeaderboard' => $f->show_leaderboard,
-                    'updates' => $f->updates->map(fn (FundraiserUpdate $u) => [
-                        'id' => $u->id,
-                        'title' => $u->title,
-                        'content' => $u->content,
-                        'imageUrl' => $u->image_url,
-                        'date' => $u->created_at->format('M d, Y'),
-                    ]),
-                    'recentDonations' => $f->donations
-                        ->sortByDesc('donated_at')
-                        ->take(10)
-                        ->map(fn ($d) => [
-                            'id' => $d->id,
-                            'donorName' => $d->publicDonorName(),
-                            'amount' => $d->amount(),
-                            'currency' => $d->currency,
-                            'isRecurring' => $d->is_recurring,
-                            'receiptNumber' => $d->receipt_number,
-                            'receiptUrl' => route('dashboard.fundraising.donation.receipt', $d->id),
-                            'timestamp' => $d->donated_at->toIso8601String(),
-                        ])->values(),
+        $user = $request->user();
+        $canManage = $user->can('manageFundraisers');
+
+        $fundraisers = Fundraiser::with(['donations', 'updates'])
+            ->orderByRaw("CASE status WHEN 'Active' THEN 1 WHEN 'Upcoming' THEN 2 WHEN 'Completed' THEN 3 ELSE 4 END")
+            ->orderBy('end_date')
+            ->get()
+            ->map(fn (Fundraiser $f) => [
+                'id' => $f->id,
+                'title' => $f->title,
+                'description' => $f->description,
+                'beneficiary' => $f->beneficiary ?? 'Community Improvement Fund',
+                'coverImageUrl' => $f->cover_image_url,
+                'images' => $f->images ?? [],
+                'goal' => $f->goal(),
+                'raised' => $f->raised(),
+                'refunded' => $f->refunded(),
+                'progress' => $f->progressPercent(),
+                'donorCount' => $f->donorCount(),
+                'currency' => $f->goal_currency,
+                'startDate' => $f->start_date->toDateString(),
+                'endDate' => $f->end_date->toDateString(),
+                'status' => $f->status,
+                'isOpen' => $f->isOpen(),
+                'allowAnonymous' => $f->allow_anonymous,
+                'allowRecurring' => $f->allow_recurring,
+                'suggestedAmounts' => $f->suggested_amounts ?? [1000, 2500, 5000, 10000],
+                'matchingSponsor' => $f->matching_sponsor,
+                'fundAllocation' => $f->fund_allocation ?? ['Project Execution' => 70, 'Materials & Equipment' => 20, 'Contingency' => 10],
+                'showLeaderboard' => $f->show_leaderboard,
+                'updates' => $f->updates->map(fn (FundraiserUpdate $u) => [
+                    'id' => $u->id,
+                    'title' => $u->title,
+                    'content' => $u->content,
+                    'imageUrl' => $u->image_url,
+                    'date' => $u->created_at->format('M d, Y'),
                 ]),
-            'canManage' => $request->user()->can('manageFundraisers'),
+                'recentDonations' => $f->donations
+                    ->sortByDesc('donated_at')
+                    ->take(10)
+                    ->map(fn ($d) => [
+                        'id' => $d->id,
+                        'donorName' => $d->publicDonorName(),
+                        'amount' => $d->amount(),
+                        'currency' => $d->currency,
+                        'isRecurring' => $d->is_recurring,
+                        'status' => $d->status ?? 'completed',
+                        'receiptNumber' => $d->receipt_number,
+                        'receiptUrl' => route('dashboard.fundraising.donation.receipt', $d->id),
+                        'timestamp' => $d->donated_at->toIso8601String(),
+                    ])->values(),
+            ]);
+
+        $adminStats = null;
+        $donorReports = [];
+        $reconciliation = null;
+
+        if ($canManage) {
+            $totalGoalMinor = Fundraiser::sum('goal_minor');
+            $totalRaisedMinor = (int) Donation::where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+            })->sum('amount_minor');
+            $totalRefundedMinor = (int) Donation::where('status', 'refunded')->sum('amount_minor');
+
+            $adminStats = [
+                'totalCampaigns' => Fundraiser::count(),
+                'activeCampaigns' => Fundraiser::where('status', 'Active')->count(),
+                'completedCampaigns' => Fundraiser::where('status', 'Completed')->count(),
+                'totalRaised' => (float) ($totalRaisedMinor / 100),
+                'totalGoal' => (float) ($totalGoalMinor / 100),
+                'totalRefunded' => (float) ($totalRefundedMinor / 100),
+                'totalDonors' => Donation::where(function ($q) {
+                    $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+                })->distinct('user_id')->count('user_id'),
+                'averageDonation' => Donation::where(function ($q) {
+                    $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+                })->avg('amount_minor') ? round((Donation::where(function ($q) {
+                    $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+                })->avg('amount_minor') / 100), 2) : 0,
+            ];
+
+            $donorReports = Donation::with(['fundraiser', 'user'])
+                ->latest('donated_at')
+                ->take(150)
+                ->get()
+                ->map(fn ($d) => [
+                    'id' => $d->id,
+                    'receiptNumber' => $d->receipt_number,
+                    'fundraiserId' => $d->fundraiser_id,
+                    'fundraiserTitle' => $d->fundraiser?->title ?? 'Unknown Campaign',
+                    'donorName' => $d->donor_name ?? ($d->user?->display_name ?? 'Resident'),
+                    'publicDonorName' => $d->publicDonorName(),
+                    'isAnonymous' => (bool) $d->is_anonymous,
+                    'userEmail' => $d->user?->email,
+                    'amount' => $d->amount(),
+                    'currency' => $d->currency,
+                    'channel' => $d->payment_channel ?? 'card',
+                    'isRecurring' => (bool) $d->is_recurring,
+                    'frequency' => $d->frequency,
+                    'status' => $d->status ?? 'completed',
+                    'refundedAt' => $d->refunded_at?->toIso8601String(),
+                    'refundReason' => $d->refund_reason,
+                    'donatedAt' => $d->donated_at->toIso8601String(),
+                    'receiptUrl' => route('dashboard.fundraising.donation.receipt', $d->id),
+                ]);
+
+            $ledgerTotalMinor = (int) Transaction::whereNotNull('fundraiser_id')
+                ->where('status', 'completed')
+                ->sum('amount_minor');
+
+            $channelBreakdown = Donation::where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+            })
+                ->selectRaw('payment_channel, count(*) as count, sum(amount_minor) as total_minor')
+                ->groupBy('payment_channel')
+                ->get()
+                ->map(fn ($row) => [
+                    'channel' => $row->payment_channel ?? 'card',
+                    'count' => (int) $row->count,
+                    'total' => round($row->total_minor / 100, 2),
+                ]);
+
+            $reconciliation = [
+                'totalDonationsMinor' => $totalRaisedMinor,
+                'totalRefundsMinor' => $totalRefundedMinor,
+                'ledgerTransactionsMinor' => $ledgerTotalMinor,
+                'varianceMinor' => abs($totalRaisedMinor - $ledgerTotalMinor),
+                'channelBreakdown' => $channelBreakdown,
+            ];
+        }
+
+        $userDonations = Donation::where('user_id', $user->id)
+            ->with('fundraiser')
+            ->latest('donated_at')
+            ->take(15)
+            ->get()
+            ->map(fn ($d) => [
+                'id' => $d->id,
+                'fundraiserId' => $d->fundraiser_id,
+                'fundraiserTitle' => $d->fundraiser?->title ?? 'Campaign',
+                'amount' => $d->amount(),
+                'currency' => $d->currency,
+                'isAnonymous' => (bool) $d->is_anonymous,
+                'isRecurring' => (bool) $d->is_recurring,
+                'frequency' => $d->frequency,
+                'status' => $d->status ?? 'completed',
+                'donatedAt' => $d->donated_at->toIso8601String(),
+                'receiptUrl' => route('dashboard.fundraising.donation.receipt', $d->id),
+            ]);
+
+        return Inertia::render('Dashboard/Fundraising', [
+            'fundraisers' => $fundraisers,
+            'canManage' => $canManage,
             'availableChannels' => $this->orchestrator->getAvailableChannels(),
+            'adminStats' => $adminStats,
+            'donorReports' => $donorReports,
+            'reconciliation' => $reconciliation,
+            'userDonations' => $userDonations,
         ]);
     }
 
@@ -86,8 +197,19 @@ class FundraisingController extends Controller
             'start_date' => ['required', 'date'],
             'end_date' => ['required', 'date', 'after:start_date'],
             'status' => ['required', 'in:Active,Upcoming'],
+            'cover_image_url' => ['nullable', 'string', 'max:500'],
+            'images' => ['nullable'],
             'matching_sponsor' => ['nullable', 'string', 'max:150'],
         ]);
+
+        $images = [];
+        if (! empty($validated['images'])) {
+            if (is_array($validated['images'])) {
+                $images = $validated['images'];
+            } elseif (is_string($validated['images'])) {
+                $images = array_filter(array_map('trim', explode("\n", $validated['images'])));
+            }
+        }
 
         Fundraiser::create([
             'title' => $validated['title'],
@@ -98,6 +220,8 @@ class FundraisingController extends Controller
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
             'status' => $validated['status'],
+            'cover_image_url' => $validated['cover_image_url'] ?? null,
+            'images' => $images,
             'matching_sponsor' => $validated['matching_sponsor'] ?? null,
             'suggested_amounts' => [1000, 2500, 5000, 10000],
             'fund_allocation' => ['Project Execution' => 70, 'Materials & Equipment' => 20, 'Contingency' => 10],
@@ -132,6 +256,7 @@ class FundraisingController extends Controller
             'donor_name' => ['nullable', 'string', 'max:120'],
             'is_anonymous' => ['boolean'],
             'is_recurring' => ['nullable', 'boolean'],
+            'frequency' => ['nullable', 'string', 'in:monthly,quarterly,annual'],
             // Validated against the registered drivers. Without this an
             // unknown key reached PaymentOrchestratorService::getDriver(),
             // which throws InvalidArgumentException — a 500 from a form post.
@@ -162,12 +287,8 @@ class FundraisingController extends Controller
             'donor_name' => $validated['donor_name'] ?? $user->display_name,
             'is_anonymous' => $request->boolean('is_anonymous'),
             'is_recurring' => $request->boolean('is_recurring'),
-            'frequency' => $request->boolean('is_recurring') ? 'monthly' : null,
-            // Not set here. Whether a gift is deductible depends on the
-            // community's charitable registration and the donor's own
-            // circumstances; recording `true` on every donation asserted
-            // both. Left at the column default until a registration number
-            // is held and checked.
+            'frequency' => $request->boolean('is_recurring') ? ($validated['frequency'] ?? 'monthly') : null,
+            'status' => 'completed',
             'receipt_number' => $receiptNumber,
             'payment_channel' => $channel,
             'donated_at' => now(),
@@ -186,6 +307,105 @@ class FundraisingController extends Controller
         $user->recordActivity('Donated $'.number_format($validated['amount'], 2)." to {$fundraiser->title}");
 
         return back()->with('success', 'Thank you for your generous donation! Your official receipt is available.');
+    }
+
+    /**
+     * Administrator refund processing for donations.
+     */
+    public function refund(Request $request, Donation $donation): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($donation->status === 'refunded') {
+            return back()->withErrors(['refund' => 'This donation has already been refunded.']);
+        }
+
+        $donation->update([
+            'status' => 'refunded',
+            'refunded_at' => now(),
+            'refund_reason' => $validated['reason'],
+        ]);
+
+        // Record refund in master ledger
+        Transaction::create([
+            'user_id' => $donation->user_id,
+            'fundraiser_id' => $donation->fundraiser_id,
+            'amount_minor' => $donation->amount_minor,
+            'fee_minor' => 0,
+            'net_amount_minor' => -$donation->amount_minor,
+            'currency' => $donation->currency,
+            'payment_channel' => $donation->payment_channel ?? 'card',
+            'reference' => 'REF-DON-'.strtoupper(Str::random(8)),
+            'status' => 'refunded',
+            'settled_at' => now(),
+            'notes' => "Refund for donation #{$donation->receipt_number}: {$validated['reason']}",
+        ]);
+
+        $request->user()->recordActivity("Refunded donation #{$donation->receipt_number} ({$donation->amount()} {$donation->currency})");
+
+        return back()->with('success', "Donation #{$donation->receipt_number} has been refunded.");
+    }
+
+    /**
+     * Export all donor contribution records as CSV for reporting and compliance.
+     */
+    public function exportDonations(Request $request): StreamedResponse
+    {
+        $donations = Donation::with(['fundraiser', 'user'])
+            ->latest('donated_at')
+            ->get();
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="fundraising-donations-'.date('Ymd-His').'.csv"',
+        ];
+
+        return response()->stream(function () use ($donations) {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'Receipt Number',
+                'Date',
+                'Campaign Title',
+                'Beneficiary',
+                'Donor Name',
+                'Public Name',
+                'Is Anonymous',
+                'User Email',
+                'Amount',
+                'Currency',
+                'Payment Channel',
+                'Is Recurring',
+                'Frequency',
+                'Status',
+                'Refunded At',
+                'Refund Reason',
+            ]);
+
+            foreach ($donations as $d) {
+                fputcsv($handle, [
+                    $d->receipt_number,
+                    $d->donated_at->toDateTimeString(),
+                    $d->fundraiser?->title ?? 'N/A',
+                    $d->fundraiser?->beneficiary ?? 'N/A',
+                    $d->donor_name ?? ($d->user?->display_name ?? 'N/A'),
+                    $d->publicDonorName(),
+                    $d->is_anonymous ? 'Yes' : 'No',
+                    $d->user?->email ?? 'N/A',
+                    number_format($d->amount(), 2, '.', ''),
+                    $d->currency,
+                    $d->payment_channel ?? 'card',
+                    $d->is_recurring ? 'Yes' : 'No',
+                    $d->frequency ?? 'one-time',
+                    $d->status ?? 'completed',
+                    $d->refunded_at?->toDateTimeString() ?? '',
+                    $d->refund_reason ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
     }
 
     /**
@@ -222,6 +442,7 @@ class FundraisingController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:150'],
             'content' => ['required', 'string', 'max:2000'],
+            'image_url' => ['nullable', 'url', 'max:500'],
         ]);
 
         $fundraiser->updates()->create($validated);

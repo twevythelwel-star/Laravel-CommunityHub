@@ -23,6 +23,23 @@ class ChangelogController extends Controller
                     'title' => $e->title,
                     'body' => $e->body,
                 ]),
+            'canManage' => $request->user()->can('viewAppChangelog'),
         ]);
+    }
+
+    public function store(Request $request)
+    {
+        $this->authorize('viewAppChangelog');
+
+        $validated = $request->validate([
+            'version' => ['required', 'string', 'max:20'],
+            'released_on' => ['required', 'date'],
+            'title' => ['required', 'string', 'max:160'],
+            'body' => ['required', 'string', 'max:5000'],
+        ]);
+
+        ChangelogEntry::create($validated);
+
+        return back()->with('success', 'Release notes published.');
     }
 }

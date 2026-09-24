@@ -35,6 +35,11 @@
             </div>
             <p class="text-xs text-muted-foreground">Show this live code to the gatehouse scanner. It refreshes automatically; screenshots will not work.</p>
 
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-xs shadow-xs">
+                <span class="text-muted-foreground uppercase font-sans font-medium text-[11px] tracking-wide">Offline Gate PIN:</span>
+                <span id="gate-code-pin" class="font-mono font-bold text-foreground text-sm tracking-widest">{{ $code['pin'] ?? ($visitor->gatePass?->offline_pin ?? 'N/A') }}</span>
+            </div>
+
             {{-- Pass Details Grid --}}
             <div class="grid grid-cols-2 gap-3 text-left border-y border-border/60 py-4 text-sm">
                 <div>

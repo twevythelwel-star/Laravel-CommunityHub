@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Jobs\SendVisitorPassNotification;
+use App\Models\BlocklistEntry;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -429,5 +430,48 @@ class VisitorPageTest extends TestCase
 
         // Exactly one access-log entry, not two.
         $this->assertDatabaseCount('access_log_entries', 1);
+    }
+
+    public function test_homeowner_can_register_visitors_in_bulk(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        $response = $this->actingAs($resident)->post('/dashboard/visitors/bulk', [
+            'expected_at' => now()->addHour()->toDateTimeString(),
+            'pass_category' => 'VISITOR',
+            'visitors' => [
+                ['name' => 'Alice Guest', 'contact' => '876-555-0101', 'vehicle' => '1234-AB'],
+                ['name' => 'Bob Guest', 'contact' => '876-555-0102', 'vehicle' => '5678-CD'],
+            ],
+            'notify_email' => true,
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('visitors', ['name' => 'Alice Guest', 'homeowner_id' => $resident->id]);
+        $this->assertDatabaseHas('visitors', ['name' => 'Bob Guest', 'homeowner_id' => $resident->id]);
+    }
+
+    public function test_bulk_registration_filters_blocked_names(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        BlocklistEntry::create([
+            'name' => 'Blocked Person',
+            'reason' => 'Security restriction',
+            'status' => 'ACTIVE',
+            'date_added' => now(),
+            'added_by' => 'Security Office',
+        ]);
+
+        $response = $this->actingAs($resident)->post('/dashboard/visitors/bulk', [
+            'expected_at' => now()->addHour()->toDateTimeString(),
+            'visitors' => [
+                ['name' => 'Allowed Person', 'contact' => '876-555-0103'],
+                ['name' => 'Blocked Person', 'contact' => '876-555-0104'],
+            ],
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('visitors', ['name' => 'Allowed Person']);
+        $this->assertDatabaseMissing('visitors', ['name' => 'Blocked Person']);
     }
 }

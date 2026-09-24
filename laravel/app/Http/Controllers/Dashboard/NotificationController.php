@@ -3,13 +3,19 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
+use App\Enums\VisitorStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Community;
 use App\Models\Notification;
+use App\Models\User;
+use App\Models\Visitor;
+use App\Services\NotificationEngine\NotificationEngine;
 use App\Services\NotificationTargetingService;
+use App\Services\SmsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -32,7 +38,7 @@ use Inertia\Response;
  */
 class NotificationController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request, NotificationEngine $engine): Response
     {
         $user = $request->user();
 
@@ -60,6 +66,7 @@ class NotificationController extends Controller
              | composer should not be told Gemini wrote them.
              */
             'aiEnabled' => filled(config('services.googleai.key')),
+            'notificationChannels' => $engine->getChannelsStatus(),
         ]);
     }
 
@@ -132,6 +139,99 @@ class NotificationController extends Controller
         $user->recordActivity('Sent a document to the AI drafting service');
 
         return response()->json($result);
+    }
+
+    /**
+     * Dispatch an emergency broadcast notice and optional SMS alerts.
+     */
+    public function broadcastEmergency(Request $request, SmsService $sms): RedirectResponse
+    {
+        $user = $request->user();
+        if (! $user->can('broadcastNotices') && ! $user->can('manageSecurity')) {
+            abort(403, 'Unauthorized to dispatch emergency broadcasts.');
+        }
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:160'],
+            'content' => ['required', 'string', 'max:500'],
+            'severity' => ['required', 'string', 'in:info,advisory,emergency'],
+            'audience' => ['required', 'string', 'in:all,residents,visitors,security'],
+            'send_sms' => ['nullable', 'boolean'],
+        ]);
+
+        $title = $validated['title'];
+        $content = $validated['content'];
+        $severity = strtoupper($validated['severity']);
+        $audience = $validated['audience'];
+        $sendSms = (bool) ($validated['send_sms'] ?? false);
+
+        $targetRoles = match ($audience) {
+            'residents' => [UserRole::Homeowner->value, UserRole::Renter->value],
+            'security' => [UserRole::Security->value],
+            default => null,
+        };
+
+        $prefix = match ($validated['severity']) {
+            'emergency' => '🚨 [EMERGENCY ALERT] ',
+            'advisory' => '⚠️ [ADVISORY] ',
+            default => '📢 [COMMUNITY NOTICE] ',
+        };
+
+        $notice = Notification::create([
+            'title' => $prefix.$title,
+            'content' => $content,
+            'target_roles' => $targetRoles,
+            'author_id' => $user->id,
+            'author_name' => $user->display_name,
+            'published_at' => now(),
+        ]);
+
+        $smsCount = 0;
+        if ($sendSms && $sms->isConfigured()) {
+            $recipients = collect();
+
+            if (in_array($audience, ['all', 'residents'], true)) {
+                $residentPhones = User::query()
+                    ->whereNotNull('phone')
+                    ->whereNull('deactivated_at')
+                    ->when($audience === 'residents', fn ($q) => $q->whereIn('role', [UserRole::Homeowner->value, UserRole::Renter->value]))
+                    ->pluck('phone');
+                $recipients = $recipients->merge($residentPhones);
+            }
+
+            if (in_array($audience, ['all', 'visitors'], true)) {
+                $visitorPhones = Visitor::query()
+                    ->where('status', VisitorStatus::CheckedIn->value)
+                    ->whereNotNull('contact')
+                    ->pluck('contact');
+                $recipients = $recipients->merge($visitorPhones);
+            }
+
+            if (in_array($audience, ['all', 'security'], true)) {
+                $securityPhones = User::query()
+                    ->where('role', UserRole::Security->value)
+                    ->whereNotNull('phone')
+                    ->whereNull('deactivated_at')
+                    ->pluck('phone');
+                $recipients = $recipients->merge($securityPhones);
+            }
+
+            $uniquePhones = $recipients->filter()->unique()->values();
+            $smsBody = "{$prefix}{$title}: {$content}";
+
+            foreach ($uniquePhones as $phone) {
+                try {
+                    $sms->send((string) $phone, $smsBody);
+                    $smsCount++;
+                } catch (\Throwable $e) {
+                    Log::warning("Failed to dispatch emergency SMS to {$phone}: ".$e->getMessage());
+                }
+            }
+        }
+
+        $user->recordActivity("Dispatched {$severity} broadcast: {$title} ({$smsCount} SMS sent)");
+
+        return back()->with('success', "Broadcast published. {$smsCount} SMS alert(s) dispatched.");
     }
 
     private function communityName(): string

@@ -21,6 +21,7 @@ use App\Services\GateScanner;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -44,8 +45,15 @@ class VisitorController extends Controller
         $isStaff = $user->can('manageSecurity');
         $tab = $request->string('tab')->toString() ?: 'all';
 
-        // Calculate live counters for Security & Residents
+        // Calculate live counters for Security Dashboard & Residents
         $countsQuery = Visitor::query()->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id));
+
+        $todayQuery = (clone $countsQuery)->where(function ($q) {
+            $q->whereDate('expected_at', today())
+                ->orWhereDate('checked_in_at', today())
+                ->orWhereDate('checked_out_at', today());
+        });
+        $visitorsTodayCount = (clone $todayQuery)->count();
 
         $expectedCount = (clone $countsQuery)
             ->where('status', VisitorStatus::Expected->value)
@@ -66,9 +74,28 @@ class VisitorController extends Controller
             })
             ->count() + ($isStaff ? AccessLogEntry::where('result', 'DENY')->count() : 0);
 
+        $suspiciousAttemptsCount = $isStaff ? AccessLogEntry::where('result', 'DENY')->where(function ($q) {
+            $q->where('deny_reason', 'like', '%Replay%')
+                ->orWhere('deny_reason', 'like', '%Signature%')
+                ->orWhere('deny_reason', 'like', '%Forged%')
+                ->orWhere('deny_reason', 'like', '%Blocklist%')
+                ->orWhere('deny_reason', 'like', '%Revoked%')
+                ->orWhere('deny_reason', 'like', '%NotAGpeGatePass%');
+        })->count() : 0;
+
         $historyCount = (clone $countsQuery)->count();
 
+        $securityStats = [
+            'visitorsToday' => $visitorsTodayCount,
+            'expected' => $expectedCount,
+            'currentlyInside' => $insideCount,
+            'checkedOut' => $checkedOutCount,
+            'rejected' => $rejectedCount,
+            'suspiciousAttempts' => $suspiciousAttemptsCount,
+        ];
+
         $tabCounts = [
+            'scan' => 0,
             'expected' => $expectedCount,
             'inside' => $insideCount,
             'checkedOut' => $checkedOutCount,
@@ -181,6 +208,7 @@ class VisitorController extends Controller
                 'tab' => $tab,
             ],
             'tabCounts' => $tabCounts,
+            'securityStats' => $securityStats,
             'activeTab' => $tab,
             'canManage' => $isStaff,
             'canRegister' => $user->can('registerVisitors'),
@@ -271,6 +299,92 @@ class VisitorController extends Controller
         return back()->with('success', $pass->status === PassStatus::Requested
             ? 'Contractor registered. Their pass is waiting for security approval.'
             : 'Visitor registered.');
+    }
+
+    /**
+     * Bulk register attendees for private gatherings, events, or contractors.
+     */
+    public function storeBulk(Request $request): RedirectResponse
+    {
+        $this->authorize('registerVisitors');
+
+        $validated = $request->validate([
+            'expected_at' => ['required', 'date', 'after:-1 hour'],
+            'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
+            'visitors' => ['required', 'array', 'min:1', 'max:50'],
+            'visitors.*.name' => ['required', 'string', 'max:120'],
+            'visitors.*.contact' => ['nullable', 'string', 'max:120'],
+            'visitors.*.vehicle' => ['nullable', 'string', 'max:120'],
+            'notify_email' => ['nullable', 'boolean'],
+            'notify_sms' => ['nullable', 'boolean'],
+            'notify_whatsapp' => ['nullable', 'boolean'],
+        ]);
+
+        $user = $request->user();
+        $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
+        $expectedAt = Carbon::parse($validated['expected_at']);
+
+        // Check stay timeframe for temporary residents
+        if ($user->role === UserRole::TemporaryHomeowner) {
+            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
+            if (! $stay || $stay->leaseHasExpired()) {
+                return back()->withErrors([
+                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot register visitors.',
+                ]);
+            }
+
+            $stayStart = $stay->lease_start->startOfDay();
+            $stayEnd = $stay->lease_end->endOfDay();
+            if ($expectedAt->lt($stayStart) || $expectedAt->gt($stayEnd)) {
+                return back()->withErrors([
+                    'expected_at' => "Visitors can only be scheduled within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
+                ]);
+            }
+        }
+
+        $createdCount = 0;
+        $blockedNames = [];
+
+        DB::transaction(function () use ($validated, $user, $expectedAt, $passCategory, &$createdCount, &$blockedNames) {
+            foreach ($validated['visitors'] as $item) {
+                $name = trim($item['name']);
+                if ($this->isOnBlocklist($name)) {
+                    $blockedNames[] = $name;
+
+                    continue;
+                }
+
+                $visitor = Visitor::create([
+                    'homeowner_id' => $user->id,
+                    'homeowner_name' => $user->display_name,
+                    'name' => $name,
+                    'contact' => $item['contact'] ?? null,
+                    'vehicle' => $item['vehicle'] ?? null,
+                    'type' => 'One-time',
+                    'expected_at' => $expectedAt,
+                    'status' => 'Expected',
+                    'is_blocked' => false,
+                    'notify_email' => $validated['notify_email'] ?? false,
+                    'notify_sms' => $validated['notify_sms'] ?? false,
+                    'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
+                ]);
+
+                $pass = $this->engine->issueGuestPass($visitor, $user, $passCategory);
+                $createdCount++;
+
+                $channels = $visitor->passNotificationChannels();
+                if ($channels !== [] && $pass->status !== PassStatus::Requested) {
+                    $visitor->sendPassNotification($channels);
+                }
+            }
+        });
+
+        $msg = "Registered {$createdCount} event attendee(s) with pre-cleared guest passes.";
+        if (! empty($blockedNames)) {
+            $msg .= ' Note: '.count($blockedNames).' attendee(s) could not be registered due to active community blocklist restrictions: '.implode(', ', $blockedNames);
+        }
+
+        return back()->with('success', $msg);
     }
 
     public function update(Request $request, Visitor $visitor): RedirectResponse
@@ -434,6 +548,69 @@ class VisitorController extends Controller
         $visitor->delete();
 
         return back()->with('success', 'Visitor removed.');
+    }
+
+    /**
+     * Dispatch or re-send guest pass via SMS, WhatsApp, or Email.
+     */
+    public function resendPass(Request $request, Visitor $visitor): RedirectResponse
+    {
+        $this->authorizeVisitor($request, $visitor);
+
+        $validated = $request->validate([
+            'channel' => ['required', 'string', 'in:sms,whatsapp,email,all'],
+        ]);
+
+        $channel = $validated['channel'];
+        $channels = $channel === 'all'
+            ? $visitor->passNotificationChannels()
+            : [$channel];
+
+        if (empty($channels)) {
+            $channels = ['sms'];
+        }
+
+        $visitor->resendPassNotification($channels);
+
+        return back()->with('success', 'Guest pass dispatched via '.strtoupper($channel).'.');
+    }
+
+    /**
+     * Extend a visitor pass validity window.
+     */
+    public function extendPass(Request $request, Visitor $visitor): RedirectResponse
+    {
+        $this->authorizeVisitor($request, $visitor);
+
+        $validated = $request->validate([
+            'hours' => ['required', 'integer', 'min:1', 'max:72'],
+        ]);
+
+        $hours = (int) $validated['hours'];
+        $base = $visitor->expected_at && $visitor->expected_at->isFuture()
+            ? $visitor->expected_at
+            : now();
+
+        $newExpectedAt = $base->copy()->addHours($hours);
+
+        $visitor->update([
+            'expected_at' => $newExpectedAt,
+            'expired_at' => null,
+            'status' => $visitor->status === VisitorStatus::CheckedIn ? VisitorStatus::CheckedIn : VisitorStatus::Expected,
+        ]);
+
+        if ($visitor->gatePass) {
+            $passBase = $visitor->gatePass->valid_until && $visitor->gatePass->valid_until->isFuture()
+                ? $visitor->gatePass->valid_until
+                : now();
+
+            $visitor->gatePass->update([
+                'valid_until' => $passBase->copy()->addHours($hours),
+                'status' => $visitor->gatePass->status === PassStatus::Expired ? PassStatus::Active : $visitor->gatePass->status,
+            ]);
+        }
+
+        return back()->with('success', "Visitor pass validity successfully extended by {$hours} hours.");
     }
 
     /** A resident may only touch their own visitors; security may touch any. */

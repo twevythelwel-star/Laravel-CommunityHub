@@ -16,7 +16,7 @@ class Fundraiser extends Model
     use HasFactory;
 
     protected $fillable = [
-        'title', 'description', 'beneficiary', 'cover_image_url', 'goal_minor', 'goal_currency',
+        'title', 'description', 'beneficiary', 'cover_image_url', 'images', 'goal_minor', 'goal_currency',
         'start_date', 'end_date', 'status', 'created_by', 'allow_anonymous', 'allow_recurring',
         'suggested_amounts', 'matching_sponsor', 'matching_multiplier', 'max_matching_minor',
         'fund_allocation', 'show_leaderboard',
@@ -35,6 +35,7 @@ class Fundraiser extends Model
             'max_matching_minor' => 'integer',
             'fund_allocation' => 'array',
             'show_leaderboard' => 'boolean',
+            'images' => 'array',
         ];
     }
 
@@ -58,15 +59,33 @@ class Fundraiser extends Model
         return (float) ($this->goal_minor / 100);
     }
 
-    /** Total raised, in minor units. */
+    /** Total raised (net of refunds), in minor units, matching the fundraiser's goal currency. */
     public function raisedMinor(): int
     {
-        return (int) $this->donations()->sum('amount_minor');
+        return (int) $this->donations()
+            ->where('currency', $this->goal_currency)
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+            })
+            ->sum('amount_minor');
     }
 
     public function raised(): float
     {
         return (float) ($this->raisedMinor() / 100);
+    }
+
+    public function refundedMinor(): int
+    {
+        return (int) $this->donations()
+            ->where('currency', $this->goal_currency)
+            ->where('status', 'refunded')
+            ->sum('amount_minor');
+    }
+
+    public function refunded(): float
+    {
+        return (float) ($this->refundedMinor() / 100);
     }
 
     public function progressPercent(): float
@@ -80,7 +99,11 @@ class Fundraiser extends Model
 
     public function donorCount(): int
     {
-        return $this->donations()->count();
+        return $this->donations()
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
+            })
+            ->count();
     }
 
     public function isOpen(): bool

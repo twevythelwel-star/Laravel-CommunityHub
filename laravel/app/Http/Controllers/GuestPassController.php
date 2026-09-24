@@ -95,6 +95,7 @@ class GuestPassController extends Controller
             'qr' => 'data:image/png;base64,'.base64_encode($this->qr->render($issued['token'], 240, 2)),
             'validUntil' => $issued['valid_until']->toIso8601String(),
             'status' => $pass->status->value,
+            'pin' => $pass->offline_pin,
         ];
     }
 }

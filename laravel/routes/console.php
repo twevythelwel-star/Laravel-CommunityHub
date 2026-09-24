@@ -2,6 +2,9 @@
 
 use App\Models\User;
 use App\Services\GatePassEngine;
+use App\Services\Messaging\MessageNotSent;
+use App\Services\SmsService;
+use App\Services\WhatsAppService;
 use Illuminate\Console\Command;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -19,6 +22,46 @@ Artisan::command('inspire', function () {
 Schedule::call(function (GatePassEngine $engine) {
     $engine->pruneNonces();
 })->hourly()->name('gatepass:prune-nonces');
+
+/*
+ | Sends one real message through Twilio to check the credentials in .env.
+ | Prints the message SID, or the reason it was refused. Never prints secrets.
+ */
+Artisan::command('messaging:test {phone : The number to send to, e.g. 876-555-1234 or +18765551234} {--whatsapp : Send a WhatsApp message instead of an SMS}', function (SmsService $sms, WhatsAppService $whatsApp) {
+    $isWhatsApp = (bool) $this->option('whatsapp');
+    $channel = $isWhatsApp ? 'WhatsApp' : 'SMS';
+    $service = $isWhatsApp ? $whatsApp : $sms;
+
+    $this->line('Account SID:  '.(filled(config('services.twilio.sid')) ? 'set' : 'MISSING (TWILIO_SID)'));
+    $this->line('Auth:         '.match (true) {
+        filled(config('services.twilio.api_key')) && filled(config('services.twilio.api_secret')) => 'API key (TWILIO_API_KEY / TWILIO_API_SECRET)',
+        filled(config('services.twilio.token')) => 'Auth Token (TWILIO_TOKEN)',
+        default => 'MISSING (TWILIO_TOKEN, or TWILIO_API_KEY + TWILIO_API_SECRET)',
+    });
+    $this->line('Sender:       '.(filled(config($isWhatsApp ? 'services.twilio.whatsapp_from' : 'services.twilio.from'))
+        ? 'set'
+        : 'MISSING ('.($isWhatsApp ? 'TWILIO_WHATSAPP_FROM' : 'TWILIO_FROM').')'));
+
+    if (! $service->isConfigured()) {
+        $this->error("{$channel} is not configured. Add the missing values to laravel/.env.");
+
+        return Command::FAILURE;
+    }
+
+    try {
+        $sid = $service->send($this->argument('phone'), 'Community Hub: this is a test message. Your gate pass notifications are set up.');
+    } catch (MessageNotSent $e) {
+        $this->error($e->getMessage());
+        $this->line('Twilio error codes are listed at https://www.twilio.com/docs/api/errors');
+
+        return Command::FAILURE;
+    }
+
+    $this->info("{$channel} accepted by Twilio. Message SID: {$sid}");
+    $this->line('Accepted is not delivered: check the message status in the Twilio console if it does not arrive.');
+
+    return Command::SUCCESS;
+})->purpose('Send a test SMS or WhatsApp message through Twilio');
 
 /*
  | Expire gate passes whose validity window has closed. Someone still checked

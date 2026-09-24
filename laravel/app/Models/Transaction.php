@@ -18,10 +18,15 @@ class Transaction extends Model
         'payment_link_id',
         'fundraiser_id',
         'amount_minor',
+        'fee_minor',
+        'net_amount_minor',
         'currency',
         'payment_channel',
         'reference',
         'status',
+        'settled_at',
+        'payout_reference',
+        'dispute_reason',
         'receipt_number',
         'proof_url',
         'notes',
@@ -29,6 +34,9 @@ class Transaction extends Model
 
     protected $casts = [
         'amount_minor' => 'integer',
+        'fee_minor' => 'integer',
+        'net_amount_minor' => 'integer',
+        'settled_at' => 'datetime',
     ];
 
     protected static function booted(): void

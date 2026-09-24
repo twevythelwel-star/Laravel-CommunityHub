@@ -108,6 +108,14 @@ class GatePass extends Model
         return ! ($this->status === PassStatus::CheckedOut && $next === PassStatus::CheckedIn && $this->single_entry);
     }
 
+    /** Deterministic 6-digit offline backup gate PIN */
+    public function getOfflinePinAttribute(): string
+    {
+        $hash = crc32($this->pass_id.($this->created_at?->timestamp ?? 'pin'));
+
+        return sprintf('%06d', abs($hash) % 1000000);
+    }
+
     /**
      * Moves the pass to a new state, or throws if the state table forbids it.
      *
