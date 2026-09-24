@@ -129,9 +129,18 @@ jobs:
             done
           '
 
+      # Laravel's /up answers 200 when the app boots and 500 when it does not;
+      # its body is an HTML page, so check the status code rather than text.
       - name: Verify Web Endpoint Health
         run: |
-          curl -f -s http://127.0.0.1:8080/up | grep -E "HTTP 200|OK" || true
+          status=$(curl -sS -o /dev/null -w '%{http_code}' \
+            --retry 5 --retry-delay 3 --retry-all-errors \
+            http://127.0.0.1:8080/up) || true
+          echo "GET /up -> HTTP $status"
+          if [ "$status" != "200" ]; then
+            echo "::error::Health endpoint returned HTTP $status, expected 200."
+            exit 1
+          fi
 
       - name: Verify Queue Worker Container
         run: |
@@ -144,6 +153,12 @@ jobs:
           # Verify scheduler container is running
           docker compose ps scheduler | grep -E "Up|running"
           docker compose exec -T scheduler php artisan schedule:list
+
+      - name: Dump Container Logs
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color --tail=200
 
       - name: Graceful Container Shutdown
         if: always()
