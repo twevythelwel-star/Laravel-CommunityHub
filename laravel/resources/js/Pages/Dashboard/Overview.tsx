@@ -21,16 +21,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowUpRight,
-  CalendarCheck,
-  Users,
-  DollarSign,
   Phone,
   Activity,
   MoreHorizontal,
   Mountain,
   Settings2,
   ShieldOff,
-  KeyRound,
   Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +36,8 @@ import { FundraiserProgressCard } from '@/components/dashboard/fundraiser-progre
 import { useMap } from '@/context/map-context';
 import { toDMS, type CommunityLandmark } from '@/lib/geofence-utils';
 import { SetGeofenceDialog } from '@/components/dashboard/set-geofence-dialog';
+import { OverviewWelcome } from '@/components/dashboard/overview-welcome';
+import { OverviewAtAGlance } from '@/components/dashboard/overview-at-a-glance';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -173,9 +171,6 @@ type Props = {
   residents: Resident[];
   landmarks: CommunityLandmark[];
 };
-
-const jmd = (amount: number) =>
-  amount.toLocaleString('en-JM', { style: 'currency', currency: 'JMD' });
 
 export default function Overview({
   stats,
@@ -363,6 +358,10 @@ export default function Overview({
       <Head title="Dashboard" />
 
       <div className="flex flex-1 flex-col gap-8 pb-12">
+
+        {/* ─── WELCOME, QUICK ACTIONS + KEY NUMBERS ─── */}
+        <OverviewWelcome myOutstandingBalance={stats.myOutstandingBalance} />
+        <OverviewAtAGlance stats={stats} permissions={permissions} />
 
         {/* ─── MAP + ANNOUNCEMENTS ─── */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 xl:grid-cols-5">
@@ -755,103 +754,6 @@ export default function Overview({
             <h2 className="text-xl font-bold tracking-tight text-foreground">
               Financials, Fundraisers &amp; Promotions
             </h2>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4 mb-8">
-            {permissions.viewActiveResidents && stats.activeResidents !== null && (
-              <Card className="bg-card border-border text-card-foreground shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Active Residents
-                  </CardTitle>
-                  <Users className="h-4 w-4 text-primary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-extrabold text-foreground">{stats.activeResidents}</div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {stats.residentsJoinedThisMonth
-                      ? `+${stats.residentsJoinedThisMonth} this month`
-                      : 'No new accounts this month'}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {permissions.viewBilling && (
-              <>
-                <Card className="bg-card border-border text-card-foreground shadow-sm">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Total Collected ({stats.month})
-                    </CardTitle>
-                    <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-extrabold text-foreground">{jmd(stats.totalCollected)}</div>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      from {stats.collectedHouseholds}{' '}
-                      {stats.collectedHouseholds === 1 ? 'household' : 'households'}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-card border-border text-card-foreground shadow-sm">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Outstanding Dues
-                    </CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-extrabold text-foreground">{jmd(stats.outstandingDues)}</div>
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      from {stats.outstandingHouseholds}{' '}
-                      {stats.outstandingHouseholds === 1 ? 'household' : 'households'}
-                    </p>
-                  </CardContent>
-                </Card>
-              </>
-            )}
-
-            {permissions.viewUpcomingVisitors && (
-              <Card className="bg-card border-border text-card-foreground shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Upcoming Visitors
-                  </CardTitle>
-                  <CalendarCheck className="h-4 w-4 text-primary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-extrabold text-foreground">{stats.upcomingVisitors}</div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {stats.visitorsToday} scheduled today
-                    {stats.visitorsOnSite > 0 && ` · ${stats.visitorsOnSite} on site`}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {stats.myRentersCount !== null && stats.myRentersCount !== undefined && (
-              <Card className="bg-card border-border text-card-foreground shadow-sm hover:border-primary/50 transition-colors">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    My Renters
-                  </CardTitle>
-                  <KeyRound className="h-4 w-4 text-primary" />
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-baseline justify-between">
-                    <div className="text-2xl font-extrabold text-foreground">{stats.myRentersCount}</div>
-                    <Button asChild size="sm" variant="ghost" className="h-7 text-xs px-2 text-primary hover:text-primary">
-                      <Link href="/dashboard/renters">Manage →</Link>
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {stats.myRentersCount === 1 ? '1 active occupant / tenant' : `${stats.myRentersCount} active occupants / tenants`}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
           </div>
 
           {permissions.viewFundraisers && activeFundraisers.length > 0 && (
