@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Donation;
+use App\Models\Fundraiser;
 use App\Models\Invoice;
 use App\Models\StripeEvent;
 use App\Models\Transaction;
@@ -9,7 +11,9 @@ use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
+use Stripe\BalanceTransaction;
 use Stripe\BillingPortal\Session as BillingPortalSession;
 use Stripe\Charge;
 use Stripe\Checkout\Session;
@@ -79,14 +83,31 @@ class StripePaymentService
      * Create a Stripe Checkout Session for an invoice.
      * Returns the redirect URL for the user to complete payment.
      *
-     * A still-open session for the invoice is reused rather than replaced, and
-     * creation carries an idempotency key, so a double click or two open tabs
-     * lead to one session instead of two sessions the resident could both pay.
+     * Charges what is still owed — or `$amountMinor` of it, for a part
+     * payment — rather than the invoice's face value, which charged a
+     * household that had already paid part of a statement for all of it again.
+     *
+     * A still-open session for the same amount is reused rather than
+     * replaced, and creation carries an idempotency key, so a double click or
+     * two open tabs lead to one session instead of two the resident could both pay.
+     *
+     * @throws DomainException when nothing is owed or the amount is out of range
      */
-    public function createCheckoutSession(Invoice $invoice, string $successUrl, string $cancelUrl): string
+    public function createCheckoutSession(Invoice $invoice, string $successUrl, string $cancelUrl, ?int $amountMinor = null): string
     {
         if (! $this->isLive()) {
             throw new RuntimeException('Stripe is not configured; refusing to simulate a checkout session.');
+        }
+
+        $balanceMinor = $invoice->balanceRemainingMinor();
+        $amountMinor ??= $balanceMinor;
+
+        if ($balanceMinor < 1) {
+            throw new DomainException("Invoice {$invoice->reference} has nothing left to pay.");
+        }
+
+        if ($amountMinor < 1 || $amountMinor > $balanceMinor) {
+            throw new DomainException('The card payment must be between 0.01 and the balance still owed.');
         }
 
         Stripe::setApiKey($this->secretKey);
@@ -95,7 +116,7 @@ class StripePaymentService
             try {
                 $existing = Session::retrieve($invoice->stripe_session_id);
 
-                if ($existing->status === 'open' && $existing->url) {
+                if ($existing->status === 'open' && $existing->url && (int) $existing->amount_total === $amountMinor) {
                     return $existing->url;
                 }
             } catch (ApiErrorException) {
@@ -112,26 +133,117 @@ class StripePaymentService
                         'name' => "HOA Assessment — Ref: {$invoice->reference}",
                         'description' => 'Community Hub Maintenance & Operations Assessment',
                     ],
-                    'unit_amount' => $invoice->amount_minor,
+                    'unit_amount' => $amountMinor,
                 ],
                 'quantity' => 1,
             ]],
             'mode' => 'payment',
             'customer_email' => $invoice->user->email,
             'client_reference_id' => (string) $invoice->id,
-            'metadata' => ['invoice_id' => (string) $invoice->id],
+            'metadata' => ['purpose' => 'invoice', 'invoice_id' => (string) $invoice->id],
             'payment_intent_data' => ['metadata' => ['invoice_id' => (string) $invoice->id]],
             'success_url' => $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $cancelUrl,
         ], [
             // Keyed on the session being replaced, so concurrent requests for
             // the same invoice share a key and get the same session back.
-            'idempotency_key' => "invoice-{$invoice->id}-checkout-".($invoice->stripe_session_id ?? 'initial'),
+            'idempotency_key' => "invoice-{$invoice->id}-checkout-".($invoice->stripe_session_id ?? 'initial')."-{$amountMinor}",
         ]);
 
         $invoice->update(['stripe_session_id' => $session->id]);
 
         return $session->url;
+    }
+
+    /**
+     * Create a Stripe Checkout Session for a donation.
+     *
+     * No Donation row exists until Stripe confirms the money: everything
+     * needed to write it travels in the session metadata, and
+     * settleDonationSession() creates it. So an abandoned checkout leaves
+     * nothing behind to be counted towards a campaign's total.
+     *
+     * @param  array{donor_name: string, is_anonymous: bool, is_recurring: bool, frequency: ?string}  $details
+     */
+    public function createDonationCheckoutSession(
+        Fundraiser $fundraiser,
+        User $donor,
+        int $amountMinor,
+        array $details,
+        string $successUrl,
+        string $cancelUrl,
+    ): string {
+        if (! $this->isLive()) {
+            throw new RuntimeException('Stripe is not configured; refusing to simulate a checkout session.');
+        }
+
+        Stripe::setApiKey($this->secretKey);
+
+        $session = Session::create([
+            'payment_method_types' => ['card'],
+            'line_items' => [[
+                'price_data' => [
+                    'currency' => strtolower($fundraiser->goal_currency ?: 'usd'),
+                    'product_data' => [
+                        'name' => "Donation — {$fundraiser->title}",
+                    ],
+                    'unit_amount' => $amountMinor,
+                ],
+                'quantity' => 1,
+            ]],
+            'mode' => 'payment',
+            'customer_email' => $donor->email,
+            'client_reference_id' => "donation-{$fundraiser->id}-{$donor->id}",
+            'metadata' => [
+                'purpose' => 'donation',
+                'fundraiser_id' => (string) $fundraiser->id,
+                'user_id' => (string) $donor->id,
+                'donor_name' => Str::limit($details['donor_name'], 120, ''),
+                'is_anonymous' => $details['is_anonymous'] ? '1' : '0',
+                'is_recurring' => $details['is_recurring'] ? '1' : '0',
+                'frequency' => (string) ($details['frequency'] ?? ''),
+            ],
+            'payment_intent_data' => ['metadata' => [
+                'purpose' => 'donation',
+                'fundraiser_id' => (string) $fundraiser->id,
+            ]],
+            'success_url' => $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $cancelUrl,
+        ]);
+
+        return $session->url;
+    }
+
+    /**
+     * Verify a returning donor's session with Stripe and record the donation.
+     *
+     * Like completePayment(), the session id comes from the browser, so the
+     * session must be a donation by this user to this campaign.
+     */
+    public function completeDonation(Fundraiser $fundraiser, User $donor, string $sessionId): bool
+    {
+        if (! $this->isLive()) {
+            return false;
+        }
+
+        Stripe::setApiKey($this->secretKey);
+        $session = Session::retrieve($sessionId);
+
+        $metadata = $session->metadata;
+
+        if (($metadata->purpose ?? null) !== 'donation'
+            || (string) ($metadata->fundraiser_id ?? '') !== (string) $fundraiser->id
+            || (string) ($metadata->user_id ?? '') !== (string) $donor->id) {
+            Log::channel('security')->warning('Stripe session presented for a donation it does not describe', [
+                'fundraiser_id' => $fundraiser->id,
+                'user_id' => $donor->id,
+                'session_id' => $sessionId,
+            ]);
+
+            return false;
+        }
+
+        return in_array($this->settleSession($session), ['settled', 'duplicate'], true);
     }
 
     /**
@@ -257,6 +369,7 @@ class StripePaymentService
                 'checkout.session.async_payment_succeeded' => $this->settleSession($object),
                 'payment_intent.succeeded' => $this->settlePaymentIntent($object),
                 'payment_intent.payment_failed',
+                'checkout.session.async_payment_failed',
                 'checkout.session.expired' => $this->handlePaymentFailure($object, $event->type),
                 'charge.refunded' => $this->syncRefunds($object),
                 'charge.dispute.created',
@@ -288,6 +401,10 @@ class StripePaymentService
     {
         if ($session->payment_status !== 'paid') {
             return 'unpaid';
+        }
+
+        if (($session->metadata->purpose ?? null) === 'donation') {
+            return $this->settleDonationSession($session);
         }
 
         $invoice = Invoice::find((int) $session->client_reference_id);
@@ -354,13 +471,89 @@ class StripePaymentService
                 'stripe_payment_intent' => $paymentIntent,
             ]);
 
-            if ($amountMinor >= $invoice->amount_minor) {
-                $invoice->markPaid();
-            } else {
-                $invoice->update(['status' => 'Partially Paid']);
-            }
+            $invoice->settleFromLedger();
 
             Log::info("Invoice {$invoice->reference} paid via Stripe ({$session->id})");
+
+            return 'settled';
+        });
+    }
+
+    /**
+     * Record a paid donation Checkout Session. Idempotent.
+     *
+     * The Donation and its ledger row are written together, keyed on the
+     * PaymentIntent's ledger reference, so the success redirect and the
+     * webhook — whichever arrives second — cannot record the gift twice.
+     */
+    private function settleDonationSession(StripeObject $session): string
+    {
+        $metadata = $session->metadata;
+        $fundraiser = Fundraiser::find((int) ($metadata->fundraiser_id ?? 0));
+
+        if (! $fundraiser) {
+            Log::warning('Stripe donation checkout completed for a campaign that does not exist', [
+                'session_id' => $session->id,
+                'fundraiser_id' => $metadata->fundraiser_id ?? null,
+            ]);
+
+            return 'unknown_fundraiser';
+        }
+
+        if (strtoupper((string) $session->currency) !== strtoupper($fundraiser->goal_currency)) {
+            Log::channel('security')->warning('Stripe donation currency does not match its campaign', [
+                'fundraiser_id' => $fundraiser->id,
+                'session_id' => $session->id,
+                'session_currency' => $session->currency,
+            ]);
+
+            return 'mismatch';
+        }
+
+        $paymentIntent = $this->idOf($session->payment_intent);
+        $amountMinor = (int) $session->amount_total;
+        $userId = (int) ($metadata->user_id ?? 0) ?: null;
+        $isAnonymous = ($metadata->is_anonymous ?? '0') === '1';
+        $isRecurring = ($metadata->is_recurring ?? '0') === '1';
+        $donorName = (string) ($metadata->donor_name ?? '');
+
+        return DB::transaction(function () use ($fundraiser, $session, $paymentIntent, $amountMinor, $userId, $isAnonymous, $isRecurring, $donorName, $metadata): string {
+            $payment = Transaction::query()->firstOrCreate(
+                ['reference' => $this->paymentReference($paymentIntent)],
+                [
+                    'user_id' => $userId,
+                    'fundraiser_id' => $fundraiser->id,
+                    'amount_minor' => $amountMinor,
+                    'fee_minor' => 0,
+                    'net_amount_minor' => $amountMinor,
+                    'settled_at' => now(),
+                    'currency' => strtoupper($fundraiser->goal_currency),
+                    'payment_channel' => self::CHANNEL,
+                    'status' => 'completed',
+                    'notes' => "Donation to {$fundraiser->title} by ".($isAnonymous ? 'Anonymous' : $donorName)." (Stripe Checkout {$session->id})",
+                ],
+            );
+
+            if (! $payment->wasRecentlyCreated) {
+                return 'duplicate';
+            }
+
+            $fundraiser->donations()->create([
+                'user_id' => $userId,
+                'amount_minor' => $amountMinor,
+                'currency' => strtoupper($fundraiser->goal_currency),
+                'donor_name' => $donorName ?: null,
+                'is_anonymous' => $isAnonymous,
+                'is_recurring' => $isRecurring,
+                'frequency' => $isRecurring ? (($metadata->frequency ?? '') ?: 'monthly') : null,
+                'status' => 'completed',
+                'receipt_number' => 'DON-REC-'.date('Ymd').'-'.strtoupper(Str::random(5)),
+                'payment_channel' => self::CHANNEL,
+                'donated_at' => now(),
+                'notes' => "Stripe PaymentIntent {$paymentIntent}",
+            ]);
+
+            Log::info("Donation to fundraiser {$fundraiser->id} received via Stripe ({$session->id})");
 
             return 'settled';
         });
@@ -372,6 +565,13 @@ class StripePaymentService
     public function settlePaymentIntent(StripeObject $paymentIntent): string
     {
         $piId = $paymentIntent->id;
+
+        // Donations settle from their Checkout Session, which carries the
+        // donor details; the PaymentIntent alone cannot write the Donation.
+        if (($paymentIntent->metadata->purpose ?? null) === 'donation') {
+            return 'ignored';
+        }
+
         $invoiceId = $paymentIntent->metadata->invoice_id ?? null;
 
         $invoice = $invoiceId
@@ -420,11 +620,7 @@ class StripePaymentService
                 'stripe_payment_intent' => $piId,
             ]);
 
-            if ($amountMinor >= $invoice->amount_minor) {
-                $invoice->markPaid();
-            } else {
-                $invoice->update(['status' => 'Partially Paid']);
-            }
+            $invoice->settleFromLedger();
 
             return 'settled';
         });
@@ -483,122 +679,199 @@ class StripePaymentService
 
     /**
      * Process chargebacks and dispute lifecycle events. Idempotent.
+     *
+     * The dispute is tied to its payment through the PaymentIntent, which is
+     * what the ledger reference is built from. It used to be matched with
+     * `notes LIKE %charge_id%`; no note ever held a charge id, and when the
+     * dispute's charge was absent the empty filter matched the first Stripe
+     * payment in the table, flagging an unrelated resident's invoice.
+     *
+     * Ledger rows record what the money did, without disturbing the sums the
+     * dashboards draw from `completed` and `refunded` rows:
+     *
+     *   - opened:  a `disputed` marker, net negative, while the funds are held;
+     *   - won:     a `reinstated` marker that offsets it. It is not `completed`,
+     *              because the original payment already is, and counting it
+     *              again doubled the amount collected;
+     *   - lost:    a `refunded` row, because the cardholder has the money back,
+     *              so the invoice's received total and the refund totals agree.
      */
     public function handleDispute(StripeObject $dispute, string $eventType): string
     {
         $disputeId = $dispute->id;
-        $chargeId = isset($dispute->charge) ? $this->idOf($dispute->charge) : null;
         $amountMinor = (int) $dispute->amount;
-        $currency = strtoupper((string) ($dispute->currency ?? 'USD'));
+        $currency = strtoupper((string) ($dispute->currency ?? ''));
+        $invoice = $this->invoiceForDispute($dispute);
 
-        // Locate transaction or invoice
-        $payment = Transaction::where('payment_channel', self::CHANNEL)
-            ->where(function ($q) use ($chargeId) {
-                if ($chargeId) {
-                    $q->where('notes', 'like', "%{$chargeId}%");
-                }
-            })->first();
+        if (! $invoice) {
+            Log::warning('Stripe dispute for a payment this application did not record', [
+                'dispute' => $disputeId,
+                'payment_intent' => $this->idOf($dispute->payment_intent ?? null),
+            ]);
 
-        $invoice = $payment?->invoice;
-        if (! $invoice && isset($dispute->metadata->invoice_id)) {
-            $invoice = Invoice::find((int) $dispute->metadata->invoice_id);
+            return 'unknown_invoice';
         }
 
-        if ($eventType === 'charge.dispute.created' || $eventType === 'charge.dispute.funds_withdrawn') {
-            if ($invoice) {
-                Transaction::query()->firstOrCreate(
-                    ['reference' => "stripe-dispute:{$disputeId}:created"],
-                    [
-                        'user_id' => $invoice->user_id,
-                        'invoice_id' => $invoice->id,
-                        'amount_minor' => $amountMinor,
-                        'fee_minor' => 0,
-                        'net_amount_minor' => $amountMinor * -1,
-                        'currency' => $currency,
-                        'payment_channel' => self::CHANNEL,
-                        'status' => 'disputed',
-                        'dispute_reason' => $dispute->reason ?? 'general',
-                        'notes' => "Chargeback/dispute opened ({$dispute->reason}). Status: {$dispute->status}",
-                    ]
-                );
+        $record = fn (string $step, string $status, int $netMinor, string $notes): Transaction => Transaction::query()->firstOrCreate(
+            ['reference' => "stripe-dispute:{$disputeId}:{$step}"],
+            [
+                'user_id' => $invoice->user_id,
+                'invoice_id' => $invoice->id,
+                'amount_minor' => $amountMinor,
+                'fee_minor' => 0,
+                'net_amount_minor' => $netMinor,
+                'currency' => $currency ?: strtoupper($invoice->currency),
+                'payment_channel' => self::CHANNEL,
+                'status' => $status,
+                'dispute_reason' => $dispute->reason ?? 'general',
+                'notes' => $notes,
+            ],
+        );
 
-                $invoice->update(['status' => 'Disputed']);
+        if (in_array($eventType, ['charge.dispute.created', 'charge.dispute.funds_withdrawn'], true)) {
+            $record('created', 'disputed', -$amountMinor, "Chargeback/dispute opened ({$dispute->reason}). Status: {$dispute->status}");
 
-                Log::channel('security')->alert('Stripe chargeback/dispute created for invoice', [
-                    'invoice' => $invoice->reference,
-                    'dispute_id' => $disputeId,
-                    'amount' => $amountMinor,
-                    'reason' => $dispute->reason ?? 'unknown',
-                ]);
-            }
+            $invoice->update(['status' => 'Disputed']);
+
+            Log::channel('security')->alert('Stripe chargeback/dispute created for invoice', [
+                'invoice' => $invoice->reference,
+                'dispute_id' => $disputeId,
+                'amount' => $amountMinor,
+                'reason' => $dispute->reason ?? 'unknown',
+            ]);
 
             return 'disputed';
         }
 
-        if ($eventType === 'charge.dispute.closed') {
-            $status = $dispute->status; // won, lost
-            if ($status === 'won') {
-                if ($invoice) {
-                    $invoice->markPaid();
-                    Transaction::query()->firstOrCreate(
-                        ['reference' => "stripe-dispute:{$disputeId}:won"],
-                        [
-                            'user_id' => $invoice->user_id,
-                            'invoice_id' => $invoice->id,
-                            'amount_minor' => $amountMinor,
-                            'fee_minor' => 0,
-                            'net_amount_minor' => $amountMinor,
-                            'currency' => $currency,
-                            'payment_channel' => self::CHANNEL,
-                            'status' => 'completed',
-                            'notes' => 'Dispute won in estate favor. Funds reinstated.',
-                        ]
-                    );
-                }
+        if ($eventType !== 'charge.dispute.closed') {
+            return 'disputed';
+        }
 
-                return 'dispute_won';
-            } else {
-                if ($invoice) {
-                    $invoice->update(['status' => 'Unpaid']);
-                    Transaction::query()->firstOrCreate(
-                        ['reference' => "stripe-dispute:{$disputeId}:lost"],
-                        [
-                            'user_id' => $invoice->user_id,
-                            'invoice_id' => $invoice->id,
-                            'amount_minor' => $amountMinor,
-                            'fee_minor' => 0,
-                            'net_amount_minor' => 0,
-                            'currency' => $currency,
-                            'payment_channel' => self::CHANNEL,
-                            'status' => 'failed',
-                            'notes' => 'Dispute lost. Funds returned to cardholder.',
-                        ]
-                    );
-                }
+        if ($dispute->status === 'won') {
+            $record('won', 'reinstated', $amountMinor, 'Dispute won in estate favor. Funds reinstated.');
 
-                return 'dispute_lost';
+            if ($invoice->status === 'Disputed') {
+                $invoice->markPaid();
+            }
+
+            return 'dispute_won';
+        }
+
+        $record('lost', 'refunded', -$amountMinor, 'Dispute lost. Funds returned to cardholder.');
+
+        $invoice->update(['status' => 'Unpaid', 'paid_at' => null]);
+
+        return 'dispute_lost';
+    }
+
+    /** The invoice a dispute's payment settled, found through its PaymentIntent. */
+    private function invoiceForDispute(StripeObject $dispute): ?Invoice
+    {
+        $paymentIntent = $this->idOf($dispute->payment_intent ?? null);
+
+        if ($paymentIntent) {
+            $invoiceId = Transaction::query()
+                ->where('reference', $this->paymentReference($paymentIntent))
+                ->value('invoice_id')
+                ?? Invoice::query()->where('stripe_payment_intent', $paymentIntent)->value('id');
+
+            if ($invoiceId) {
+                return Invoice::find($invoiceId);
             }
         }
 
-        return 'disputed';
+        $invoiceId = $dispute->metadata->invoice_id ?? null;
+
+        return $invoiceId ? Invoice::find((int) $invoiceId) : null;
     }
 
     /**
-     * Record payout settlement against open transactions. Idempotent.
+     * Mark the payments a payout carried to the bank. Idempotent.
+     *
+     * This used to stamp the payout id on every unmarked Stripe payment in the
+     * ledger, for `payout.failed` as well as `payout.paid`, so a failed payout
+     * recorded money as banked and one payout claimed payments it never held.
+     *
+     * A paid payout now asks Stripe which charges it contained and marks only
+     * those, recording Stripe's fee where it is in the payment's own currency.
+     * A failed payout changes nothing and raises an alert: the funds are back
+     * in the Stripe balance and go out with a later payout.
      */
     public function handlePayout(StripeObject $payout, string $eventType): string
     {
-        $payoutId = $payout->id;
-
-        Transaction::where('payment_channel', self::CHANNEL)
-            ->whereNull('payout_reference')
-            ->where('status', 'completed')
-            ->update([
-                'payout_reference' => $payoutId,
-                'settled_at' => now(),
+        if ($eventType === 'payout.failed') {
+            Log::channel('security')->alert('Stripe payout failed; the ledger was left unchanged', [
+                'payout' => $payout->id,
+                'amount' => $payout->amount ?? null,
+                'failure_code' => $payout->failure_code ?? null,
+                'failure_message' => $payout->failure_message ?? null,
             ]);
 
+            return 'payout_failed';
+        }
+
+        foreach ($this->payoutCharges($payout->id) as $paymentIntent => $charge) {
+            $payment = Transaction::query()
+                ->where('reference', $this->paymentReference($paymentIntent))
+                ->whereNull('payout_reference')
+                ->first();
+
+            if (! $payment) {
+                continue;
+            }
+
+            $feeMinor = strtoupper($charge['currency']) === strtoupper($payment->currency)
+                ? $charge['fee_minor']
+                : (int) $payment->fee_minor;
+
+            $payment->update([
+                'payout_reference' => $payout->id,
+                'fee_minor' => $feeMinor,
+                'net_amount_minor' => $payment->amount_minor - $feeMinor,
+                'settled_at' => now(),
+            ]);
+        }
+
         return 'payout_settled';
+    }
+
+    /**
+     * The card payments a payout contained, from its balance transactions.
+     *
+     * Stripe lists these only for automatic payouts; a manual payout returns
+     * none and leaves the ledger as it was.
+     *
+     * @return array<string, array{fee_minor: int, currency: string}> keyed by PaymentIntent id
+     */
+    protected function payoutCharges(string $payoutId): array
+    {
+        Stripe::setApiKey($this->secretKey);
+
+        $charges = [];
+
+        $balanceTransactions = BalanceTransaction::all([
+            'payout' => $payoutId,
+            'limit' => 100,
+            'expand' => ['data.source'],
+        ]);
+
+        foreach ($balanceTransactions->autoPagingIterator() as $balanceTransaction) {
+            if (! in_array($balanceTransaction->type, ['charge', 'payment'], true)
+                || ! $balanceTransaction->source instanceof StripeObject) {
+                continue;
+            }
+
+            $paymentIntent = $this->idOf($balanceTransaction->source->payment_intent ?? null);
+
+            if ($paymentIntent) {
+                $charges[$paymentIntent] = [
+                    'fee_minor' => (int) $balanceTransaction->fee,
+                    'currency' => (string) $balanceTransaction->currency,
+                ];
+            }
+        }
+
+        return $charges;
     }
 
     /**

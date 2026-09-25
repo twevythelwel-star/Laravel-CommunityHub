@@ -37,6 +37,8 @@ import {
   RotateCcw,
   AlertCircle,
   FileSpreadsheet,
+  XCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   Dialog,
@@ -67,14 +69,23 @@ export type MasterTransaction = {
   /** Present only for an administrator, on a Stripe payment with money left to return. */
   refundableAmount?: number | null;
   refundUrl?: string | null;
+  /** Present only for an administrator, on a payment awaiting office confirmation. */
+  confirmUrl?: string | null;
+  rejectUrl?: string | null;
+  isDonation?: boolean;
 };
 
 type Props = {
   transactions: Paginated<MasterTransaction>;
+  /** Administrators only: every payment awaiting confirmation, oldest first. */
+  pendingPayments?: MasterTransaction[];
   currency?: string;
 };
 
-export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
+/** A receipt exists only for money that has actually arrived. */
+const hasReceipt = (tx: MasterTransaction) => !['pending', 'rejected'].includes(tx.status.toLowerCase());
+
+export function TransactionsLedger({ transactions, pendingPayments = [], currency = 'JMD' }: Props) {
   const [searchTerm, setSearchTerm] = useState('');
   const [channelFilter, setChannelFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -85,6 +96,79 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
   const [refundNote, setRefundNote] = useState('');
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundSaving, setRefundSaving] = useState(false);
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [rejecting, setRejecting] = useState<MasterTransaction | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectSaving, setRejectSaving] = useState(false);
+
+  const confirmPayment = async (tx: MasterTransaction) => {
+    if (!tx.confirmUrl) return;
+    setConfirmingId(tx.id);
+    try {
+      await submit('post', tx.confirmUrl);
+      toast({
+        title: 'Payment confirmed',
+        description: tx.isDonation
+          ? `${money(tx.amount, tx.currency || currency)} now counts towards the campaign.`
+          : `${money(tx.amount, tx.currency || currency)} from ${tx.homeowner} is applied to their statement.`,
+      });
+    } catch (message) {
+      toast({
+        variant: 'destructive',
+        title: 'Could not confirm the payment',
+        description: typeof message === 'string' ? message : 'Please try again.',
+      });
+    } finally {
+      setConfirmingId(null);
+    }
+  };
+
+  const rejectPayment = async () => {
+    if (!rejecting?.rejectUrl) return;
+    setRejectSaving(true);
+    try {
+      await submit('post', rejecting.rejectUrl, { reason: rejectReason.trim() === '' ? null : rejectReason });
+      toast({ title: 'Payment marked as not received', description: `${rejecting.reference} will not count.` });
+      setRejecting(null);
+    } catch (message) {
+      toast({
+        variant: 'destructive',
+        title: 'Could not reject the payment',
+        description: typeof message === 'string' ? message : 'Please try again.',
+      });
+    } finally {
+      setRejectSaving(false);
+    }
+  };
+
+  /** Confirm / Not received buttons for a pending payment. */
+  const ReviewActions = ({ tx }: { tx: MasterTransaction }) =>
+    tx.confirmUrl ? (
+      <>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs gap-1 text-emerald-700 dark:text-emerald-400"
+          disabled={confirmingId === tx.id}
+          onClick={() => confirmPayment(tx)}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {confirmingId === tx.id ? 'Confirming…' : 'Confirm'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 px-2 text-xs gap-1 text-destructive"
+          onClick={() => {
+            setRejecting(tx);
+            setRejectReason('');
+          }}
+        >
+          <XCircle className="h-3.5 w-3.5" />
+          Not received
+        </Button>
+      </>
+    ) : null;
 
   const openRefund = (tx: MasterTransaction) => {
     setRefunding(tx);
@@ -164,6 +248,18 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
         return (
           <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-800 gap-1">
             <RotateCcw className="h-3 w-3" /> Refunded
+          </Badge>
+        );
+      case 'rejected':
+        return (
+          <Badge variant="outline" className="text-muted-foreground gap-1">
+            <XCircle className="h-3 w-3" /> Not received
+          </Badge>
+        );
+      case 'reinstated':
+        return (
+          <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-800 gap-1">
+            <ShieldCheck className="h-3 w-3" /> Reinstated
           </Badge>
         );
       default:
@@ -253,6 +349,7 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
               <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="rejected">Not received</SelectItem>
               <SelectItem value="refunded">Refunded</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
             </SelectContent>
@@ -260,7 +357,46 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-6">
+        {pendingPayments.length > 0 && (
+          <section
+            aria-labelledby="pending-payments-heading"
+            className="rounded-xl border border-amber-300 bg-amber-50/60 p-4 dark:border-amber-800 dark:bg-amber-950/20"
+          >
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 id="pending-payments-heading" className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-200">
+                <Clock className="h-4 w-4" />
+                Awaiting confirmation ({pendingPayments.length})
+              </h3>
+              <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+                Confirm each once the money shows in the bank, till or wallet account. Nothing counts until you do.
+              </p>
+            </div>
+            <ul className="divide-y divide-amber-200 dark:divide-amber-900">
+              {pendingPayments.map((tx) => (
+                <li key={tx.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">
+                      {money(tx.amount, tx.currency || currency)}
+                      <span className="ml-2 text-xs font-normal capitalize text-muted-foreground">
+                        via {tx.channel.replace(/_/g, ' ')}
+                        {tx.isDonation ? ' · donation' : ''}
+                      </span>
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {tx.homeowner || 'Unknown payer'}
+                      {tx.lot ? ` · ${tx.lot}` : ''} · {tx.date} · <span className="font-mono">{tx.reference}</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <ReviewActions tx={tx} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {filteredData.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <Receipt className="h-10 w-10 mx-auto mb-3 opacity-30" />
@@ -312,17 +448,21 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
                     </TableCell>
                     <TableCell className="text-center">{getStatusBadge(tx.status)}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2 text-xs gap-1 text-primary"
-                        onClick={() => {
-                          window.open(`/dashboard/billing/receipt/${tx.id}`, '_blank');
-                        }}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        PDF
-                      </Button>
+                      <ReviewActions tx={tx} />
+                      {hasReceipt(tx) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-xs gap-1 text-primary"
+                          onClick={() => {
+                            // Was /dashboard/billing/receipt/{id}, which is not a route.
+                            window.open(`/dashboard/billing/transactions/${tx.id}/receipt`, '_blank');
+                          }}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          PDF
+                        </Button>
+                      )}
                       {tx.refundUrl && (
                         <Button
                           variant="ghost"
@@ -391,6 +531,39 @@ export function TransactionsLedger({ transactions, currency = 'JMD' }: Props) {
                   onClick={issueRefund}
                 >
                   {refundSaving ? 'Refunding…' : 'Issue Refund'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejecting !== null} onOpenChange={(open) => !open && setRejecting(null)}>
+        <DialogContent className="sm:max-w-md">
+          {rejecting && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Mark payment as not received</DialogTitle>
+                <DialogDescription>
+                  {money(rejecting.amount, rejecting.currency || currency)} via {rejecting.channel.replace(/_/g, ' ')} from{' '}
+                  {rejecting.homeowner || 'an unknown payer'}. It will never count towards
+                  {rejecting.isDonation ? ' the campaign' : ' their statement'}, and no receipt is issued.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2">
+                <Label htmlFor="reject-reason">Reason (optional)</Label>
+                <Textarea
+                  id="reject-reason"
+                  maxLength={500}
+                  placeholder="e.g., No matching deposit on the bank statement"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setRejecting(null)}>Cancel</Button>
+                <Button type="button" variant="destructive" disabled={rejectSaving} onClick={rejectPayment}>
+                  {rejectSaving ? 'Saving…' : 'Mark not received'}
                 </Button>
               </DialogFooter>
             </>

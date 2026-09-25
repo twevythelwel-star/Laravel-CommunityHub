@@ -13,9 +13,20 @@ use UnexpectedValueException;
 /**
  * Receives Stripe webhooks: POST /api/webhooks/stripe.
  *
- * Point the Stripe dashboard at that URL for `checkout.session.completed`,
- * `checkout.session.async_payment_succeeded` and `charge.refunded`, and put
- * the endpoint's signing secret in STRIPE_WEBHOOK_SECRET.
+ * Point a Stripe webhook endpoint at that URL, subscribed to the events
+ * StripePaymentService::handleWebhook() acts on, and put the endpoint's
+ * signing secret in STRIPE_WEBHOOK_SECRET:
+ *
+ *   checkout.session.completed            checkout.session.async_payment_succeeded
+ *   checkout.session.async_payment_failed checkout.session.expired
+ *   payment_intent.succeeded              payment_intent.payment_failed
+ *   charge.refunded                       charge.dispute.created
+ *   charge.dispute.funds_withdrawn        charge.dispute.funds_reinstated
+ *   charge.dispute.closed                 payout.paid
+ *   payout.failed
+ *
+ * Locally, `stripe listen --forward-to <app>/api/webhooks/stripe` delivers
+ * them all and prints the signing secret to use.
  *
  * Status codes are what Stripe acts on: any 2xx stops retries, anything else
  * is retried with backoff for up to three days. So a bad signature is a 400

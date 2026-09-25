@@ -78,6 +78,23 @@ class Invoice extends Model
         $this->items()->update(['status' => 'Paid']);
     }
 
+    /**
+     * Paid when the ledger covers the invoice, Partially Paid when some of it
+     * has arrived, left alone when nothing has.
+     *
+     * Decided from completed ledger rows, not from the payment just recorded,
+     * so a statement paid in parts across channels reads correctly, and a
+     * payment still awaiting confirmation changes nothing.
+     */
+    public function settleFromLedger(): void
+    {
+        if ($this->balanceRemainingMinor() <= 0) {
+            $this->markPaid();
+        } elseif ($this->amountPaidMinor() > 0) {
+            $this->update(['status' => 'Partially Paid']);
+        }
+    }
+
     public function scopeOutstanding($query)
     {
         return $query->whereIn('status', ['Unpaid', 'Overdue', 'Partially Paid']);

@@ -5,12 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Models\PaymentLink;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Payments\PaymentOrchestratorService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -73,7 +75,13 @@ class UniversalPaymentLinkController extends Controller
         $paymentLink = PaymentLink::where('token', $token)->where('active', true)->firstOrFail();
 
         $validated = $request->validate([
-            'channel' => ['required', 'string'],
+            // Office-confirmed channels only: a stranger has no Community
+            // Wallet, and card needs a Stripe Checkout flow this page lacks.
+            // An unregistered key used to reach getDriver() and throw a 500.
+            'channel' => ['required', 'string', Rule::in(array_values(array_filter(
+                $this->orchestrator->channelKeys(),
+                fn (string $key) => $this->orchestrator->requiresOfficeConfirmation($key),
+            )))],
             'payer_name' => ['required', 'string', 'max:100'],
             'lot' => ['required', 'string', 'max:50'],
             'custom_amount' => ['nullable', 'numeric', 'min:1'],
@@ -106,6 +114,8 @@ class UniversalPaymentLinkController extends Controller
             channel: $validated['channel'],
             reference: $settlement['reference'] ?? ('LINK-'.strtoupper(bin2hex(random_bytes(4)))),
             paymentLink: $paymentLink,
+            // Recorded as pending: the office confirms it before it counts.
+            status: Transaction::STATUS_PENDING,
             notes: "Paid by {$validated['payer_name']} ({$validated['lot']}) via {$validated['channel']} in {$paymentLink->currency}",
             currency: $paymentLink->currency
         );

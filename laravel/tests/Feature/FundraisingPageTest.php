@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\Fundraiser;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -130,6 +131,9 @@ class FundraisingPageTest extends TestCase
                 'currency' => 'USD',          // ignored
                 'donor_name' => 'Marcus V.',
                 'is_anonymous' => false,
+                // Card gifts are recorded from Stripe's confirmation (see
+                // StripeDonationTest); an office channel records immediately.
+                'channel' => 'cash_office',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
@@ -171,8 +175,13 @@ class FundraisingPageTest extends TestCase
                 'amount' => 100,
                 'donor_name' => 'Should Not Appear',
                 'is_anonymous' => true,
+                'channel' => 'cash_office',
             ])
             ->assertRedirect();
+
+        // The public feed shows confirmed gifts only.
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.transactions.confirm', Transaction::sole()));
 
         $response = $this->actingAs($this->resident())->get('/dashboard/fundraising');
 
@@ -487,6 +496,7 @@ class FundraisingPageTest extends TestCase
                 'amount' => 50,
                 'is_recurring' => true,
                 'frequency' => 'quarterly',
+                'channel' => 'cash_office',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');

@@ -58,6 +58,7 @@ import { Button } from '@/components/ui/button';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/toaster';
+import { FlashToaster } from '@/components/flash-toaster';
 import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider } from '@/context/theme-context';
 import { EmergencyBroadcastBanner } from '@/components/dashboard/emergency-broadcast-banner';
@@ -319,6 +320,7 @@ export default function DashboardLayout({
       </SidebarInset>
 
           <Toaster />
+          <FlashToaster />
         </SidebarProvider>
       </BrandingProvider>
       </ThemeProvider>

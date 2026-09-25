@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
+use App\Services\StripePaymentService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -351,31 +352,91 @@ class RealWorldWorkflowE2ETest extends TestCase
 
         $this->assertSame(0, $fundraiser->raisedMinor());
 
-        // 2. Donation & Payment: Resident submits a $150.00 donation via card channel
+        // 2. Donation: Resident gives $150.00 by card and is sent to Stripe
+        //    Checkout. Only the session is stubbed; settlement below runs the
+        //    real service. Nothing is recorded until Stripe confirms payment —
+        //    the card driver used to record the gift right here, unpaid.
+        $checkout = new class extends StripePaymentService
+        {
+            /** @var array<string, string> */
+            public array $metadata = [];
+
+            public function createDonationCheckoutSession($fundraiser, $donor, int $amountMinor, array $details, string $successUrl, string $cancelUrl): string
+            {
+                $this->metadata = [
+                    'purpose' => 'donation',
+                    'fundraiser_id' => (string) $fundraiser->id,
+                    'user_id' => (string) $donor->id,
+                    'donor_name' => $details['donor_name'],
+                    'is_anonymous' => $details['is_anonymous'] ? '1' : '0',
+                    'is_recurring' => '0',
+                    'frequency' => '',
+                ];
+
+                return 'https://checkout.stripe.com/c/pay/cs_test_e2e_donation';
+            }
+        };
+        $this->app->instance(StripePaymentService::class, $checkout);
+
         $this->actingAs($this->homeowner);
 
-        $donateResponse = $this->post(route('dashboard.fundraising.donate', $fundraiser->id), [
+        $this->post(route('dashboard.fundraising.donate', $fundraiser->id), [
             'amount' => 150.00,
             'donor_name' => 'Thelwell Household',
             'is_anonymous' => false,
             'channel' => 'card',
+        ])->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_e2e_donation');
+
+        $this->assertSame(0, Donation::count());
+        $this->assertSame(0, $fundraiser->fresh()->raisedMinor());
+
+        // 3. Webhook: Stripe reports the paid session, twice, as it may.
+        $payload = json_encode([
+            'id' => 'evt_e2e_donation_paid',
+            'object' => 'event',
+            'type' => 'checkout.session.completed',
+            'data' => [
+                'object' => [
+                    'id' => 'cs_test_e2e_donation',
+                    'object' => 'checkout.session',
+                    'client_reference_id' => "donation-{$fundraiser->id}-{$this->homeowner->id}",
+                    'payment_status' => 'paid',
+                    'payment_intent' => 'pi_test_e2e_donation',
+                    'amount_total' => 15000,
+                    'currency' => 'usd',
+                    'metadata' => $checkout->metadata,
+                ],
+            ],
         ]);
 
-        $donateResponse->assertRedirect();
+        foreach ([1, 2] as $attempt) {
+            $timestamp = time();
+            $signature = hash_hmac('sha256', "{$timestamp}.{$payload}", self::STRIPE_WEBHOOK_SECRET);
 
-        // 3. Donation Recorded: Verified record saved with unique receipt number
+            $this->call('POST', '/api/webhooks/stripe', [], [], [], [
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_STRIPE_SIGNATURE' => "t={$timestamp},v1={$signature}",
+            ], $payload)->assertOk();
+        }
+
+        // 4. Donation Recorded once, with a unique receipt number
+        $this->assertSame(1, Donation::count());
+        $this->assertSame(1, Transaction::where('reference', 'stripe:pi_test_e2e_donation')->count());
+
         $donation = Donation::where('fundraiser_id', $fundraiser->id)->latest('id')->first();
         $this->assertNotNull($donation);
         $this->assertSame(15000, $donation->amount_minor);
         $this->assertSame('completed', $donation->status);
         $this->assertStringStartsWith('DON-REC-', $donation->receipt_number);
         $this->assertSame($this->homeowner->id, $donation->user_id);
+        $this->assertSame('Thelwell Household', $donation->donor_name);
+        $this->assertSame('stripe_card', $donation->payment_channel);
 
-        // 4. Receipt generated
+        // 5. Receipt generated
         $receiptResponse = $this->get(route('dashboard.fundraising.donation.receipt', $donation->id));
         $receiptResponse->assertStatus(200);
 
-        // 5. Campaign Total: Real-time net balance reflects contribution
+        // 6. Campaign Total: Real-time net balance reflects contribution
         $fundraiser->refresh();
         $this->assertSame(15000, $fundraiser->raisedMinor());
         $this->assertSame(150.00, $fundraiser->raised());

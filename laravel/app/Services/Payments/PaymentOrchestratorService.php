@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
 use App\Models\Transaction;
@@ -17,10 +18,24 @@ use App\Services\Payments\Drivers\PeerPaymentDriver;
 use App\Services\Payments\Drivers\QrPaymentDriver;
 use App\Services\Payments\Drivers\StripeCardDriver;
 use App\Services\StripePaymentService;
+use DomainException;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 class PaymentOrchestratorService
 {
+    /**
+     * Channels whose money the app itself can see move.
+     *
+     * The wallet debits a balance held in this database. Card is taken by
+     * Stripe Checkout and never settles through a driver. Every other channel
+     * — bank wire, cash, QR, NFC, Apple/Google/Samsung Pay, Zelle, Cash App —
+     * has a driver that cannot see the money, and used to report success for
+     * any amount anyone typed. Those payments are recorded as pending and
+     * count only once an administrator confirms the money arrived.
+     */
+    private const SELF_VERIFYING_CHANNELS = ['wallet', 'card'];
+
     /** @var array<string, PaymentDriverInterface> */
     protected array $drivers = [];
 
@@ -66,6 +81,88 @@ class PaymentOrchestratorService
         return $this->drivers[$key];
     }
 
+    /** Whether a payment by this channel waits for an administrator to confirm it. */
+    public function requiresOfficeConfirmation(string $channel): bool
+    {
+        return ! in_array($channel, self::SELF_VERIFYING_CHANNELS, true);
+    }
+
+    /**
+     * An administrator confirms that a pending payment's money arrived.
+     *
+     * The payment becomes `completed`; the line items the resident chose are
+     * marked Paid; the invoice is settled from the ledger; a pending donation
+     * becomes a completed one and starts counting towards its campaign.
+     *
+     * @throws DomainException when the payment is not awaiting confirmation
+     */
+    public function confirmPendingPayment(Transaction $payment, User $admin): Transaction
+    {
+        return DB::transaction(function () use ($payment, $admin): Transaction {
+            $payment = Transaction::query()->lockForUpdate()->findOrFail($payment->id);
+
+            if (! $payment->isPending()) {
+                throw new DomainException("Payment {$payment->reference} is not awaiting confirmation.");
+            }
+
+            $payment->update([
+                'status' => 'completed',
+                'reviewed_by' => $admin->id,
+                'reviewed_at' => now(),
+                'settled_at' => now(),
+            ]);
+
+            if ($payment->invoice) {
+                if ($payment->invoice_item_ids) {
+                    InvoiceItem::query()
+                        ->where('invoice_id', $payment->invoice_id)
+                        ->whereKey($payment->invoice_item_ids)
+                        ->update(['status' => 'Paid']);
+                }
+
+                $payment->invoice->settleFromLedger();
+            }
+
+            $payment->donation?->update(['status' => 'completed', 'donated_at' => now()]);
+
+            $admin->recordActivity("Confirmed {$payment->payment_channel} payment {$payment->reference} of {$payment->currency} ".number_format($payment->amount_minor / 100, 2));
+
+            return $payment;
+        });
+    }
+
+    /**
+     * An administrator records that a pending payment's money never arrived.
+     *
+     * Nothing it would have paid changes; a pending donation is marked
+     * rejected so it never counts.
+     *
+     * @throws DomainException when the payment is not awaiting confirmation
+     */
+    public function rejectPendingPayment(Transaction $payment, User $admin, ?string $reason = null): Transaction
+    {
+        return DB::transaction(function () use ($payment, $admin, $reason): Transaction {
+            $payment = Transaction::query()->lockForUpdate()->findOrFail($payment->id);
+
+            if (! $payment->isPending()) {
+                throw new DomainException("Payment {$payment->reference} is not awaiting confirmation.");
+            }
+
+            $payment->update([
+                'status' => 'rejected',
+                'reviewed_by' => $admin->id,
+                'reviewed_at' => now(),
+                'notes' => trim(($payment->notes ?? '').' | Rejected: '.($reason ?: 'payment not received'), ' |'),
+            ]);
+
+            $payment->donation?->update(['status' => 'rejected']);
+
+            $admin->recordActivity("Rejected {$payment->payment_channel} payment {$payment->reference}".($reason ? ": {$reason}" : ''));
+
+            return $payment;
+        });
+    }
+
     /**
      * Get active channels configured for the estate.
      */
@@ -85,6 +182,7 @@ class PaymentOrchestratorService
                     'instructions' => $setting?->instructions,
                     'account_identifier' => $setting?->account_identifier,
                     'fee_surcharge_percent' => (float) ($setting?->fee_surcharge_percent ?? 0),
+                    'requires_confirmation' => $this->requiresOfficeConfirmation($key),
                 ];
             }
         }

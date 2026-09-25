@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\UserRole;
 use App\Models\Donation;
 use App\Models\Fundraiser;
 use App\Models\Invoice;
@@ -112,6 +113,13 @@ class PaymentOwnershipTest extends TestCase
                 'amount' => 1000,
                 'invoice_id' => $invoice->id,
             ])
+            ->assertSessionHasNoErrors();
+
+        // Cash is confirmed by the office before it settles anything.
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.transactions.confirm', Transaction::sole()))
             ->assertSessionHasNoErrors();
 
         $this->assertSame('Paid', $invoice->fresh()->status);
@@ -316,7 +324,7 @@ class PaymentOwnershipTest extends TestCase
 
         $this->actingAs($donor)->post(
             route('dashboard.fundraising.donate', ['fundraiser' => $fundraiser->id]),
-            ['amount' => 500],
+            ['amount' => 500, 'channel' => 'cash_office'],
         );
 
         $donation = Donation::latest('id')->first();
@@ -324,6 +332,14 @@ class PaymentOwnershipTest extends TestCase
         $this->actingAs($this->homeowner())
             ->get(route('dashboard.fundraising.donation.receipt', ['donation' => $donation->id]))
             ->assertForbidden();
+
+        // No receipt until the office confirms the cash arrived.
+        $this->actingAs($donor)
+            ->get(route('dashboard.fundraising.donation.receipt', ['donation' => $donation->id]))
+            ->assertStatus(409);
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.transactions.confirm', Transaction::where('donation_id', $donation->id)->sole()));
 
         $this->actingAs($donor)
             ->get(route('dashboard.fundraising.donation.receipt', ['donation' => $donation->id]))

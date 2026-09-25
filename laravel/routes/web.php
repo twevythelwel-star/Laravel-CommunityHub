@@ -334,6 +334,8 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
             ->middleware('can:manageFundraisers')
             ->name('fundraising.store');
         Route::post('/fundraising/{fundraiser}/donate', [FundraisingController::class, 'donate'])->name('fundraising.donate');
+        Route::get('/fundraising/{fundraiser}/donate/stripe-success', [FundraisingController::class, 'donationStripeSuccess'])->name('fundraising.donate.stripe.success');
+        Route::get('/fundraising/{fundraiser}/donate/stripe-cancel', [FundraisingController::class, 'donationStripeCancel'])->name('fundraising.donate.stripe.cancel');
         // Backs the card's "Enable Now", which had no handler and no endpoint.
         Route::patch('/fundraising/{fundraiser}', [FundraisingController::class, 'update'])
             ->middleware('can:manageFundraisers')
@@ -384,6 +386,8 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
             Route::post('/billing/channels/{channel}/toggle', [BillingController::class, 'toggleChannel'])->name('billing.channels.toggle');
             Route::post('/billing/payment-plans', [BillingController::class, 'storePaymentPlan'])->name('billing.payment-plans.store');
             Route::post('/billing/reconciliations', [BillingController::class, 'storeReconciliation'])->name('billing.reconciliations.store');
+            Route::post('/billing/transactions/{transaction}/confirm', [BillingController::class, 'confirmPayment'])->name('billing.transactions.confirm');
+            Route::post('/billing/transactions/{transaction}/reject', [BillingController::class, 'rejectPayment'])->name('billing.transactions.reject');
         });
         Route::get('/billing/transactions/{transaction}/receipt', [BillingController::class, 'downloadReceipt'])->name('billing.transactions.receipt');
         Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])

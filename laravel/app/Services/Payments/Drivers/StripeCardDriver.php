@@ -3,8 +3,20 @@
 namespace App\Services\Payments\Drivers;
 
 use App\Services\StripePaymentService;
-use Illuminate\Support\Str;
+use LogicException;
 
+/**
+ * The card channel's entry in the orchestrator.
+ *
+ * Card money is taken only by Stripe Checkout, and recorded only when Stripe
+ * confirms it — see StripePaymentService and the `card` branches of
+ * BillingController::pay() and FundraisingController::donate().
+ *
+ * initiate() and settle() used to invent a "pi_..._secret_..." client secret
+ * and a "STRIPE-..." reference and report success, so any caller that settled
+ * the card channel through the orchestrator recorded a completed payment with
+ * no money taken. They now refuse, so a new caller fails loudly instead.
+ */
 class StripeCardDriver implements PaymentDriverInterface
 {
     public function __construct(
@@ -23,25 +35,11 @@ class StripeCardDriver implements PaymentDriverInterface
 
     public function initiate(array $params): array
     {
-        $amountMinor = $params['amount_minor'] ?? 0;
-        $currency = $params['currency'] ?? 'JMD';
-        $clientSecret = 'pi_'.Str::random(24).'_secret_'.Str::random(16);
-
-        return [
-            'type' => 'card',
-            'client_secret' => $clientSecret,
-            'amount_minor' => $amountMinor,
-            'currency' => $currency,
-            'instructions' => 'Payment processed securely via Stripe Elements.',
-        ];
+        throw new LogicException('Card payments start a Stripe Checkout session; see StripePaymentService.');
     }
 
     public function settle(array $params): array
     {
-        return [
-            'success' => true,
-            'reference' => 'STRIPE-'.strtoupper(Str::random(10)),
-            'notes' => 'Settled via Stripe Checkout / Elements.',
-        ];
+        throw new LogicException('Card payments settle only from Stripe\'s confirmation; see StripePaymentService.');
     }
 }

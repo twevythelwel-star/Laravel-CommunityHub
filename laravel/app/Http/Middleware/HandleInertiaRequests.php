@@ -8,6 +8,7 @@ use App\Models\Community;
 use App\Models\Warning;
 use App\Services\GeofenceService;
 use App\Services\SmsService;
+use App\Services\StripePaymentService;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -103,9 +104,19 @@ class HandleInertiaRequests extends Middleware
                 'whatsapp' => app(WhatsAppService::class)->isConfigured(),
             ] : null,
 
+            /*
+             | Whether card payments reach a real processor. The card options
+             | describe Stripe Checkout when this is true, and say card payment
+             | is unavailable otherwise, rather than offering a button that fails.
+             */
+            'payments' => fn () => $user ? [
+                'cardCheckout' => app(StripePaymentService::class)->isLive(),
+            ] : null,
+
             'flash' => [
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
+                'info' => fn () => $request->session()->get('info'),
             ],
 
             'ziggy' => fn () => [

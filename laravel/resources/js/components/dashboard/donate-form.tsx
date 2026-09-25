@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -41,6 +41,7 @@ import {
   Share2,
   Repeat,
   ShieldCheck,
+  Clock,
 } from 'lucide-react';
 import { ShareCampaignDialog } from './share-campaign-dialog';
 
@@ -84,10 +85,18 @@ export function DonateForm({
   const [completedDonation, setCompletedDonation] = useState<{
     amount: number;
     receiptUrl?: string;
+    /** Office channels: the gift counts once the office confirms the money arrived. */
+    awaitingConfirmation: boolean;
   } | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
 
   const selectedChannel = channels.find((c) => c.key === channelKey) ?? null;
+
+  // The server treats a missing channel as card, so this does too.
+  const isCardGift = (channelKey ?? 'card') === 'card';
+  const cardCheckout = Boolean(
+    (usePage().props as { payments?: { cardCheckout?: boolean } | null }).payments?.cardCheckout,
+  );
   const suggestedPills = fundraiser.suggestedAmounts ?? [1000, 2500, 5000, 10000];
 
   const form = useForm<DonateFormValues>({
@@ -121,13 +130,18 @@ export function DonateForm({
       {
         preserveScroll: true,
         onSuccess: () => {
+          const awaitingConfirmation = Boolean(selectedChannel?.requires_confirmation);
+
           setCompletedDonation({
             amount: values.amount,
             receiptUrl: `/dashboard/fundraising`, // Receipt will be available on the card and profile
+            awaitingConfirmation,
           });
           toast({
-            title: 'Contribution Recorded',
-            description: `Thank you! ${values.amount} ${fundraiser.currency} recorded against "${fundraiser.title}".`,
+            title: awaitingConfirmation ? 'Gift submitted' : 'Contribution Recorded',
+            description: awaitingConfirmation
+              ? `Thank you! ${values.amount} ${fundraiser.currency} will count towards "${fundraiser.title}" once the office confirms it.`
+              : `Thank you! ${values.amount} ${fundraiser.currency} recorded against "${fundraiser.title}".`,
           });
         },
         onError: (errors) => {
@@ -172,19 +186,33 @@ export function DonateForm({
                   <strong className="text-foreground">
                     {fundraiser.currency} {completedDonation.amount.toLocaleString()}
                   </strong>{' '}
-                  to &ldquo;{fundraiser.title}&rdquo; has been officially registered.
+                  to &ldquo;{fundraiser.title}&rdquo;{' '}
+                  {completedDonation.awaitingConfirmation ? 'has been submitted.' : 'has been officially registered.'}
                 </p>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border text-left text-xs space-y-2">
-                <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <ShieldCheck className="h-4 w-4" />
-                  <span>Audited Community Record</span>
+              {completedDonation.awaitingConfirmation ? (
+                <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-lg border border-amber-200 dark:border-amber-800 text-left text-xs space-y-2">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-semibold">
+                    <Clock className="h-4 w-4" />
+                    <span>Awaiting office confirmation</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Once the community office sees your payment arrive, your gift counts towards the campaign and
+                    your receipt appears under &ldquo;My Contributions&rdquo;.
+                  </p>
                 </div>
-                <p className="text-muted-foreground leading-relaxed">
-                  Your contribution has been recorded in the Master Ledger. An official PDF receipt is available to download below or anytime under &ldquo;My Contributions&rdquo;.
-                </p>
-              </div>
+              ) : (
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border text-left text-xs space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold">
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>Audited Community Record</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Your contribution has been recorded in the Master Ledger. An official PDF receipt is available to download below or anytime under &ldquo;My Contributions&rdquo;.
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-2 pt-2">
                 <Button
@@ -345,6 +373,14 @@ export function DonateForm({
                   </div>
                 )}
 
+                {isCardGift && (
+                  <p className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
+                    {cardCheckout
+                      ? "You'll finish on Stripe's secure checkout. Your gift is recorded, with a receipt, once Stripe confirms it."
+                      : 'Card donations are not available yet. Please choose another method.'}
+                  </p>
+                )}
+
                 {/* Anonymous Donation Switch */}
                 {fundraiser.allowAnonymous && (
                   <FormField
@@ -386,9 +422,11 @@ export function DonateForm({
                   <Button type="button" variant="outline" onClick={() => handleClose(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={submitting} className="gap-2">
+                  <Button type="submit" disabled={submitting || (isCardGift && !cardCheckout)} className="gap-2">
                     <HeartHandshake className="h-4 w-4" />
-                    {submitting ? 'Recording...' : `Contribute ${fundraiser.currency} ${Number(currentAmount || 0).toLocaleString()}`}
+                    {submitting
+                      ? isCardGift ? 'Opening checkout...' : 'Recording...'
+                      : `${isCardGift ? 'Continue to checkout' : 'Contribute'} ${fundraiser.currency} ${Number(currentAmount || 0).toLocaleString()}`}
                   </Button>
                 </DialogFooter>
               </form>

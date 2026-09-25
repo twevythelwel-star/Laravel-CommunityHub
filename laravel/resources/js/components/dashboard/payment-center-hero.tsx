@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { channelSurcharge, type PaymentChannel } from '@/lib/payment-channels';
+import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
   DialogContent,
@@ -73,6 +74,11 @@ export function PaymentCenterHero({
    * all every button shows, which keeps older callers working.
    */
   const configuredChannels: PaymentChannel[] = availableChannels ?? [];
+
+  // Shared by HandleInertiaRequests: true only when a Stripe key is configured.
+  const cardCheckout = Boolean(
+    (usePage().props as { payments?: { cardCheckout?: boolean } | null }).payments?.cardCheckout,
+  );
 
   const channelEnabled = (key: string): boolean =>
     configuredChannels.length === 0 || configuredChannels.some((c) => c.key === key);
@@ -167,9 +173,16 @@ export function PaymentCenterHero({
         split_wallet_amount: settlementMode === 'split' ? Number(splitWalletAmount) : undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (page) => {
           setIsProcessing(false);
           setActiveModal(null);
+
+          // Say what happened: an office channel's payment is only submitted
+          // until the office confirms it, and the modal closing said nothing.
+          const message = (page.props as { flash?: { success?: string | null } }).flash?.success;
+          if (message) {
+            toast({ title: 'Payment submitted', description: message });
+          }
         },
         onError: () => {
           setIsProcessing(false);
@@ -649,11 +662,20 @@ export function PaymentCenterHero({
                 */}
                 <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-2">
                   <p className="font-semibold">Card checkout</p>
-                  <p className="text-muted-foreground">
-                    Card payment is not yet in service. When it is, you will be taken to the
-                    payment provider&apos;s own secure page to enter your card details — they are
-                    never typed into Community Hub.
-                  </p>
+                  {cardCheckout ? (
+                    <p className="text-muted-foreground">
+                      You&apos;ll be taken to Stripe&apos;s secure checkout to enter your card
+                      details — they are never typed into Community Hub. Your statement updates
+                      as soon as Stripe confirms the payment. Card payments are charged in the
+                      statement&apos;s currency.
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      Card payment is not yet in service. When it is, you will be taken to the
+                      payment provider&apos;s own secure page to enter your card details — they are
+                      never typed into Community Hub.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -700,11 +722,13 @@ export function PaymentCenterHero({
 
             <Button
               className="w-full font-bold py-3 mt-4"
-              disabled={isProcessing}
+              disabled={isProcessing || ((activeModal || 'card') === 'card' && !cardCheckout)}
               onClick={() => handleConfirmPayment(activeModal || 'card')}
             >
               {isProcessing
                 ? 'Processing Settlement...'
+                : (activeModal || 'card') === 'card'
+                ? `Continue to secure checkout (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`
                 : `Confirm & Authorize Payment (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`}
             </Button>
           </div>

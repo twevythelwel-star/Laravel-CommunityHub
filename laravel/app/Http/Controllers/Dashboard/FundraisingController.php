@@ -9,6 +9,7 @@ use App\Models\Fundraiser;
 use App\Models\FundraiserUpdate;
 use App\Models\Transaction;
 use App\Services\Payments\PaymentOrchestratorService;
+use App\Services\StripePaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,8 @@ use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Stripe\Exception\ApiErrorException;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FundraisingController extends Controller
@@ -63,7 +66,9 @@ class FundraisingController extends Controller
                     'imageUrl' => $u->image_url,
                     'date' => $u->created_at->format('M d, Y'),
                 ]),
+                // Only gifts whose money has arrived; a pending one may yet be rejected.
                 'recentDonations' => $f->donations
+                    ->filter(fn (Donation $d) => $d->isCounted())
                     ->sortByDesc('donated_at')
                     ->take(10)
                     ->map(fn ($d) => [
@@ -85,9 +90,7 @@ class FundraisingController extends Controller
 
         if ($canManage) {
             $totalGoalMinor = Fundraiser::sum('goal_minor');
-            $totalRaisedMinor = (int) Donation::where(function ($q) {
-                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-            })->sum('amount_minor');
+            $totalRaisedMinor = (int) Donation::counted()->sum('amount_minor');
             $totalRefundedMinor = (int) Donation::where('status', 'refunded')->sum('amount_minor');
 
             $adminStats = [
@@ -97,14 +100,8 @@ class FundraisingController extends Controller
                 'totalRaised' => (float) ($totalRaisedMinor / 100),
                 'totalGoal' => (float) ($totalGoalMinor / 100),
                 'totalRefunded' => (float) ($totalRefundedMinor / 100),
-                'totalDonors' => Donation::where(function ($q) {
-                    $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-                })->distinct('user_id')->count('user_id'),
-                'averageDonation' => Donation::where(function ($q) {
-                    $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-                })->avg('amount_minor') ? round((Donation::where(function ($q) {
-                    $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-                })->avg('amount_minor') / 100), 2) : 0,
+                'totalDonors' => Donation::counted()->distinct('user_id')->count('user_id'),
+                'averageDonation' => Donation::counted()->avg('amount_minor') ? round((Donation::counted()->avg('amount_minor') / 100), 2) : 0,
             ];
 
             $donorReports = Donation::with(['fundraiser', 'user'])
@@ -136,9 +133,7 @@ class FundraisingController extends Controller
                 ->where('status', 'completed')
                 ->sum('amount_minor');
 
-            $channelBreakdown = Donation::where(function ($q) {
-                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-            })
+            $channelBreakdown = Donation::counted()
                 ->selectRaw('payment_channel, count(*) as count, sum(amount_minor) as total_minor')
                 ->groupBy('payment_channel')
                 ->get()
@@ -249,7 +244,15 @@ class FundraisingController extends Controller
         return back()->with('success', "\"{$fundraiser->title}\" is now {$validated['status']}.");
     }
 
-    public function donate(Request $request, Fundraiser $fundraiser): RedirectResponse
+    /**
+     * Give to a campaign.
+     *
+     * A card gift goes to Stripe Checkout and is recorded only once Stripe
+     * confirms it (see StripePaymentService::settleDonationSession). It used to
+     * go through the card driver, which returned success for every request, so
+     * the default channel recorded a completed donation with no money taken.
+     */
+    public function donate(Request $request, Fundraiser $fundraiser, StripePaymentService $stripe): SymfonyResponse
     {
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1', 'max:100000000'],
@@ -270,6 +273,34 @@ class FundraisingController extends Controller
         $user = $request->user();
         $channel = $validated['channel'] ?? 'card';
         $amountMinor = (int) round($validated['amount'] * 100);
+
+        if ($channel === 'card') {
+            if (! $stripe->isLive()) {
+                return back()->withErrors(['channel' => 'Card donations are not available yet. Please choose another method.']);
+            }
+
+            try {
+                $checkoutUrl = $stripe->createDonationCheckoutSession(
+                    $fundraiser,
+                    $user,
+                    $amountMinor,
+                    [
+                        'donor_name' => $validated['donor_name'] ?? $user->display_name,
+                        'is_anonymous' => $request->boolean('is_anonymous'),
+                        'is_recurring' => $request->boolean('is_recurring'),
+                        'frequency' => $validated['frequency'] ?? null,
+                    ],
+                    route('dashboard.fundraising.donate.stripe.success', $fundraiser),
+                    route('dashboard.fundraising.donate.stripe.cancel', $fundraiser),
+                );
+            } catch (ApiErrorException $e) {
+                report($e);
+
+                return back()->withErrors(['channel' => 'Card checkout could not be started. Please try again shortly.']);
+            }
+
+            return Inertia::location($checkoutUrl);
+        }
         $receiptNumber = 'DON-REC-'.date('Ymd').'-'.strtoupper(Str::random(5));
 
         // Settle via Payment Orchestrator
@@ -280,6 +311,18 @@ class FundraisingController extends Controller
             'description' => "Contribution to {$fundraiser->title}",
         ]);
 
+        if (! ($settlement['success'] ?? false)) {
+            return back()->withErrors(['channel' => $settlement['notes'] ?? 'The payment could not be taken.']);
+        }
+
+        /*
+         | A gift by bank wire, cash, QR, NFC, a digital wallet, Zelle or Cash
+         | App waits for the office to confirm the money arrived. Until then it
+         | is `pending`: it is left out of every campaign total, the public
+         | donor feed, and receipts. Only the Community Wallet settles here.
+         */
+        $awaitsConfirmation = $this->orchestrator->requiresOfficeConfirmation($channel);
+
         $donation = $fundraiser->donations()->create([
             'user_id' => $user->id,
             'amount_minor' => $amountMinor,
@@ -288,23 +331,36 @@ class FundraisingController extends Controller
             'is_anonymous' => $request->boolean('is_anonymous'),
             'is_recurring' => $request->boolean('is_recurring'),
             'frequency' => $request->boolean('is_recurring') ? ($validated['frequency'] ?? 'monthly') : null,
-            'status' => 'completed',
+            'status' => $awaitsConfirmation ? 'pending' : 'completed',
             'receipt_number' => $receiptNumber,
             'payment_channel' => $channel,
             'donated_at' => now(),
         ]);
 
         // Record in Master Ledger
-        $this->orchestrator->recordTransaction(
+        $payment = $this->orchestrator->recordTransaction(
             user: $user,
             amountMinor: $amountMinor,
             channel: $channel,
             reference: $settlement['reference'] ?? ('DON-'.strtoupper(Str::random(8))),
             fundraiserId: $fundraiser->id,
+            status: $awaitsConfirmation ? Transaction::STATUS_PENDING : 'completed',
             notes: "Donation to {$fundraiser->title} by ".($request->boolean('is_anonymous') ? 'Anonymous' : ($validated['donor_name'] ?? $user->display_name))
+                .($awaitsConfirmation ? '; awaiting office confirmation' : ''),
+            currency: $fundraiser->goal_currency,
         );
 
-        $user->recordActivity('Donated $'.number_format($validated['amount'], 2)." to {$fundraiser->title}");
+        $payment->update(['donation_id' => $donation->id]);
+
+        $amountLabel = "{$fundraiser->goal_currency} ".number_format($validated['amount'], 2);
+
+        if ($awaitsConfirmation) {
+            $user->recordActivity("Pledged {$amountLabel} to {$fundraiser->title} via {$channel}, awaiting confirmation");
+
+            return back()->with('success', 'Thank you! Your gift is recorded as pending and will count towards the campaign once the community office confirms it has arrived.');
+        }
+
+        $user->recordActivity("Donated {$amountLabel} to {$fundraiser->title}");
 
         return back()->with('success', 'Thank you for your generous donation! Your official receipt is available.');
     }
@@ -320,6 +376,10 @@ class FundraisingController extends Controller
 
         if ($donation->status === 'refunded') {
             return back()->withErrors(['refund' => 'This donation has already been refunded.']);
+        }
+
+        if (! $donation->isCounted()) {
+            return back()->withErrors(['refund' => 'Only a confirmed donation can be refunded. Reject a pending one from the billing ledger instead.']);
         }
 
         $donation->update([
@@ -426,6 +486,12 @@ class FundraisingController extends Controller
             'You can only view your own donation receipts.',
         );
 
+        abort_if(
+            in_array($donation->status, ['pending', 'rejected'], true),
+            409,
+            'A receipt is issued once the community office confirms the donation.',
+        );
+
         $donation->load('fundraiser');
         $community = Community::first();
 
@@ -435,6 +501,38 @@ class FundraisingController extends Controller
         ]);
 
         return $pdf->stream('donation-receipt-'.($donation->receipt_number ?? $donation->id).'.pdf');
+    }
+
+    /**
+     * The donor returning from Stripe Checkout. The session is checked with
+     * Stripe before anything is recorded; see completeDonation().
+     */
+    public function donationStripeSuccess(Request $request, Fundraiser $fundraiser, StripePaymentService $stripe): RedirectResponse
+    {
+        abort_unless($stripe->isLive(), 404);
+
+        $validated = $request->validate([
+            'session_id' => ['required', 'string', 'max:255'],
+        ]);
+
+        if (! $stripe->completeDonation($fundraiser, $request->user(), $validated['session_id'])) {
+            return redirect()->route('dashboard.fundraising')->with(
+                'error',
+                'We could not confirm your donation with Stripe. If you were charged, please contact the community office.',
+            );
+        }
+
+        return redirect()->route('dashboard.fundraising')
+            ->with('success', "Thank you for supporting \"{$fundraiser->title}\"! Your receipt is ready.");
+    }
+
+    /** The donor backed out of Stripe Checkout. */
+    public function donationStripeCancel(Fundraiser $fundraiser, StripePaymentService $stripe): RedirectResponse
+    {
+        abort_unless($stripe->isLive(), 404);
+
+        return redirect()->route('dashboard.fundraising')
+            ->with('info', 'Donation cancelled. You have not been charged.');
     }
 
     public function addUpdate(Request $request, Fundraiser $fundraiser): RedirectResponse

@@ -17,6 +17,8 @@ class Transaction extends Model
         'invoice_item_id',
         'payment_link_id',
         'fundraiser_id',
+        'donation_id',
+        'invoice_item_ids',
         'amount_minor',
         'fee_minor',
         'net_amount_minor',
@@ -24,6 +26,8 @@ class Transaction extends Model
         'payment_channel',
         'reference',
         'status',
+        'reviewed_by',
+        'reviewed_at',
         'settled_at',
         'payout_reference',
         'dispute_reason',
@@ -37,7 +41,12 @@ class Transaction extends Model
         'fee_minor' => 'integer',
         'net_amount_minor' => 'integer',
         'settled_at' => 'datetime',
+        'reviewed_at' => 'datetime',
+        'invoice_item_ids' => 'array',
     ];
+
+    /** Recorded for a payment the office must confirm; see PaymentOrchestratorService. */
+    public const STATUS_PENDING = 'pending';
 
     protected static function booted(): void
     {
@@ -70,6 +79,21 @@ class Transaction extends Model
     public function fundraiser(): BelongsTo
     {
         return $this->belongsTo(Fundraiser::class);
+    }
+
+    public function donation(): BelongsTo
+    {
+        return $this->belongsTo(Donation::class);
+    }
+
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
     }
 
     public function formattedAmount(): string

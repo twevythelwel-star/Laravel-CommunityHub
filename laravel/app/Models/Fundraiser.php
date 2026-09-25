@@ -64,9 +64,7 @@ class Fundraiser extends Model
     {
         return (int) $this->donations()
             ->where('currency', $this->goal_currency)
-            ->where(function ($q) {
-                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-            })
+            ->counted()
             ->sum('amount_minor');
     }
 
@@ -100,9 +98,7 @@ class Fundraiser extends Model
     public function donorCount(): int
     {
         return $this->donations()
-            ->where(function ($q) {
-                $q->whereNull('status')->orWhere('status', '!=', 'refunded');
-            })
+            ->counted()
             ->count();
     }
 

@@ -86,12 +86,15 @@ class RevenueEngineTest extends TestCase
 
         $response->assertRedirect();
 
+        // Apple Pay is an office-confirmed channel: recorded, but pending until
+        // an administrator confirms the money arrived.
         $this->assertDatabaseHas('transactions', [
             'user_id' => $resident->id,
             'payment_channel' => 'apple_pay',
-            'status' => 'completed',
+            'status' => 'pending',
             'amount_minor' => 5000000,
         ]);
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
     }
 
     public function test_resident_can_pay_using_community_wallet_split_payment(): void
@@ -194,7 +197,7 @@ class RevenueEngineTest extends TestCase
                 'currency' => $curr,
                 'amount_minor' => 15000,
                 'payment_channel' => 'apple_pay',
-                'status' => 'completed',
+                'status' => 'pending',
             ]);
         }
     }

@@ -10,15 +10,13 @@ return [
     | Off by default, deliberately.
     |
     | `UniversalPaymentLinkController` serves an unauthenticated page that
-    | anyone holding the link can submit. None of the payment drivers take
-    | money — they return a simulated reference — and the controller then
-    | writes a Transaction with status `completed` and answers "Payment
-    | completed successfully".
+    | anyone holding the link can submit. Its payments are now recorded as
+    | `pending` and count only once an administrator confirms them from the
+    | billing ledger, so a submission can no longer settle anything by itself.
     |
-    | So while this is enabled, a stranger with the link can fabricate a settled
-    | payment against the community ledger. Leave it off until a driver
-    | genuinely settles funds and the result is confirmed out-of-band by the
-    | processor rather than by the person submitting the form.
+    | It stays off because the page is not ready: its form still posts a card
+    | channel it has no checkout for, so it needs a "report a payment" form
+    | offering the office-confirmed channels before it is switched on.
     |
     */
 

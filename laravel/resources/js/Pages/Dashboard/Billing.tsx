@@ -186,6 +186,8 @@ type Props = {
   wallet?: WalletData;
   paymentLinks?: PaymentLinkItem[];
   transactions?: Paginated<MasterTransaction>;
+  /** Administrators only: payments awaiting office confirmation. */
+  pendingPayments?: MasterTransaction[];
   payouts?: any[];
   reconciliations?: any[];
   paymentEvents?: {
@@ -223,6 +225,7 @@ export default function BillingPage({
   wallet,
   paymentLinks = [],
   transactions,
+  pendingPayments = [],
   payouts = [],
   reconciliations = [],
   paymentEvents = [],
@@ -931,6 +934,7 @@ export default function BillingPage({
             {transactions ? (
               <TransactionsLedger
                 transactions={transactions}
+                pendingPayments={pendingPayments}
                 currency={settings.currency}
               />
             ) : (

@@ -10,7 +10,9 @@ use App\Services\StripePaymentService;
 use DomainException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Stripe\Exception\ApiErrorException;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Stripe Checkout.
@@ -27,24 +29,40 @@ class StripeCheckoutController extends Controller
 
     /**
      * Initiate Stripe Checkout session for an invoice.
+     *
+     * The Pay button posts here through Inertia, which sends an XHR. An XHR
+     * cannot follow a redirect to checkout.stripe.com, so the plain
+     * `redirect()->away()` this used to return left the resident on the
+     * billing page with nothing happening. Inertia::location() answers an
+     * Inertia request with a 409 and X-Inertia-Location, which makes the client
+     * do a full-page visit; a non-Inertia request still gets a normal redirect.
      */
-    public function checkout(Request $request, Invoice $invoice): RedirectResponse
+    public function checkout(Request $request, Invoice $invoice): Response
     {
         $this->ensureEnabled();
         $this->authorizeInvoice($request->user(), $invoice);
 
-        if ($invoice->status === 'Paid') {
+        if (in_array($invoice->status, ['Paid', 'Waived'], true)) {
             return redirect()->route('dashboard.billing')
-                ->with('status', "Invoice {$invoice->reference} is already settled.");
+                ->with('success', "Invoice {$invoice->reference} is already settled.");
         }
 
-        $checkoutUrl = $this->stripe->createCheckoutSession(
-            $invoice,
-            route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]),
-            route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]),
-        );
+        try {
+            $checkoutUrl = $this->stripe->createCheckoutSession(
+                $invoice,
+                route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]),
+                route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]),
+            );
+        } catch (ApiErrorException $e) {
+            report($e);
 
-        return redirect()->away($checkoutUrl);
+            return redirect()->route('dashboard.billing')->with(
+                'error',
+                "Card checkout for invoice {$invoice->reference} could not be started. Please try again shortly.",
+            );
+        }
+
+        return Inertia::location($checkoutUrl);
     }
 
     /**
@@ -91,7 +109,7 @@ class StripeCheckoutController extends Controller
         $this->authorizeInvoice($request->user(), $invoice);
 
         return redirect()->route('dashboard.billing')
-            ->with('status', "Payment cancelled for invoice {$invoice->reference}. No charges were made.");
+            ->with('info', "Payment cancelled for invoice {$invoice->reference}. No charges were made.");
     }
 
     /**

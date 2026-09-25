@@ -29,6 +29,8 @@ export type PaymentChannel = {
   instructions?: string | null;
   account_identifier?: string | null;
   fee_surcharge_percent?: number;
+  /** True for channels the office must confirm before the payment counts. */
+  requires_confirmation?: boolean;
 };
 
 type ChannelPresentation = {

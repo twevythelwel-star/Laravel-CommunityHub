@@ -3,10 +3,12 @@
 namespace Tests\Feature;
 
 use App\Models\Invoice;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
+use Stripe\Exception\ApiConnectionException;
 use Tests\TestCase;
 
 /**
@@ -205,5 +207,127 @@ class StripeBillingTest extends TestCase
 
         $response->assertOk();
         $response->assertHeader('content-type', 'application/pdf');
+    }
+
+    // ── Reaching Stripe from the app ──
+
+    public function test_an_inertia_checkout_is_sent_to_stripe_as_a_full_page_visit(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-009');
+
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldReceive('createCheckoutSession')->once()->andReturn('https://checkout.stripe.com/c/pay/cs_test_9');
+        });
+
+        // The Pay button posts through Inertia (an XHR), which cannot follow a
+        // 302 to another origin. Inertia's 409 + X-Inertia-Location makes the
+        // client leave the page for Stripe instead.
+        $this->actingAs($user)
+            ->withHeaders(['X-Inertia' => 'true'])
+            ->post(route('dashboard.billing.stripe.checkout', ['invoice' => $invoice->id]))
+            ->assertStatus(409)
+            ->assertHeader('X-Inertia-Location', 'https://checkout.stripe.com/c/pay/cs_test_9');
+    }
+
+    public function test_a_stripe_outage_at_checkout_is_reported_not_thrown(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-010');
+
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldReceive('createCheckoutSession')->andThrow(ApiConnectionException::factory('Stripe is unreachable'));
+        });
+
+        $this->actingAs($user)
+            ->post(route('dashboard.billing.stripe.checkout', ['invoice' => $invoice->id]))
+            ->assertRedirect(route('dashboard.billing'))
+            ->assertSessionHas('error');
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+    }
+
+    // ── The Payment Center's card option ──
+
+    public function test_paying_by_card_goes_to_stripe_for_the_chosen_amount_and_records_nothing_yet(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-011');
+
+        $this->stripeConfigured(function (MockInterface $mock) use ($invoice) {
+            $mock->shouldReceive('createCheckoutSession')
+                ->once()
+                ->withArgs(fn (Invoice $paid, string $success, string $cancel, ?int $amountMinor) => $paid->is($invoice) && $amountMinor === 10000)
+                ->andReturn('https://checkout.stripe.com/c/pay/cs_test_11');
+        });
+
+        $this->actingAs($user)
+            ->post(route('dashboard.billing.pay'), [
+                'channel' => 'card',
+                'amount' => 100.00,
+                'currency' => 'USD',
+                'invoice_id' => $invoice->id,
+            ])
+            ->assertRedirect('https://checkout.stripe.com/c/pay/cs_test_11');
+
+        // The card driver used to answer "success" here and settle the invoice.
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertSame(0, Transaction::count());
+    }
+
+    public function test_paying_by_card_without_stripe_is_refused_and_settles_nothing(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-012');
+
+        $this->actingAs($user)
+            ->post(route('dashboard.billing.pay'), [
+                'channel' => 'card',
+                'amount' => 250.00,
+                'currency' => 'USD',
+                'invoice_id' => $invoice->id,
+            ])
+            ->assertSessionHasErrors('channel');
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertSame(0, Transaction::count());
+    }
+
+    public function test_a_card_payment_above_the_balance_is_refused(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-013');
+
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldNotReceive('createCheckoutSession');
+        });
+
+        $this->actingAs($user)
+            ->post(route('dashboard.billing.pay'), [
+                'channel' => 'card',
+                'amount' => 300.00,
+                'currency' => 'USD',
+                'invoice_id' => $invoice->id,
+            ])
+            ->assertSessionHasErrors('amount');
+    }
+
+    public function test_a_card_payment_must_be_in_the_statement_currency(): void
+    {
+        $user = User::factory()->create();
+        $invoice = $this->invoiceFor($user, 'INV-TEST-014');
+
+        $this->stripeConfigured(function (MockInterface $mock) {
+            $mock->shouldNotReceive('createCheckoutSession');
+        });
+
+        $this->actingAs($user)
+            ->post(route('dashboard.billing.pay'), [
+                'channel' => 'card',
+                'amount' => 100.00,
+                'currency' => 'JMD',
+                'invoice_id' => $invoice->id,
+            ])
+            ->assertSessionHasErrors('currency');
     }
 }

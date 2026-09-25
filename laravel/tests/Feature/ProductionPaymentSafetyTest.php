@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\StripeEvent;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\StripePaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -59,6 +60,58 @@ class ProductionPaymentSafetyTest extends TestCase
             'CONTENT_TYPE' => 'application/json',
             'HTTP_STRIPE_SIGNATURE' => "t={$timestamp},v1={$signature}",
         ], $payload);
+    }
+
+    /** A completed Stripe payment that settled the invoice, as settleSession() records it. */
+    private function paidByStripe(Invoice $invoice, string $paymentIntent): void
+    {
+        Transaction::create([
+            'user_id' => $invoice->user_id,
+            'invoice_id' => $invoice->id,
+            'amount_minor' => $invoice->amount_minor,
+            'currency' => $invoice->currency,
+            'payment_channel' => 'stripe_card',
+            'reference' => "stripe:{$paymentIntent}",
+            'status' => 'completed',
+        ]);
+
+        $invoice->forceFill(['stripe_payment_intent' => $paymentIntent])->save();
+        $invoice->markPaid();
+    }
+
+    /** @return array<string, mixed> */
+    private function dispute(string $id, string $paymentIntent, string $status): array
+    {
+        return [
+            'id' => $id,
+            'object' => 'dispute',
+            'payment_intent' => $paymentIntent,
+            'amount' => 50000,
+            'currency' => 'usd',
+            'status' => $status,
+            'reason' => 'fraudulent',
+        ];
+    }
+
+    /**
+     * Stand in for Stripe's list of the charges a payout carried.
+     *
+     * @param  array<string, array{fee_minor: int, currency: string}>  $charges
+     */
+    private function payoutContains(array $charges): void
+    {
+        $this->app->instance(StripePaymentService::class, new class($charges) extends StripePaymentService
+        {
+            public function __construct(private array $charges)
+            {
+                parent::__construct();
+            }
+
+            protected function payoutCharges(string $payoutId): array
+            {
+                return $this->charges;
+            }
+        });
     }
 
     // ── 1. Failed Payments ──
@@ -184,7 +237,9 @@ class ProductionPaymentSafetyTest extends TestCase
 
         $tx = Transaction::where('reference', 'stripe-dispute:dp_test_dispute_2:won')->first();
         $this->assertNotNull($tx);
-        $this->assertSame('completed', $tx->status);
+        // Not `completed`: the original payment already is, and a second
+        // completed row counted the same money as collected twice.
+        $this->assertSame('reinstated', $tx->status);
     }
 
     public function test_dispute_closed_lost_marks_invoice_unpaid(): void
@@ -206,7 +261,60 @@ class ProductionPaymentSafetyTest extends TestCase
 
         $tx = Transaction::where('reference', 'stripe-dispute:dp_test_dispute_3:lost')->first();
         $this->assertNotNull($tx);
-        $this->assertSame('failed', $tx->status);
+        $this->assertSame('refunded', $tx->status);
+        $this->assertNull($invoice->paid_at);
+    }
+
+    public function test_a_won_dispute_does_not_count_the_payment_twice(): void
+    {
+        $invoice = $this->invoice();
+        $this->paidByStripe($invoice, 'pi_won_once');
+
+        $this->deliver('charge.dispute.created', $this->dispute('dp_won_once', 'pi_won_once', 'needs_response'))->assertOk();
+        $this->deliver('charge.dispute.closed', $this->dispute('dp_won_once', 'pi_won_once', 'won'))->assertOk();
+
+        $this->assertSame('Paid', $invoice->fresh()->status);
+        $this->assertSame(50000, (int) Transaction::where('status', 'completed')->sum('amount_minor'));
+        $this->assertSame(50000, $invoice->fresh()->amountPaidMinor());
+    }
+
+    public function test_a_lost_dispute_takes_the_payment_off_the_invoice(): void
+    {
+        $invoice = $this->invoice();
+        $this->paidByStripe($invoice, 'pi_lost');
+
+        $this->deliver('charge.dispute.closed', $this->dispute('dp_lost', 'pi_lost', 'lost'))->assertOk();
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertSame(0, $invoice->fresh()->amountPaidMinor());
+    }
+
+    public function test_a_dispute_is_matched_to_its_own_payment_not_the_first_one_on_file(): void
+    {
+        $bystander = $this->invoice();
+        $this->paidByStripe($bystander, 'pi_bystander');
+
+        $disputed = $this->invoice();
+        $this->paidByStripe($disputed, 'pi_disputed');
+
+        // No metadata: Stripe's dispute object names the PaymentIntent.
+        $this->deliver('charge.dispute.created', $this->dispute('dp_matched', 'pi_disputed', 'needs_response'))
+            ->assertOk()->assertJson(['outcome' => 'disputed']);
+
+        $this->assertSame('Disputed', $disputed->fresh()->status);
+        $this->assertSame('Paid', $bystander->fresh()->status);
+    }
+
+    public function test_a_dispute_for_an_unknown_payment_flags_no_invoice(): void
+    {
+        $bystander = $this->invoice();
+        $this->paidByStripe($bystander, 'pi_someone_else');
+
+        $this->deliver('charge.dispute.created', $this->dispute('dp_unknown', 'pi_never_seen', 'needs_response'))
+            ->assertOk()->assertJson(['outcome' => 'unknown_invoice']);
+
+        $this->assertSame('Paid', $bystander->fresh()->status);
+        $this->assertSame(0, Transaction::where('status', 'disputed')->count());
     }
 
     // ── 4. Settlement and Payout Tracking ──
@@ -232,9 +340,23 @@ class ProductionPaymentSafetyTest extends TestCase
             'status' => 'completed',
         ]);
 
+        $tx3 = Transaction::create([
+            'user_id' => $user->id,
+            'amount_minor' => 5000,
+            'currency' => 'USD',
+            'payment_channel' => 'stripe_card',
+            'reference' => 'stripe:pi_next_payout',
+            'status' => 'completed',
+        ]);
+
+        $this->payoutContains([
+            'pi_batch_1' => ['fee_minor' => 320, 'currency' => 'usd'],
+            'pi_batch_2' => ['fee_minor' => 465, 'currency' => 'usd'],
+        ]);
+
         $this->deliver('payout.paid', [
             'id' => 'po_test_payout_99',
-            'amount' => 25000,
+            'amount' => 24215,
             'currency' => 'usd',
             'status' => 'paid',
         ])->assertOk()->assertJson(['outcome' => 'payout_settled']);
@@ -245,6 +367,82 @@ class ProductionPaymentSafetyTest extends TestCase
         $this->assertSame('po_test_payout_99', $tx2->payout_reference);
         $this->assertNotNull($tx1->settled_at);
         $this->assertNotNull($tx2->settled_at);
+
+        // Stripe's fee, so net is what reached the bank.
+        $this->assertSame(320, $tx1->fee_minor);
+        $this->assertSame(9680, $tx1->net_amount_minor);
+
+        // A payment the payout did not carry is left for the payout that does.
+        $this->assertNull($tx3->fresh()->payout_reference);
+    }
+
+    public function test_a_failed_payout_leaves_the_ledger_unchanged(): void
+    {
+        $tx = Transaction::create([
+            'user_id' => User::factory()->create()->id,
+            'amount_minor' => 10000,
+            'currency' => 'USD',
+            'payment_channel' => 'stripe_card',
+            'reference' => 'stripe:pi_failed_payout',
+            'status' => 'completed',
+        ]);
+
+        $this->payoutContains(['pi_failed_payout' => ['fee_minor' => 320, 'currency' => 'usd']]);
+
+        $this->deliver('payout.failed', [
+            'id' => 'po_test_failed',
+            'amount' => 9680,
+            'currency' => 'usd',
+            'status' => 'failed',
+            'failure_code' => 'account_closed',
+        ])->assertOk()->assertJson(['outcome' => 'payout_failed']);
+
+        $this->assertNull($tx->fresh()->payout_reference);
+    }
+
+    // ── Partial payments ──
+
+    public function test_a_card_payment_finishing_a_part_paid_statement_marks_it_paid(): void
+    {
+        $invoice = $this->invoice(['status' => 'Partially Paid']);
+
+        Transaction::create([
+            'user_id' => $invoice->user_id,
+            'invoice_id' => $invoice->id,
+            'amount_minor' => 20000,
+            'currency' => 'USD',
+            'payment_channel' => 'cash',
+            'reference' => 'CASH-REC-PART',
+            'status' => 'completed',
+        ]);
+
+        $this->deliver('checkout.session.completed', [
+            'id' => 'cs_remainder',
+            'object' => 'checkout.session',
+            'client_reference_id' => (string) $invoice->id,
+            'payment_status' => 'paid',
+            'payment_intent' => 'pi_remainder',
+            'amount_total' => 30000,
+            'currency' => 'usd',
+            'metadata' => ['purpose' => 'invoice', 'invoice_id' => (string) $invoice->id],
+        ])->assertOk()->assertJson(['outcome' => 'settled']);
+
+        $this->assertSame('Paid', $invoice->fresh()->status);
+    }
+
+    public function test_a_failed_delayed_checkout_payment_is_recorded(): void
+    {
+        $invoice = $this->invoice();
+
+        $this->deliver('checkout.session.async_payment_failed', [
+            'id' => 'cs_async_failed',
+            'client_reference_id' => (string) $invoice->id,
+            'amount_total' => 50000,
+            'currency' => 'usd',
+        ])->assertOk()->assertJson(['outcome' => 'failed']);
+
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertSame('failed', Transaction::where('reference', 'stripe-failed:cs_async_failed')->value('status'));
     }
 
     // ── 5. Bank Reconciliation Controller & Variance Math ──

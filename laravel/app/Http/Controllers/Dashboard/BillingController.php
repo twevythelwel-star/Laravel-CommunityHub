@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Stripe\Exception\ApiErrorException;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BillingController extends Controller
@@ -240,34 +242,58 @@ class BillingController extends Controller
         $stripe = app(StripePaymentService::class);
         $canRefund = $isAdmin && $stripe->isLive();
 
+        $presentTransaction = function (Transaction $t) use ($stripe, $canRefund, $isAdmin): array {
+            // Only a Stripe payment with money left to return, and only for
+            // an administrator on a live Stripe account.
+            $refundableMinor = $canRefund ? $stripe->refundableMinor($t) : 0;
+
+            return [
+                'id' => $t->id,
+                'reference' => $t->reference,
+                'receiptNumber' => $t->receipt_number,
+                'homeowner' => $t->user?->display_name,
+                'lot' => $t->user?->lot,
+                'amount' => (float) ($t->amount_minor / 100),
+                'currency' => $t->currency,
+                'channel' => $t->payment_channel,
+                'status' => $t->status,
+                'notes' => $t->notes,
+                'date' => $t->created_at->format('M d, Y h:i A'),
+                'refundableAmount' => $refundableMinor > 0 ? (float) ($refundableMinor / 100) : null,
+                'refundUrl' => $refundableMinor > 0
+                    ? route('dashboard.billing.transactions.refund', $t->id)
+                    : null,
+                // Payments by channels the app cannot see wait for the office.
+                'confirmUrl' => $isAdmin && $t->isPending()
+                    ? route('dashboard.billing.transactions.confirm', $t->id)
+                    : null,
+                'rejectUrl' => $isAdmin && $t->isPending()
+                    ? route('dashboard.billing.transactions.reject', $t->id)
+                    : null,
+                'isDonation' => $t->donation_id !== null,
+            ];
+        };
+
         $transactions = Transaction::with('user:id,display_name,lot')
             ->unless($isAdmin, fn ($q) => $q->where('user_id', $user->id))
             ->latest()
             ->paginate(15)
             ->withQueryString()
-            ->through(function (Transaction $t) use ($stripe, $canRefund) {
-                // Only a Stripe payment with money left to return, and only for
-                // an administrator on a live Stripe account.
-                $refundableMinor = $canRefund ? $stripe->refundableMinor($t) : 0;
+            ->through($presentTransaction);
 
-                return [
-                    'id' => $t->id,
-                    'reference' => $t->reference,
-                    'receiptNumber' => $t->receipt_number,
-                    'homeowner' => $t->user?->display_name,
-                    'lot' => $t->user?->lot,
-                    'amount' => (float) ($t->amount_minor / 100),
-                    'currency' => $t->currency,
-                    'channel' => $t->payment_channel,
-                    'status' => $t->status,
-                    'notes' => $t->notes,
-                    'date' => $t->created_at->format('M d, Y h:i A'),
-                    'refundableAmount' => $refundableMinor > 0 ? (float) ($refundableMinor / 100) : null,
-                    'refundUrl' => $refundableMinor > 0
-                        ? route('dashboard.billing.transactions.refund', $t->id)
-                        : null,
-                ];
-            });
+        /*
+         | Every payment awaiting the office, oldest first, so none is lost
+         | below the first page of the ledger.
+         */
+        $pendingPayments = $isAdmin
+            ? Transaction::with('user:id,display_name,lot')
+                ->where('status', Transaction::STATUS_PENDING)
+                ->oldest()
+                ->take(100)
+                ->get()
+                ->map($presentTransaction)
+                ->values()
+            : [];
 
         // Payouts & Reconciliations — estate treasury records, administrators only.
         $payouts = $isAdmin ? Payout::latest()->take(10)->get()->map(fn ($p) => [
@@ -409,6 +435,7 @@ class BillingController extends Controller
             'wallet' => $walletData,
             'paymentLinks' => $paymentLinks,
             'transactions' => $transactions,
+            'pendingPayments' => $pendingPayments,
             'payouts' => $payouts,
             'reconciliations' => $reconciliations,
             'paymentEvents' => $isAdmin ? StripeEvent::latest()->take(25)->get()->map(fn ($e) => [
@@ -448,8 +475,14 @@ class BillingController extends Controller
      *
      * Both id lists are now resolved through the caller's own relations, and
      * the wallet leg only happens if the money is actually there.
+     *
+     * The card channel is not settled here at all. Its driver answered every
+     * request with a made-up "STRIPE-..." reference and success, so choosing
+     * card recorded a completed payment and marked the invoice Paid with no
+     * money taken. Card now hands the resident to Stripe Checkout for the
+     * amount they chose, and the invoice settles only when Stripe confirms.
      */
-    public function pay(Request $request): RedirectResponse
+    public function pay(Request $request, StripePaymentService $stripe): HttpResponse
     {
         $user = $request->user();
 
@@ -491,6 +524,32 @@ class BillingController extends Controller
         // was recorded as JMD.
         $currency = strtoupper($validated['currency'] ?? ($invoice?->currency ?? 'JMD'));
         $amountMinor = (int) round($validated['amount'] * 100);
+
+        $isCard = $validated['channel'] === 'card';
+
+        if ($isCard) {
+            if (! $stripe->isLive()) {
+                return back()->withErrors(['channel' => 'Card payments are not available yet. Please choose another method or pay at the community office.']);
+            }
+
+            if (! $invoice) {
+                return back()->withErrors(['invoice_id' => 'There is no open statement to pay by card.']);
+            }
+
+            if ($currency !== strtoupper($invoice->currency)) {
+                return back()->withErrors(['currency' => "Card payments are charged in {$invoice->currency}, the statement's currency."]);
+            }
+
+            if (! empty($validated['item_ids'])) {
+                return back()->withErrors(['item_ids' => 'Individual charges cannot be paid by card. Pay an amount towards the statement instead.']);
+            }
+
+            // Checked on the whole amount, wallet share included, before the
+            // wallet is debited: refusing after the debit would strand it.
+            if ($amountMinor > $invoice->balanceRemainingMinor()) {
+                return back()->withErrors(['amount' => 'That is more than the balance still owed on this statement.']);
+            }
+        }
 
         // Line items, scoped to the invoice being paid.
         $itemIds = [];
@@ -540,43 +599,120 @@ class BillingController extends Controller
             $amountMinor -= $walletDeductMinor;
         }
 
-        // Settle remaining via selected channel
+        if ($isCard && $amountMinor > 0) {
+            try {
+                $checkoutUrl = $stripe->createCheckoutSession(
+                    $invoice,
+                    route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]),
+                    route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]),
+                    $amountMinor,
+                );
+            } catch (\DomainException $e) {
+                return back()->withErrors(['amount' => $e->getMessage()]);
+            } catch (ApiErrorException $e) {
+                report($e);
+
+                return back()->withErrors(['channel' => 'Card checkout could not be started. Please try again shortly.']);
+            }
+
+            return Inertia::location($checkoutUrl);
+        }
+
+        /*
+         | Channels the app cannot see — bank wire, cash, QR, NFC, digital
+         | wallets, Zelle, Cash App — are recorded as pending and settle nothing
+         | until an administrator confirms the money arrived. Their drivers
+         | report success for any amount, which used to mark invoices Paid on
+         | the resident's word alone.
+         */
+        $awaitsConfirmation = $amountMinor > 0 && $this->orchestrator->requiresOfficeConfirmation($validated['channel']);
+
         if ($amountMinor > 0) {
             $settlement = $this->orchestrator->settlePayment($validated['channel'], [
                 'amount_minor' => $amountMinor,
                 'currency' => $currency,
                 'user_id' => $user->id,
                 'lot' => $user->lot,
+                'description' => "Payment for invoice {$invoice?->reference}",
             ]);
 
-            $this->orchestrator->recordTransaction(
+            // The wallet driver refuses when the balance is short; this result
+            // was ignored, so a short wallet still recorded a completed payment.
+            if (! ($settlement['success'] ?? false)) {
+                return back()->withErrors(['channel' => $settlement['notes'] ?? 'The payment could not be taken.']);
+            }
+
+            $payment = $this->orchestrator->recordTransaction(
                 user: $user,
                 amountMinor: $amountMinor,
                 channel: $validated['channel'],
                 reference: $settlement['reference'] ?? ('PAY-'.strtoupper(Str::random(8))),
                 invoice: $invoice,
-                notes: "Settled via {$validated['channel']} in {$currency}",
+                status: $awaitsConfirmation ? Transaction::STATUS_PENDING : 'completed',
+                notes: $awaitsConfirmation
+                    ? "Reported via {$validated['channel']} in {$currency}; awaiting office confirmation"
+                    : "Settled via {$validated['channel']} in {$currency}",
                 currency: $currency
             );
-        }
 
-        // If specific items were paid
-        if ($itemIds !== []) {
-            InvoiceItem::whereKey($itemIds)->update(['status' => 'Paid']);
-        }
-
-        // Settle or partially settle invoice
-        if ($invoice) {
-            if ($invoice->balanceRemainingMinor() <= 0) {
-                $invoice->markPaid();
-            } else {
-                $invoice->update(['status' => 'Partially Paid']);
+            if ($awaitsConfirmation && $itemIds !== []) {
+                $payment->update(['invoice_item_ids' => $itemIds]);
             }
         }
 
-        $user->recordActivity("Paid {$currency} ".number_format($validated['amount'], 2)." via {$validated['channel']}");
+        if (! $awaitsConfirmation && $itemIds !== []) {
+            InvoiceItem::whereKey($itemIds)->update(['status' => 'Paid']);
+        }
 
-        return back()->with('success', "Payment of {$currency} ".number_format($validated['amount'], 2).' recorded.');
+        // Settles from completed ledger rows only, so a pending payment changes
+        // nothing here while a wallet share already taken still counts.
+        $invoice?->settleFromLedger();
+
+        $amountLabel = "{$currency} ".number_format($validated['amount'], 2);
+
+        if ($awaitsConfirmation) {
+            $user->recordActivity("Reported a payment of {$amountLabel} via {$validated['channel']}, awaiting confirmation");
+
+            return back()->with('success', "Payment of {$amountLabel} submitted. Your statement updates once the community office confirms it has arrived.");
+        }
+
+        $user->recordActivity("Paid {$amountLabel} via {$validated['channel']}");
+
+        return back()->with('success', "Payment of {$amountLabel} recorded.");
+    }
+
+    /**
+     * An administrator confirms a pending payment's money arrived.
+     * Route gate: `manageBilling`.
+     */
+    public function confirmPayment(Request $request, Transaction $transaction): RedirectResponse
+    {
+        try {
+            $this->orchestrator->confirmPendingPayment($transaction, $request->user());
+        } catch (\DomainException $e) {
+            return back()->withErrors(['transaction' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Payment {$transaction->reference} confirmed.");
+    }
+
+    /**
+     * An administrator records that a pending payment never arrived.
+     * Route gate: `manageBilling`.
+     */
+    public function rejectPayment(Request $request, Transaction $transaction): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->orchestrator->rejectPendingPayment($transaction, $request->user(), $validated['reason'] ?? null);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['transaction' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Payment {$transaction->reference} marked as not received.");
     }
 
     public function updateAutoPay(Request $request): RedirectResponse
@@ -844,6 +980,13 @@ class BillingController extends Controller
             'You can only download your own payment receipts.'
         );
 
+        // A receipt for money nobody has confirmed would be proof of nothing.
+        abort_if(
+            in_array($transaction->status, [Transaction::STATUS_PENDING, 'rejected'], true),
+            409,
+            'A receipt is issued once the community office confirms the payment.',
+        );
+
         $transaction->load(['user', 'invoice']);
         $community = Community::first();
 
@@ -903,7 +1046,7 @@ class BillingController extends Controller
     /**
      * Redirect user to Stripe's hosted Billing Customer Portal.
      */
-    public function customerPortal(Request $request, StripePaymentService $stripe): RedirectResponse|\Symfony\Component\HttpFoundation\Response
+    public function customerPortal(Request $request, StripePaymentService $stripe): RedirectResponse|HttpResponse
     {
         $user = $request->user();
 
