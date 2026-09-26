@@ -90,39 +90,35 @@ class UniversalPaymentLinkController extends Controller
         $amountMinor = $paymentLink->amount_minor
             ?? (int) (round((float) $validated['custom_amount'], 2) * 100);
 
-        // Non-custodial settlement via Orchestrator
-        $settlement = $this->orchestrator->settlePayment($validated['channel'], [
-            'amount_minor' => $amountMinor,
-            'currency' => $paymentLink->currency,
-            'payer_name' => $validated['payer_name'],
-            'lot' => $validated['lot'],
-        ]);
-
         /*
          | No user is attached. This was
          | `User::where('name', 'like', '%'.$payer_name.'%')->first()`, so a
          | payer name typed on a public form credited whichever resident's name
          | happened to match it first — a stranger could post a payment against
          | someone else's account, and a common surname could do it by accident.
-         | The payer's name and lot are kept in the notes instead.
+         | The payer's name and lot are kept with the payment instead.
+         |
+         | The payment waits for the office like any other office channel: it
+         | counts only once one administrator logs it received and another
+         | verifies it in a bank reconciliation.
          */
-        $user = null;
+        $payment = $this->orchestrator->startPayment([
+            'channel' => $validated['channel'],
+            'payment_link' => $paymentLink,
+            'applies_to' => 'payment_link',
+            'purpose' => Transaction::PURPOSE_COMMUNITY_PROJECT,
+            'amount_minor' => $amountMinor,
+            'currency' => $paymentLink->currency,
+            'metadata' => ['payer_name' => $validated['payer_name'], 'lot' => $validated['lot']],
+            'source' => 'public_link',
+        ]);
 
-        $this->orchestrator->recordTransaction(
-            user: $user,
-            amountMinor: $amountMinor,
-            channel: $validated['channel'],
-            reference: $settlement['reference'] ?? ('LINK-'.strtoupper(bin2hex(random_bytes(4)))),
-            paymentLink: $paymentLink,
-            // Recorded as pending: the office confirms it before it counts.
-            status: Transaction::STATUS_PENDING,
-            notes: "Paid by {$validated['payer_name']} ({$validated['lot']}) via {$validated['channel']} in {$paymentLink->currency}",
-            currency: $paymentLink->currency
-        );
+        $this->orchestrator->awaitTransfer($payment);
+        $paymentLink->increment('uses_count');
 
         return back()->with(
             'status',
-            'Recorded a payment of '.$paymentLink->formattedAmount().'. The community office will confirm it.',
+            "Payment {$payment->transaction_id} of ".$paymentLink->formattedAmount().' recorded. The community office will confirm it.',
         );
     }
 }

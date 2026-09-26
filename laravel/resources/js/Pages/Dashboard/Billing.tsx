@@ -32,6 +32,7 @@ import {
 import {
   TransactionsLedger,
   type MasterTransaction,
+  type OfficePayment,
 } from '@/components/dashboard/transactions-ledger';
 import {
   CreditCard,
@@ -60,7 +61,8 @@ import {
   Banknote,
   DollarSign,
   ArrowRight,
-  ChevronRight
+  ChevronRight,
+  Layers,
 } from 'lucide-react';
 
 type AdminBillingProps = {
@@ -186,8 +188,8 @@ type Props = {
   wallet?: WalletData;
   paymentLinks?: PaymentLinkItem[];
   transactions?: Paginated<MasterTransaction>;
-  /** Administrators only: payments awaiting office confirmation. */
-  pendingPayments?: MasterTransaction[];
+  /** Office payments in flight: every one for an administrator, a resident's own otherwise. */
+  pendingPayments?: OfficePayment[];
   payouts?: any[];
   reconciliations?: any[];
   paymentEvents?: {
@@ -210,6 +212,44 @@ type Props = {
     nextRunDate: string;
   };
   paymentChannels?: ChannelReport[];
+  triPartyReconciliation?: {
+    currency: string;
+    communityHubLedger: {
+      total_minor: number;
+      total: number;
+      settled_transactions_count: number;
+      status: string;
+    };
+    paymentProvider: {
+      name: string;
+      total_minor: number;
+      total: number;
+      status: string;
+    };
+    bank: {
+      name: string;
+      total_minor: number;
+      total: number;
+      statement_date: string;
+      status: string;
+    };
+    variance: {
+      amount_minor: number;
+      amount: number;
+      is_balanced: boolean;
+      state: string;
+    };
+  } | null;
+  chartOfAccounts?: Array<{
+    id: number;
+    code: string;
+    name: string;
+    type: string;
+    currency: string;
+    balance: number;
+    entriesCount: number;
+    description: string;
+  }>;
 };
 
 export default function BillingPage({
@@ -235,10 +275,16 @@ export default function BillingPage({
   refundsList = [],
   autoPayPortfolio,
   paymentChannels = [],
+  triPartyReconciliation,
+  chartOfAccounts = [],
 }: Props) {
   const { toast } = useToast();
   const isAdmin = canManage && !!adminSummary && !!monthlyCollections && !!invoices;
   const [activeTab, setActiveTab] = useState(isAdmin ? 'dashboard' : 'invoices');
+
+  const formatMoney = (amount: number, cur: string = 'JMD') => {
+    return `${cur} ${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   // Create payment plan modal
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
@@ -252,6 +298,9 @@ export default function BillingPage({
   const [reconDate, setReconDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [reconBalance, setReconBalance] = useState<string>('');
   const [reconNotes, setReconNotes] = useState<string>('');
+  const [reconVerifyIds, setReconVerifyIds] = useState<number[]>([]);
+  const [reconError, setReconError] = useState<string | null>(null);
+  const receivedPayments = pendingPayments.filter((p) => p.state === 'received');
   const [isSubmittingRecon, setIsSubmittingRecon] = useState(false);
 
   const handleCreateReconSubmit = (e: React.FormEvent) => {
@@ -265,6 +314,7 @@ export default function BillingPage({
         bank_statement_date: reconDate,
         statement_balance: parseFloat(reconBalance),
         notes: reconNotes,
+        verify_payment_ids: reconVerifyIds,
       },
       {
         preserveScroll: true,
@@ -273,12 +323,15 @@ export default function BillingPage({
           setIsReconModalOpen(false);
           setReconBalance('');
           setReconNotes('');
+          setReconVerifyIds([]);
+          setReconError(null);
           toast({
             title: 'Bank Reconciliation Recorded',
             description: 'Variance verification against master transaction ledger completed.',
           });
         },
         onError: (errors) => {
+          setReconError((Object.values(errors)[0] as string) ?? null);
           toast({
             variant: 'destructive',
             title: 'Reconciliation Failed',
@@ -449,6 +502,18 @@ export default function BillingPage({
             )}
           </div>
         </div>
+
+        {paymentCenter && (
+          <PaymentCenterHero
+            amountDue={paymentCenter.amountDue}
+            currency={settings.currency}
+            itemizedCharges={paymentCenter.itemizedCharges || []}
+            walletBalance={wallet?.totalUsable || wallet?.available || 0}
+            onNavigateTab={setActiveTab}
+            availableChannels={paymentCenter.availableChannels}
+            autoPay={paymentCenter.autoPay}
+          />
+        )}
 
         {/* 10 Views Tabbed Navigation */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -1031,6 +1096,85 @@ export default function BillingPage({
               </Button>
             </div>
 
+            {/* Tri-Party Continuous Reconciliation Matrix: CommunityHub Ledger vs Provider vs Bank */}
+            {triPartyReconciliation && (
+              <div className="p-5 rounded-2xl border bg-gradient-to-br from-card via-card to-violet-500/5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-sm tracking-tight text-foreground flex items-center gap-2">
+                        <Scale className="h-4 w-4 text-violet-500" />
+                        <span>Tri-Party Continuous Reconciliation Matrix</span>
+                      </h4>
+                      <Badge variant="outline" className="font-mono text-[10px] border-violet-500/40 text-violet-600 bg-violet-500/10">
+                        {triPartyReconciliation.currency}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Triangulated verification auditing CommunityHub Master Ledger entries against Payment Gateway feeds and Bank Clearing deposits.
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={`font-mono text-xs px-2.5 py-1 ${
+                      triPartyReconciliation.variance.is_balanced
+                        ? 'border-emerald-500/40 text-emerald-600 bg-emerald-500/10'
+                        : 'border-amber-500/40 text-amber-600 bg-amber-500/10'
+                    }`}
+                  >
+                    {triPartyReconciliation.variance.is_balanced ? '✓ TRI-PARTY BALANCED' : 'VARIANCE DETECTED'}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Card 1: CommunityHub Ledger */}
+                  <div className="p-4 rounded-xl border bg-background/60 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-medium">1. CommunityHub Ledger</span>
+                      <Badge variant="secondary" className="text-[9px] font-mono">INTERNAL</Badge>
+                    </div>
+                    <div className="font-mono font-bold text-xl text-foreground">
+                      {triPartyReconciliation.currency} {triPartyReconciliation.communityHubLedger.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                      <span>{triPartyReconciliation.communityHubLedger.settled_transactions_count} settled transactions audited</span>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Payment Provider (Stripe) */}
+                  <div className="p-4 rounded-xl border bg-background/60 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-medium">2. Gateway ({triPartyReconciliation.paymentProvider.name})</span>
+                      <Badge variant="secondary" className="text-[9px] font-mono">PROCESSOR</Badge>
+                    </div>
+                    <div className="font-mono font-bold text-xl text-foreground">
+                      {triPartyReconciliation.currency} {triPartyReconciliation.paymentProvider.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3 text-indigo-500" />
+                      <span>HMAC-SHA256 verified webhooks</span>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Bank Operating Feed */}
+                  <div className="p-4 rounded-xl border bg-background/60 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-medium">3. Bank Feed (NCB)</span>
+                      <Badge variant="secondary" className="text-[9px] font-mono">EXTERNAL FEED</Badge>
+                    </div>
+                    <div className="font-mono font-bold text-xl text-foreground">
+                      {triPartyReconciliation.currency} {triPartyReconciliation.bank.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Landmark className="h-3 w-3 text-emerald-500" />
+                      <span>Statement as of {triPartyReconciliation.bank.statement_date}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <div className="lg:col-span-7 space-y-6">
                 <Card className="border shadow-sm">
@@ -1204,6 +1348,82 @@ export default function BillingPage({
                               {evt.errorMessage || '—'}
                             </td>
                             <td className="p-3 text-right font-mono text-muted-foreground">{evt.date}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Chart of Accounts (Double-Entry General Ledger) */}
+            <Card className="border shadow-sm">
+              <CardHeader>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <CardTitle className="text-lg font-bold flex items-center gap-2">
+                      <Layers className="h-5 w-5 text-indigo-500" />
+                      <span>Chart of Accounts &amp; General Ledger Sub-Accounts</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Double-entry accounting structure with real-time balance calculations for assets, liabilities, revenues, and campaign funds.
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {chartOfAccounts.length} Active Accounts
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {chartOfAccounts.length === 0 ? (
+                  <div className="p-8 text-center border border-dashed rounded-xl text-muted-foreground">
+                    <p className="font-semibold text-xs">No ledger accounts registered.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-muted/60 text-muted-foreground font-semibold border-b">
+                        <tr>
+                          <th className="p-3">Code</th>
+                          <th className="p-3">Account Name</th>
+                          <th className="p-3">Classification</th>
+                          <th className="p-3">Currency</th>
+                          <th className="p-3 text-right">Journal Entries</th>
+                          <th className="p-3 text-right">Account Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {chartOfAccounts.map((acc) => (
+                          <tr key={acc.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="p-3 font-mono font-bold text-foreground">{acc.code}</td>
+                            <td className="p-3 font-medium text-foreground">
+                              {acc.name}
+                              {acc.description && (
+                                <span className="block text-[10px] text-muted-foreground">{acc.description}</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-mono uppercase ${
+                                  acc.type === 'asset'
+                                    ? 'border-emerald-500/40 text-emerald-600 bg-emerald-500/10'
+                                    : acc.type === 'liability'
+                                    ? 'border-amber-500/40 text-amber-600 bg-amber-500/10'
+                                    : acc.type === 'revenue'
+                                    ? 'border-blue-500/40 text-blue-600 bg-blue-500/10'
+                                    : 'border-slate-500/40 text-slate-600'
+                                }`}
+                              >
+                                {acc.type}
+                              </Badge>
+                            </td>
+                            <td className="p-3 font-mono text-muted-foreground">{acc.currency}</td>
+                            <td className="p-3 text-right font-mono text-muted-foreground">{acc.entriesCount} entries</td>
+                            <td className="p-3 text-right font-mono font-bold text-foreground">
+                              {formatMoney(acc.balance, acc.currency)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1472,6 +1692,48 @@ export default function BillingPage({
                   required
                 />
               </div>
+
+              {receivedPayments.length > 0 && (
+                <fieldset className="space-y-2 rounded-lg border border-border p-3">
+                  <legend className="px-1 text-xs font-semibold">Verify office payments on this statement</legend>
+                  <p className="text-[11px] text-muted-foreground">
+                    Tick each payment you can see on the statement. It is applied to its statement or campaign, and
+                    counted in this reconciliation. You cannot verify a payment you logged as received yourself.
+                  </p>
+                  <ul className="space-y-1.5">
+                    {receivedPayments.map((p) => (
+                      <li key={p.id}>
+                        <label className={`flex items-start gap-2 text-xs ${p.canVerify ? '' : 'opacity-60'}`}>
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            disabled={!p.canVerify}
+                            checked={reconVerifyIds.includes(p.id)}
+                            onChange={(e) =>
+                              setReconVerifyIds((ids) => (e.target.checked ? [...ids, p.id] : ids.filter((id) => id !== p.id)))
+                            }
+                          />
+                          <span>
+                            <span className="font-mono font-semibold">{p.transactionId}</span>{' '}
+                            {p.currency} {p.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} · {p.paymentMethod} ·{' '}
+                            {p.homeowner ?? 'Unknown payer'}
+                            {p.bankReference ? ` · bank ref ${p.bankReference}` : ''}
+                            <span className="block text-[10px] text-muted-foreground">
+                              {p.canVerify
+                                ? `Received by ${p.receivedBy ?? 'another administrator'} on ${p.receivedAt ?? '—'}`
+                                : 'You logged this as received; another administrator must verify it.'}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </fieldset>
+              )}
+
+              {reconError && (
+                <p role="alert" className="text-xs text-destructive">{reconError}</p>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="recon-notes" className="text-xs font-semibold">Statement Reference / Audit Notes (Optional)</Label>

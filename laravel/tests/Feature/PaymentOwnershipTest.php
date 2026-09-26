@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\Donation;
 use App\Models\Fundraiser;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Wallet;
@@ -35,6 +36,22 @@ use Tests\TestCase;
 class PaymentOwnershipTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** One administrator logs the payment received; another verifies it in a reconciliation. */
+    private function receiveAndVerify(Payment $payment): void
+    {
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.payments.receive', $payment))
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.reconciliations.store'), [
+                'bank_statement_date' => now()->toDateString(),
+                'statement_balance' => 0,
+                'verify_payment_ids' => [$payment->id],
+            ])
+            ->assertSessionHasNoErrors();
+    }
 
     private function homeowner(): User
     {
@@ -115,12 +132,10 @@ class PaymentOwnershipTest extends TestCase
             ])
             ->assertSessionHasNoErrors();
 
-        // Cash is confirmed by the office before it settles anything.
+        // Cash is received and verified by the office before it settles anything.
         $this->assertSame('Unpaid', $invoice->fresh()->status);
 
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
-            ->post(route('dashboard.billing.transactions.confirm', Transaction::sole()))
-            ->assertSessionHasNoErrors();
+        $this->receiveAndVerify(Payment::sole());
 
         $this->assertSame('Paid', $invoice->fresh()->status);
     }
@@ -139,7 +154,7 @@ class PaymentOwnershipTest extends TestCase
 
         // `$invoice` was read one line before it was assigned, so this fell
         // through to the 'JMD' default and a USD statement was paid in JMD.
-        $this->assertSame('USD', Transaction::latest('id')->first()->currency);
+        $this->assertSame('USD', Payment::latest('id')->first()->currency);
     }
 
     // ── Wallet ───────────────────────────────────────────────────────────
@@ -338,8 +353,7 @@ class PaymentOwnershipTest extends TestCase
             ->get(route('dashboard.fundraising.donation.receipt', ['donation' => $donation->id]))
             ->assertStatus(409);
 
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
-            ->post(route('dashboard.billing.transactions.confirm', Transaction::where('donation_id', $donation->id)->sole()));
+        $this->receiveAndVerify(Payment::where('donation_id', $donation->id)->sole());
 
         $this->actingAs($donor)
             ->get(route('dashboard.fundraising.donation.receipt', ['donation' => $donation->id]))

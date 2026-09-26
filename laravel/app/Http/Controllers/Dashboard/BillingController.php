@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Enums\PaymentState;
 use App\Http\Controllers\Controller;
+use App\Models\Account;
 use App\Models\AutoPaySetting;
 use App\Models\BankReconciliation;
 use App\Models\BillingSetting;
@@ -10,13 +12,16 @@ use App\Models\Community;
 use App\Models\Fundraiser;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Payment;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
 use App\Models\PaymentPlan;
 use App\Models\Payout;
 use App\Models\StripeEvent;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Models\Wallet;
+use App\Services\Ledger\LedgerService;
 use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\StripePaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -24,8 +29,8 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Stripe\Exception\ApiErrorException;
@@ -34,6 +39,20 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BillingController extends Controller
 {
+    /** What a payment may be for; Transaction::PURPOSE_*. */
+    private const PAYMENT_PURPOSES = [
+        Transaction::PURPOSE_HOA_ASSESSMENT,
+        Transaction::PURPOSE_MAINTENANCE_FEE,
+        Transaction::PURPOSE_LATE_FEE,
+        Transaction::PURPOSE_AMENITY_BOOKING,
+        Transaction::PURPOSE_GATE_ACCESS_FEE,
+        Transaction::PURPOSE_EVENT_TICKET,
+        Transaction::PURPOSE_FUNDRAISING_DONATION,
+        Transaction::PURPOSE_FUNDRAISING_SPONSORSHIP,
+        Transaction::PURPOSE_COMMUNITY_PROJECT,
+        Transaction::PURPOSE_EMERGENCY_FUND,
+    ];
+
     public function __construct(
         protected PaymentOrchestratorService $orchestrator
     ) {}
@@ -242,13 +261,15 @@ class BillingController extends Controller
         $stripe = app(StripePaymentService::class);
         $canRefund = $isAdmin && $stripe->isLive();
 
-        $presentTransaction = function (Transaction $t) use ($stripe, $canRefund, $isAdmin): array {
+        $presentTransaction = function (Transaction $t) use ($stripe, $canRefund): array {
             // Only a Stripe payment with money left to return, and only for
             // an administrator on a live Stripe account.
             $refundableMinor = $canRefund ? $stripe->refundableMinor($t) : 0;
 
             return [
                 'id' => $t->id,
+                'transactionId' => $t->transaction_id ?? $t->reference,
+                'transaction_id' => $t->transaction_id ?? $t->reference,
                 'reference' => $t->reference,
                 'receiptNumber' => $t->receipt_number,
                 'homeowner' => $t->user?->display_name,
@@ -256,6 +277,14 @@ class BillingController extends Controller
                 'amount' => (float) ($t->amount_minor / 100),
                 'currency' => $t->currency,
                 'channel' => $t->payment_channel,
+                'paymentMethod' => $t->payment_method ?? Transaction::formatPaymentMethod($t->payment_channel),
+                'userCode' => $t->user_code ?? Transaction::formatUserCode($t->user_id),
+                'propertyCode' => $t->property_code,
+                'communityCode' => $t->community_code,
+                'purpose' => $t->purpose,
+                'provider' => $t->provider,
+                'providerReference' => $t->provider_reference,
+                'device' => $t->device_identifier,
                 'status' => $t->status,
                 'notes' => $t->notes,
                 'date' => $t->created_at->format('M d, Y h:i A'),
@@ -263,14 +292,18 @@ class BillingController extends Controller
                 'refundUrl' => $refundableMinor > 0
                     ? route('dashboard.billing.transactions.refund', $t->id)
                     : null,
-                // Payments by channels the app cannot see wait for the office.
-                'confirmUrl' => $isAdmin && $t->isPending()
-                    ? route('dashboard.billing.transactions.confirm', $t->id)
-                    : null,
-                'rejectUrl' => $isAdmin && $t->isPending()
-                    ? route('dashboard.billing.transactions.reject', $t->id)
-                    : null,
                 'isDonation' => $t->donation_id !== null,
+                'slip' => $t->toTransactionCardPayload(),
+                'ledgerEntries' => $t->ledgerEntries()->with('account:id,code,name,type')->get()->map(fn ($e) => [
+                    'entryId' => $e->entry_id,
+                    'accountCode' => $e->account?->code,
+                    'accountName' => $e->account?->name,
+                    'accountType' => $e->account?->type,
+                    'type' => $e->entry_type,
+                    'amount' => (float) ($e->amount_minor / 100),
+                    'currency' => $e->currency,
+                    'description' => $e->description,
+                ]),
             ];
         };
 
@@ -282,18 +315,48 @@ class BillingController extends Controller
             ->through($presentTransaction);
 
         /*
-         | Every payment awaiting the office, oldest first, so none is lost
-         | below the first page of the ledger.
+         | Office payments in flight, oldest first. Administrators get every one,
+         | with the actions its state allows; a resident gets their own, to see
+         | where each stands. Card attempts are not here: they wait on Stripe,
+         | not the office, and there is nothing for anyone to confirm.
          */
-        $pendingPayments = $isAdmin
-            ? Transaction::with('user:id,display_name,lot')
-                ->where('status', Transaction::STATUS_PENDING)
-                ->oldest()
-                ->take(100)
-                ->get()
-                ->map($presentTransaction)
-                ->values()
-            : [];
+        $presentPayment = fn (Payment $p): array => [
+            'id' => $p->id,
+            'transactionId' => $p->transaction_id,
+            'state' => $p->state->value,
+            'stateLabel' => $p->state->label(),
+            'channel' => $p->channel,
+            'paymentMethod' => Transaction::formatPaymentMethod($p->channel),
+            'amount' => (float) ($p->amount_minor / 100),
+            'currency' => $p->currency,
+            'purpose' => $p->purpose,
+            'homeowner' => $p->user?->display_name,
+            'lot' => $p->user?->lot,
+            'invoiceReference' => $p->invoice?->reference,
+            'isDonation' => $p->applies_to === 'donation',
+            'payerReference' => $p->payer_reference,
+            'bankReference' => $p->bank_reference,
+            'receivedBy' => $p->receiver?->display_name,
+            'receivedAt' => $p->received_at?->format('M d, Y h:i A'),
+            'submittedAt' => $p->updated_at->format('M d, Y h:i A'),
+            'receiveUrl' => $isAdmin && $p->state === PaymentState::AwaitingTransfer
+                ? route('dashboard.billing.payments.receive', $p->id)
+                : null,
+            'rejectUrl' => $isAdmin && $p->state->awaitsOffice()
+                ? route('dashboard.billing.payments.reject', $p->id)
+                : null,
+            // Separation of duties: whoever logged receipt cannot verify it.
+            'canVerify' => $isAdmin && $p->state === PaymentState::Received && $p->received_by !== $user->id,
+        ];
+
+        $pendingPayments = Payment::with(['user:id,display_name,lot', 'invoice:id,reference', 'receiver:id,display_name'])
+            ->inState(PaymentState::AwaitingTransfer, PaymentState::Received)
+            ->unless($isAdmin, fn ($q) => $q->where('user_id', $user->id))
+            ->oldest('updated_at')
+            ->take(100)
+            ->get()
+            ->map($presentPayment)
+            ->values();
 
         // Payouts & Reconciliations — estate treasury records, administrators only.
         $payouts = $isAdmin ? Payout::latest()->take(10)->get()->map(fn ($p) => [
@@ -454,6 +517,17 @@ class BillingController extends Controller
             'refundsList' => $refundsList,
             'autoPayPortfolio' => $autoPayPortfolio,
             'paymentChannels' => $paymentChannels,
+            'triPartyReconciliation' => $isAdmin ? app(LedgerService::class)->getTriPartyReconciliationSummary($settings->currency ?: 'JMD') : null,
+            'chartOfAccounts' => $isAdmin ? Account::withCount('entries')->orderBy('code')->get()->map(fn ($a) => [
+                'id' => $a->id,
+                'code' => $a->code,
+                'name' => $a->name,
+                'type' => $a->type,
+                'currency' => $a->currency,
+                'balance' => (float) ($a->balance_minor / 100),
+                'entriesCount' => $a->entries_count,
+                'description' => $a->description,
+            ]) : [],
         ]);
     }
 
@@ -502,6 +576,9 @@ class BillingController extends Controller
             'item_ids' => ['nullable', 'array'],
             'item_ids.*' => ['integer'],
             'split_wallet_amount' => ['nullable', 'numeric', 'min:0'],
+            'transaction_id' => ['nullable', 'string', 'max:32'],
+            'payer_reference' => ['nullable', 'string', 'max:100'],
+            'device_identifier' => ['nullable', 'string', 'max:100'],
         ]);
 
         /*
@@ -565,47 +642,60 @@ class BillingController extends Controller
             }
         }
 
-        // If split payment with wallet
-        $walletDeductMinor = (int) round(($validated['split_wallet_amount'] ?? 0) * 100);
+        /*
+         | The payment shown on the resident's slip, if they started one. It
+         | must be theirs and not yet submitted: a slip is a Created payment,
+         | and one that has moved on cannot be submitted again.
+         */
+        $payment = null;
+        if (! empty($validated['transaction_id'])) {
+            $payment = Payment::query()
+                ->where('transaction_id', $validated['transaction_id'])
+                ->where('user_id', $user->id)
+                ->first();
 
-        if ($walletDeductMinor > 0) {
-            if ($walletDeductMinor > $amountMinor) {
-                return back()->withErrors([
-                    'split_wallet_amount' => 'The wallet portion cannot exceed the payment amount.',
-                ]);
+            if (! $payment || $payment->state !== PaymentState::Created) {
+                return back()->withErrors(['transaction_id' => 'That payment has already been submitted, or is not yours.']);
             }
-
-            $walletTransaction = $user->wallet?->debit(
-                $walletDeductMinor,
-                "Split payment for invoice {$invoice?->reference}",
-            );
-
-            if (! $walletTransaction) {
-                return back()->withErrors([
-                    'split_wallet_amount' => 'Your Community Wallet does not hold that much.',
-                ]);
-            }
-
-            $this->orchestrator->recordTransaction(
-                user: $user,
-                amountMinor: $walletDeductMinor,
-                channel: 'wallet',
-                reference: 'SPLIT-WAL-'.strtoupper(Str::random(6)),
-                invoice: $invoice,
-                notes: 'Split payment portion via Community Wallet',
-                currency: $currency
-            );
-
-            $amountMinor -= $walletDeductMinor;
         }
 
-        if ($isCard && $amountMinor > 0) {
+        $walletShareMinor = (int) round(($validated['split_wallet_amount'] ?? 0) * 100);
+
+        if ($walletShareMinor > $amountMinor) {
+            return back()->withErrors([
+                'split_wallet_amount' => 'The wallet portion cannot exceed the payment amount.',
+            ]);
+        }
+
+        // The Community Wallet share is money the app holds, so it is taken
+        // and applied at once, as a payment of its own.
+        if ($walletShareMinor > 0) {
+            $walletError = $this->payFromWallet($user, $walletShareMinor, $currency, $invoice);
+
+            if ($walletError) {
+                return back()->withErrors(['split_wallet_amount' => $walletError]);
+            }
+
+            $amountMinor -= $walletShareMinor;
+        }
+
+        $channel = $validated['channel'];
+        $amountLabel = "{$currency} ".number_format($validated['amount'], 2);
+
+        if ($amountMinor <= 0) {
+            $user->recordActivity("Paid {$amountLabel} from the Community Wallet");
+
+            return back()->with('success', "Payment of {$amountLabel} recorded.");
+        }
+
+        if ($isCard) {
             try {
                 $checkoutUrl = $stripe->createCheckoutSession(
                     $invoice,
                     route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]),
                     route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]),
                     $amountMinor,
+                    $payment,
                 );
             } catch (\DomainException $e) {
                 return back()->withErrors(['amount' => $e->getMessage()]);
@@ -618,101 +708,201 @@ class BillingController extends Controller
             return Inertia::location($checkoutUrl);
         }
 
+        if ($channel === 'wallet') {
+            $walletError = $this->payFromWallet($user, $amountMinor, $currency, $invoice, $itemIds, $payment);
+
+            if ($walletError) {
+                return back()->withErrors(['channel' => $walletError]);
+            }
+
+            $user->recordActivity("Paid {$amountLabel} from the Community Wallet");
+
+            return back()->with('success', "Payment of {$amountLabel} recorded.");
+        }
+
         /*
          | Channels the app cannot see — bank wire, cash, QR, NFC, digital
-         | wallets, Zelle, Cash App — are recorded as pending and settle nothing
-         | until an administrator confirms the money arrived. Their drivers
-         | report success for any amount, which used to mark invoices Paid on
-         | the resident's word alone.
+         | wallets, Zelle, Cash App — become AwaitingTransfer and settle nothing
+         | until one administrator logs the money as received and another
+         | verifies it in a bank reconciliation. Their drivers report success
+         | for any amount, so nothing they say is taken as proof of payment.
          */
-        $awaitsConfirmation = $amountMinor > 0 && $this->orchestrator->requiresOfficeConfirmation($validated['channel']);
+        $payment ??= $this->orchestrator->startPayment([
+            'user' => $user,
+            'channel' => $channel,
+            'invoice' => $invoice,
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+        ]);
 
-        if ($amountMinor > 0) {
-            $settlement = $this->orchestrator->settlePayment($validated['channel'], [
-                'amount_minor' => $amountMinor,
-                'currency' => $currency,
-                'user_id' => $user->id,
-                'lot' => $user->lot,
-                'description' => "Payment for invoice {$invoice?->reference}",
-            ]);
+        $payment->update([
+            'channel' => $channel,
+            'provider' => Transaction::resolveDefaultProvider($channel),
+            'invoice_id' => $invoice?->id,
+            'applies_to' => $invoice ? 'invoice' : $payment->applies_to,
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+            'invoice_item_ids' => $itemIds ?: null,
+            'device_identifier' => $validated['device_identifier'] ?? $payment->device_identifier,
+        ]);
 
-            // The wallet driver refuses when the balance is short; this result
-            // was ignored, so a short wallet still recorded a completed payment.
-            if (! ($settlement['success'] ?? false)) {
-                return back()->withErrors(['channel' => $settlement['notes'] ?? 'The payment could not be taken.']);
-            }
+        $this->orchestrator->awaitTransfer($payment, $user, $validated['payer_reference'] ?? null);
 
-            $payment = $this->orchestrator->recordTransaction(
-                user: $user,
-                amountMinor: $amountMinor,
-                channel: $validated['channel'],
-                reference: $settlement['reference'] ?? ('PAY-'.strtoupper(Str::random(8))),
-                invoice: $invoice,
-                status: $awaitsConfirmation ? Transaction::STATUS_PENDING : 'completed',
-                notes: $awaitsConfirmation
-                    ? "Reported via {$validated['channel']} in {$currency}; awaiting office confirmation"
-                    : "Settled via {$validated['channel']} in {$currency}",
-                currency: $currency
-            );
+        $user->recordActivity("Reported a payment of {$amountLabel} via {$channel} ({$payment->transaction_id}), awaiting confirmation");
 
-            if ($awaitsConfirmation && $itemIds !== []) {
-                $payment->update(['invoice_item_ids' => $itemIds]);
-            }
-        }
-
-        if (! $awaitsConfirmation && $itemIds !== []) {
-            InvoiceItem::whereKey($itemIds)->update(['status' => 'Paid']);
-        }
-
-        // Settles from completed ledger rows only, so a pending payment changes
-        // nothing here while a wallet share already taken still counts.
-        $invoice?->settleFromLedger();
-
-        $amountLabel = "{$currency} ".number_format($validated['amount'], 2);
-
-        if ($awaitsConfirmation) {
-            $user->recordActivity("Reported a payment of {$amountLabel} via {$validated['channel']}, awaiting confirmation");
-
-            return back()->with('success', "Payment of {$amountLabel} submitted. Your statement updates once the community office confirms it has arrived.");
-        }
-
-        $user->recordActivity("Paid {$amountLabel} via {$validated['channel']}");
-
-        return back()->with('success', "Payment of {$amountLabel} recorded.");
+        return back()->with('success', "Payment {$payment->transaction_id} of {$amountLabel} submitted. Your statement updates once the community office has received and verified it.");
     }
 
     /**
-     * An administrator confirms a pending payment's money arrived.
-     * Route gate: `manageBilling`.
+     * Take money from the payer's Community Wallet and apply it at once.
+     * Returns an error message, or null on success.
+     *
+     * @param  list<int>  $itemIds
      */
-    public function confirmPayment(Request $request, Transaction $transaction): RedirectResponse
+    private function payFromWallet(User $user, int $amountMinor, string $currency, ?Invoice $invoice, array $itemIds = [], ?Payment $payment = null): ?string
     {
-        try {
-            $this->orchestrator->confirmPendingPayment($transaction, $request->user());
-        } catch (\DomainException $e) {
-            return back()->withErrors(['transaction' => $e->getMessage()]);
+        $payment ??= $this->orchestrator->startPayment([
+            'user' => $user,
+            'channel' => 'wallet',
+            'invoice' => $invoice,
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+        ]);
+
+        $payment->update([
+            'channel' => 'wallet',
+            'provider' => 'internal',
+            'invoice_id' => $invoice?->id,
+            'amount_minor' => $amountMinor,
+            'invoice_item_ids' => $itemIds ?: null,
+        ]);
+
+        $settlement = $this->orchestrator->settlePayment('wallet', [
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+            'user_id' => $user->id,
+            'description' => "Payment {$payment->transaction_id}".($invoice ? " for invoice {$invoice->reference}" : ''),
+        ]);
+
+        // The wallet refuses when the balance is short; that refusal was
+        // ignored once, and a short wallet recorded a completed payment.
+        if (! ($settlement['success'] ?? false)) {
+            $reason = 'Your Community Wallet does not hold that much.';
+            $payment->transitionTo(PaymentState::Failed, $user, 'resident', $reason, ['failure_reason' => $reason]);
+
+            return $reason;
         }
 
-        return back()->with('success', "Payment {$transaction->reference} confirmed.");
+        $payment->transitionTo(PaymentState::Succeeded, $user, 'resident', 'Debited from the Community Wallet');
+
+        $this->orchestrator->applyPayment($payment, [
+            'reference' => $settlement['reference'] ?? $payment->transaction_id,
+            'provider_reference' => $settlement['reference'] ?? null,
+            'notes' => 'Paid from the Community Wallet',
+        ], $user, 'resident');
+
+        return null;
     }
 
     /**
-     * An administrator records that a pending payment never arrived.
+     * Start a payment and return its slip, before any money moves.
+     *
+     * The payer sees the CH- number from the first step. The payment is
+     * Created and nothing else: it is not on the ledger, and it is not in the
+     * office's queue — a resident cannot put anything in front of the office
+     * to confirm. It is submitted through pay() with its transaction_id.
+     */
+    public function initiatePayment(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($request->has('payment_channel') && ! $request->has('channel')) {
+            $request->merge(['channel' => $request->input('payment_channel')]);
+        }
+
+        $validated = $request->validate([
+            'channel' => ['required', 'string', 'in:'.implode(',', $this->orchestrator->channelKeys())],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'currency' => ['nullable', 'string', 'in:JMD,USD,CAD,GBP,EUR,jmd,usd,cad,gbp,eur'],
+            'invoice_id' => ['nullable', 'integer'],
+            'purpose' => ['nullable', 'string', 'in:'.implode(',', self::PAYMENT_PURPOSES)],
+            'device_identifier' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $invoice = isset($validated['invoice_id'])
+            ? $user->invoices()->whereKey($validated['invoice_id'])->first()
+            : $user->invoices()->outstanding()->latest('due_on')->first();
+
+        if (isset($validated['invoice_id']) && ! $invoice) {
+            return response()->json(['message' => 'That statement is not on your account.', 'errors' => ['invoice_id' => ['That statement is not on your account.']]], 422);
+        }
+
+        $amountMinor = (int) round($validated['amount'] * 100);
+
+        if ($invoice && $amountMinor > $invoice->balanceRemainingMinor()) {
+            return response()->json(['message' => 'That is more than the balance still owed on this statement.', 'errors' => ['amount' => ['That is more than the balance still owed on this statement.']]], 422);
+        }
+
+        $payment = $this->orchestrator->startPayment([
+            'user' => $user,
+            'channel' => $validated['channel'],
+            'invoice' => $invoice,
+            'purpose' => $validated['purpose'] ?? null,
+            'amount_minor' => $amountMinor,
+            'currency' => strtoupper($validated['currency'] ?? ($invoice?->currency ?? 'JMD')),
+            'device_identifier' => $validated['device_identifier'] ?? null,
+            'metadata' => ['initiated_via' => 'portal_payment_center'],
+        ]);
+
+        $slip = $payment->toSlip();
+
+        return response()->json([
+            'success' => true,
+            'transaction' => $slip,
+            'slip' => $slip,
+            'transaction_id' => $payment->transaction_id,
+            'status' => $payment->state->value,
+        ]);
+    }
+
+    /**
+     * An administrator logs that an office payment's money has arrived.
+     * Route gate: `manageBilling`. It is applied only once a different
+     * administrator verifies it in a bank reconciliation.
+     */
+    public function receivePayment(Request $request, Payment $payment): RedirectResponse
+    {
+        $validated = $request->validate([
+            'bank_reference' => ['nullable', 'string', 'max:120'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $this->orchestrator->markReceived($payment, $request->user(), $validated['bank_reference'] ?? null, $validated['note'] ?? null);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['payment' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Payment {$payment->transaction_id} logged as received. Another administrator verifies it in the next bank reconciliation.");
+    }
+
+    /**
+     * An administrator records that an office payment never arrived.
      * Route gate: `manageBilling`.
      */
-    public function rejectPayment(Request $request, Transaction $transaction): RedirectResponse
+    public function rejectPayment(Request $request, Payment $payment): RedirectResponse
     {
         $validated = $request->validate([
             'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
         try {
-            $this->orchestrator->rejectPendingPayment($transaction, $request->user(), $validated['reason'] ?? null);
+            $this->orchestrator->rejectPayment($payment, $request->user(), $validated['reason'] ?? null);
         } catch (\DomainException $e) {
-            return back()->withErrors(['transaction' => $e->getMessage()]);
+            return back()->withErrors(['payment' => $e->getMessage()]);
         }
 
-        return back()->with('success', "Payment {$transaction->reference} marked as not received.");
+        return back()->with('success', "Payment {$payment->transaction_id} marked as not received.");
     }
 
     public function updateAutoPay(Request $request): RedirectResponse
@@ -982,7 +1172,7 @@ class BillingController extends Controller
 
         // A receipt for money nobody has confirmed would be proof of nothing.
         abort_if(
-            in_array($transaction->status, [Transaction::STATUS_PENDING, 'rejected'], true),
+            $transaction->isPending() || in_array($transaction->status, ['rejected'], true),
             409,
             'A receipt is issued once the community office confirms the payment.',
         );
@@ -1009,38 +1199,66 @@ class BillingController extends Controller
             'bank_statement_date' => ['required', 'date'],
             'statement_balance' => ['required', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            'verify_payment_ids' => ['nullable', 'array'],
+            'verify_payment_ids.*' => ['integer'],
         ]);
 
+        $admin = $request->user();
         $date = $validated['bank_statement_date'];
         $statementBalanceMinor = (int) round(((float) $validated['statement_balance']) * 100);
 
-        // Ledger balance = sum(completed payments up to statement date) - sum(refunds up to statement date)
-        $completedMinor = Transaction::where('status', 'completed')
-            ->whereDate('created_at', '<=', $date)
-            ->sum('amount_minor');
+        try {
+            [$reconciliation, $verified] = DB::transaction(function () use ($validated, $admin, $date, $statementBalanceMinor): array {
+                $reconciliation = BankReconciliation::create([
+                    'bank_statement_date' => $date,
+                    'statement_balance_minor' => $statementBalanceMinor,
+                    'ledger_balance_minor' => 0,
+                    'difference_minor' => 0,
+                    'reconciled_by' => $admin->id,
+                    'status' => 'Discrepancy',
+                    'notes' => $validated['notes'] ?? null,
+                ]);
 
-        $refundedMinor = Transaction::where('status', 'refunded')
-            ->whereDate('created_at', '<=', $date)
-            ->sum('amount_minor');
+                /*
+                 | Office payments on this statement are verified first — by an
+                 | administrator other than the one who logged them received —
+                 | so the comparison below includes them. All or none: one
+                 | payment that cannot be verified stops the reconciliation.
+                 */
+                $verified = 0;
+                foreach (Payment::query()->whereKey($validated['verify_payment_ids'] ?? [])->get() as $payment) {
+                    $this->orchestrator->verifyReceived($payment, $admin, $reconciliation);
+                    $verified++;
+                }
 
-        $ledgerBalanceMinor = (int) ($completedMinor - $refundedMinor);
-        $diffMinor = $statementBalanceMinor - $ledgerBalanceMinor;
-        $status = ($diffMinor === 0) ? 'Reconciled' : 'Discrepancy';
+                // Money received less money refunded, by the date it arrived.
+                $asOf = fn ($query) => $query->whereRaw('date(coalesce(settled_at, created_at)) <= ?', [$date]);
+                $completedMinor = (int) $asOf(Transaction::where('status', Transaction::STATUS_COMPLETED))->sum('amount_minor');
+                $refundedMinor = (int) $asOf(Transaction::where('status', Transaction::STATUS_REFUNDED))->sum('amount_minor');
 
-        BankReconciliation::create([
-            'bank_statement_date' => $date,
-            'statement_balance_minor' => $statementBalanceMinor,
-            'ledger_balance_minor' => $ledgerBalanceMinor,
-            'difference_minor' => $diffMinor,
-            'reconciled_by' => $request->user()->id,
-            'status' => $status,
-            'notes' => $validated['notes'] ?? null,
-        ]);
+                $ledgerBalanceMinor = $completedMinor - $refundedMinor;
+                $diffMinor = $statementBalanceMinor - $ledgerBalanceMinor;
 
-        $statusWord = $status === 'Reconciled' ? 'balanced perfectly' : 'has a variance of J$'.number_format($diffMinor / 100, 2);
-        $request->user()->recordActivity("Completed bank reconciliation for {$date}: {$statusWord}");
+                $reconciliation->update([
+                    'ledger_balance_minor' => $ledgerBalanceMinor,
+                    'difference_minor' => $diffMinor,
+                    'status' => $diffMinor === 0 ? 'Reconciled' : 'Discrepancy',
+                ]);
 
-        return back()->with('success', "Bank reconciliation recorded. Status: {$status} ({$statusWord}).");
+                return [$reconciliation, $verified];
+            });
+        } catch (\DomainException $e) {
+            return back()->withErrors(['verify_payment_ids' => $e->getMessage()]);
+        }
+
+        $statusWord = $reconciliation->status === 'Reconciled'
+            ? 'balanced perfectly'
+            : 'has a variance of J$'.number_format($reconciliation->difference_minor / 100, 2);
+        $verifiedWord = $verified > 0 ? " {$verified} office ".($verified === 1 ? 'payment' : 'payments').' verified and applied.' : '';
+
+        $admin->recordActivity("Completed bank reconciliation for {$date}: {$statusWord}".($verified ? "; verified {$verified} office payments" : ''));
+
+        return back()->with('success', "Bank reconciliation recorded. Status: {$reconciliation->status} ({$statusWord}).{$verifiedWord}");
     }
 
     /**

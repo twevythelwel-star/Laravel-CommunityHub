@@ -2,12 +2,19 @@
 
 namespace App\Services\Payments;
 
+use App\Enums\PaymentState;
+use App\Exceptions\IllegalPaymentTransition;
+use App\Models\BankReconciliation;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Payment;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
+use App\Models\PaymentMethod;
 use App\Models\Transaction;
+use App\Models\TransactionEvent;
 use App\Models\User;
+use App\Services\Ledger\LedgerService;
 use App\Services\Payments\Drivers\BankTransferDriver;
 use App\Services\Payments\Drivers\CashDeskDriver;
 use App\Services\Payments\Drivers\CommunityWalletDriver;
@@ -17,9 +24,11 @@ use App\Services\Payments\Drivers\PaymentDriverInterface;
 use App\Services\Payments\Drivers\PeerPaymentDriver;
 use App\Services\Payments\Drivers\QrPaymentDriver;
 use App\Services\Payments\Drivers\StripeCardDriver;
+use App\Services\SmsService;
 use App\Services\StripePaymentService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
 class PaymentOrchestratorService
@@ -88,29 +97,198 @@ class PaymentOrchestratorService
     }
 
     /**
-     * An administrator confirms that a pending payment's money arrived.
+     * Begin a payment, in Created unless told otherwise, with its CH- number.
      *
-     * The payment becomes `completed`; the line items the resident chose are
-     * marked Paid; the invoice is settled from the ledger; a pending donation
-     * becomes a completed one and starts counting towards its campaign.
+     * Nothing is written to the ledger: the ledger records money, and none
+     * has moved. Recognised keys: user, applies_to, purpose, channel,
+     * amount_minor, currency, invoice, fundraiser, donation, payment_link,
+     * item_ids, device_identifier, metadata, state, source.
      *
-     * @throws DomainException when the payment is not awaiting confirmation
+     * @param  array<string, mixed>  $params
      */
-    public function confirmPendingPayment(Transaction $payment, User $admin): Transaction
+    public function startPayment(array $params): Payment
     {
-        return DB::transaction(function () use ($payment, $admin): Transaction {
-            $payment = Transaction::query()->lockForUpdate()->findOrFail($payment->id);
+        $user = $params['user'] ?? null;
+        $channel = $params['channel'] ?? 'card';
+        $invoice = $params['invoice'] ?? null;
+        $fundraiser = $params['fundraiser'] ?? null;
 
-            if (! $payment->isPending()) {
-                throw new DomainException("Payment {$payment->reference} is not awaiting confirmation.");
+        $appliesTo = $params['applies_to'] ?? match (true) {
+            $invoice !== null => 'invoice',
+            $fundraiser !== null => 'donation',
+            default => 'payment_link',
+        };
+
+        $provider = Transaction::resolveDefaultProvider($channel);
+
+        return Payment::start($params['state'] ?? PaymentState::Created, [
+            'applies_to' => $appliesTo,
+            'purpose' => $params['purpose'] ?? ($appliesTo === 'donation' ? Transaction::PURPOSE_FUNDRAISING_DONATION : Transaction::PURPOSE_HOA_ASSESSMENT),
+            'channel' => $channel,
+            'provider' => $provider,
+            'user_id' => $user?->id,
+            'invoice_id' => $invoice?->id,
+            'fundraiser_id' => $fundraiser?->id,
+            'donation_id' => ($params['donation'] ?? null)?->id,
+            'payment_link_id' => ($params['payment_link'] ?? null)?->id,
+            'payment_method_id' => $user instanceof User ? $this->paymentMethodFor($user, $channel, $provider)->id : null,
+            'amount_minor' => (int) $params['amount_minor'],
+            'currency' => strtoupper($params['currency'] ?? $invoice?->currency ?? $fundraiser?->goal_currency ?? 'JMD'),
+            'invoice_item_ids' => ($params['item_ids'] ?? []) ?: null,
+            'device_identifier' => $params['device_identifier'] ?? null,
+            'metadata' => $params['metadata'] ?? null,
+        ], $user instanceof User ? $user : null, $params['source'] ?? 'resident');
+    }
+
+    /** The payer's saved method for a channel, from the registry. */
+    private function paymentMethodFor(User $user, string $channel, string $provider): PaymentMethod
+    {
+        $methodType = match ($channel) {
+            'card', 'stripe_card' => 'card',
+            'apple_pay', 'google_pay', 'samsung_wallet' => 'wallet',
+            'bank_wire' => 'bank_transfer',
+            'nfc_pos' => 'card_present',
+            'zelle', 'cash_app' => 'peer_transfer',
+            'wallet' => 'community_wallet',
+            default => 'other',
+        };
+
+        return PaymentMethod::resolveForUser($user, $methodType, $provider, [
+            'wallet_type' => in_array($channel, ['apple_pay', 'google_pay', 'samsung_wallet'], true) ? $channel : null,
+            'display_name' => Transaction::formatPaymentMethod($channel),
+        ]);
+    }
+
+    /** An office channel was chosen: the payer now has to send the money. */
+    public function awaitTransfer(Payment $payment, ?User $payer = null, ?string $payerReference = null): Payment
+    {
+        return $payment->transitionTo(PaymentState::AwaitingTransfer, $payer, 'resident', null, [
+            'payer_reference' => $payerReference,
+        ]);
+    }
+
+    /**
+     * An administrator logs that an office payment's money has arrived.
+     *
+     * This does not settle anything. A second administrator verifies it in a
+     * bank reconciliation (verifyReceived), and only then is it Paid.
+     *
+     * @throws IllegalPaymentTransition unless the payment is awaiting transfer
+     */
+    public function markReceived(Payment $payment, User $admin, ?string $bankReference = null, ?string $note = null): Payment
+    {
+        return DB::transaction(function () use ($payment, $admin, $bankReference, $note): Payment {
+            $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+
+            $payment->transitionTo(PaymentState::Received, $admin, 'admin', $note, [
+                'received_by' => $admin->id,
+                'received_at' => now(),
+                'bank_reference' => $bankReference,
+            ]);
+
+            $admin->recordActivity("Logged {$payment->channel} payment {$payment->transaction_id} as received");
+
+            return $payment;
+        });
+    }
+
+    /**
+     * A second administrator verifies a received payment against a bank
+     * statement, and it is applied.
+     *
+     * Separation of duties: whoever logged the money as received may not be
+     * the one who verifies it, so no single administrator can settle a debt
+     * on their own word.
+     *
+     * @throws DomainException when the verifier is the one who logged receipt
+     * @throws IllegalPaymentTransition unless the payment is Received
+     */
+    public function verifyReceived(Payment $payment, User $admin, BankReconciliation $reconciliation): Payment
+    {
+        return DB::transaction(function () use ($payment, $admin, $reconciliation): Payment {
+            $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->received_by === $admin->id) {
+                throw new DomainException("Payment {$payment->transaction_id} was logged as received by you; a different administrator must verify it.");
             }
 
-            $payment->update([
-                'status' => 'completed',
+            $payment->transitionTo(PaymentState::Verified, $admin, 'admin', "Verified in bank reconciliation #{$reconciliation->id}", [
+                'verified_by' => $admin->id,
+                'verified_at' => now(),
+                'bank_reconciliation_id' => $reconciliation->id,
+            ]);
+
+            $this->applyPayment($payment, [
+                'reference' => $payment->payer_reference ?: $payment->transaction_id,
+                // Dated when the money arrived, so the reconciliation counts it
+                // against the statement it appears on.
+                'settled_at' => $payment->received_at,
                 'reviewed_by' => $admin->id,
                 'reviewed_at' => now(),
-                'settled_at' => now(),
+                'notes' => "{$payment->channel} payment verified by {$admin->display_name}".($payment->bank_reference ? " (bank ref {$payment->bank_reference})" : ''),
+            ], $admin, 'admin');
+
+            $admin->recordActivity("Verified {$payment->channel} payment {$payment->transaction_id} in bank reconciliation #{$reconciliation->id}");
+
+            return $payment;
+        });
+    }
+
+    /**
+     * An administrator records that an office payment never arrived.
+     * Nothing it would have paid changes; a pending donation becomes rejected.
+     *
+     * @throws IllegalPaymentTransition unless awaiting transfer or received
+     */
+    public function rejectPayment(Payment $payment, User $admin, ?string $reason = null): Payment
+    {
+        return DB::transaction(function () use ($payment, $admin, $reason): Payment {
+            $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+
+            $payment->transitionTo(PaymentState::Rejected, $admin, 'admin', $reason ?: 'Payment not received', [
+                'failure_reason' => $reason ?: 'Payment not received',
             ]);
+
+            // Placeholder ledger rows from before payments had their own table.
+            $payment->ledgerEntries()->whereIn('status', ['pending', 'awaiting_bank_transfer', 'received', 'verified'])
+                ->update(['status' => 'rejected']);
+
+            $payment->donation?->update(['status' => 'rejected']);
+
+            $admin->recordActivity("Rejected {$payment->channel} payment {$payment->transaction_id}".($reason ? ": {$reason}" : ''));
+
+            return $payment;
+        });
+    }
+
+    /**
+     * Apply a payment whose money has arrived: write the ledger row, settle
+     * what it was for, post the double-entry ledger, and move it to Paid.
+     *
+     * The payment must be Succeeded (a processor has the money) or Verified
+     * (the office has checked it). Everything happens in one database
+     * transaction; the SMS confirmation goes out only after it commits, so a
+     * slow provider never holds the invoice lock and a rolled-back payment
+     * is never announced.
+     *
+     * @param  array<string, mixed>  $ledger  attributes for the ledger row
+     *
+     * @throws IllegalPaymentTransition
+     */
+    public function applyPayment(Payment $payment, array $ledger = [], ?User $actor = null, string $source = 'system'): Transaction
+    {
+        return DB::transaction(function () use ($payment, $ledger, $actor, $source): Transaction {
+            $payment = Payment::query()->lockForUpdate()->findOrFail($payment->id);
+
+            if ($payment->state === PaymentState::Paid && $existing = $payment->ledgerPayment()) {
+                return $existing;
+            }
+
+            if (! $payment->state->canTransitionTo(PaymentState::Paid)) {
+                throw new IllegalPaymentTransition($payment, PaymentState::Paid);
+            }
+
+            $row = $this->recordLedgerPayment($payment, $ledger);
 
             if ($payment->invoice) {
                 if ($payment->invoice_item_ids) {
@@ -125,42 +303,100 @@ class PaymentOrchestratorService
 
             $payment->donation?->update(['status' => 'completed', 'donated_at' => now()]);
 
-            $admin->recordActivity("Confirmed {$payment->payment_channel} payment {$payment->reference} of {$payment->currency} ".number_format($payment->amount_minor / 100, 2));
+            $payment->transitionTo(PaymentState::Paid, $actor, $source, null, ['paid_at' => now()]);
 
-            return $payment;
+            app(LedgerService::class)->postTransaction($row);
+
+            DB::afterCommit(fn () => $this->sendPaymentConfirmationNotification($row->fresh()));
+
+            return $row;
         });
     }
 
     /**
-     * An administrator records that a pending payment's money never arrived.
+     * The ledger row for a payment's money.
      *
-     * Nothing it would have paid changes; a pending donation is marked
-     * rejected so it never counts.
+     * A placeholder row written before payments had their own table is
+     * promoted rather than duplicated; otherwise the row is created once,
+     * keyed on its reference, so a retry cannot record the money twice.
      *
-     * @throws DomainException when the payment is not awaiting confirmation
+     * @param  array<string, mixed>  $attributes
      */
-    public function rejectPendingPayment(Transaction $payment, User $admin, ?string $reason = null): Transaction
+    public function recordLedgerPayment(Payment $payment, array $attributes = []): Transaction
     {
-        return DB::transaction(function () use ($payment, $admin, $reason): Transaction {
-            $payment = Transaction::query()->lockForUpdate()->findOrFail($payment->id);
+        $values = [
+            'payment_id' => $payment->id,
+            'transaction_id' => $payment->transaction_id,
+            'user_id' => $payment->user_id,
+            'invoice_id' => $payment->invoice_id,
+            'fundraiser_id' => $payment->fundraiser_id,
+            'donation_id' => $payment->donation_id,
+            'payment_link_id' => $payment->payment_link_id,
+            'payment_method_id' => $payment->payment_method_id,
+            'purpose' => $payment->purpose,
+            'amount_minor' => $payment->amount_minor,
+            'fee_minor' => 0,
+            'net_amount_minor' => $payment->amount_minor,
+            'currency' => $payment->currency,
+            'payment_channel' => $payment->channel === 'card' ? StripePaymentService::CHANNEL : $payment->channel,
+            'provider' => $payment->provider,
+            'device_identifier' => $payment->device_identifier,
+            'status' => Transaction::STATUS_COMPLETED,
+            'settled_at' => now(),
+            'captured_at' => now(),
+            ...$attributes,
+        ];
 
-            if (! $payment->isPending()) {
-                throw new DomainException("Payment {$payment->reference} is not awaiting confirmation.");
+        $placeholder = $payment->ledgerEntries()
+            ->whereIn('status', ['pending', 'payment_started', 'requires_action', 'awaiting_bank_transfer', 'received', 'verified'])
+            ->first();
+
+        if ($placeholder) {
+            $placeholder->update($values);
+
+            return $placeholder;
+        }
+
+        $reference = $values['reference'] ?? $payment->transaction_id;
+
+        return Transaction::query()->firstOrCreate(['reference' => $reference], [...$values, 'reference' => $reference]);
+    }
+
+    /**
+     * Send payment confirmation notification via Twilio when payment is confirmed/paid.
+     */
+    public function sendPaymentConfirmationNotification(Transaction $payment): void
+    {
+        if (! $payment->isPaid()) {
+            return;
+        }
+
+        $amountFormatted = "{$payment->currency} ".number_format($payment->amount_minor / 100, 2);
+        $txId = $payment->transaction_id ?? $payment->reference;
+        $user = $payment->user;
+
+        if (! $user || ! $user->phone) {
+            return;
+        }
+
+        try {
+            $sms = app(SmsService::class);
+            if ($sms->isConfigured()) {
+                if ($payment->fundraiser_id && $payment->fundraiser) {
+                    $message = "CommunityHub donation received: {$amountFormatted} for {$payment->fundraiser->title}. Receipt {$txId}.";
+                } else {
+                    $purpose = $payment->purpose ?: 'Payment';
+                    $message = "CommunityHub {$purpose} received: {$amountFormatted}. Receipt {$txId}.";
+                }
+
+                $sms->send($user->phone, $message);
+
+                TransactionEvent::log($payment, 'notification_sent', $payment->status, null, "Dispatched SMS confirmation for {$txId}");
             }
-
-            $payment->update([
-                'status' => 'rejected',
-                'reviewed_by' => $admin->id,
-                'reviewed_at' => now(),
-                'notes' => trim(($payment->notes ?? '').' | Rejected: '.($reason ?: 'payment not received'), ' |'),
-            ]);
-
-            $payment->donation?->update(['status' => 'rejected']);
-
-            $admin->recordActivity("Rejected {$payment->payment_channel} payment {$payment->reference}".($reason ? ": {$reason}" : ''));
-
-            return $payment;
-        });
+        } catch (\Throwable $e) {
+            // The payment is recorded either way; a failed text is not a failed payment.
+            Log::warning("Payment confirmation SMS for {$txId} not sent: {$e->getMessage()}");
+        }
     }
 
     /**

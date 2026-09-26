@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\Fundraiser;
-use App\Models\Transaction;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -30,6 +30,22 @@ class FundraisingPageTest extends TestCase
             'end_date' => now()->addMonth(),
             'status' => 'Active',
         ], $overrides));
+    }
+
+    /** One administrator logs the payment received; another verifies it in a reconciliation. */
+    private function receiveAndVerify(Payment $payment): void
+    {
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.payments.receive', $payment))
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->post(route('dashboard.billing.reconciliations.store'), [
+                'bank_statement_date' => now()->toDateString(),
+                'statement_balance' => 0,
+                'verify_payment_ids' => [$payment->id],
+            ])
+            ->assertSessionHasNoErrors();
     }
 
     private function resident(array $attributes = []): User
@@ -180,8 +196,7 @@ class FundraisingPageTest extends TestCase
             ->assertRedirect();
 
         // The public feed shows confirmed gifts only.
-        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
-            ->post(route('dashboard.billing.transactions.confirm', Transaction::sole()));
+        $this->receiveAndVerify(Payment::sole());
 
         $response = $this->actingAs($this->resident())->get('/dashboard/fundraising');
 

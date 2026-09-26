@@ -136,7 +136,10 @@ class LegalPagesTest extends TestCase
             'lot' => '42',
         ])->assertRedirect();
 
-        $this->assertDatabaseMissing('transactions', ['user_id' => $resident->id]);
-        $this->assertDatabaseCount('transactions', 1);
+        $this->assertDatabaseMissing('payments', ['user_id' => $resident->id]);
+        $this->assertDatabaseCount('payments', 1);
+        $this->assertDatabaseHas('payments', ['state' => 'awaiting_transfer', 'user_id' => null]);
+        // Nothing is on the ledger until the office has verified the money.
+        $this->assertDatabaseCount('transactions', 0);
     }
 }

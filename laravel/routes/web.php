@@ -357,6 +357,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::middleware('can:accessBilling')->group(function () {
         Route::get('/billing', [BillingController::class, 'index'])->name('billing');
         Route::post('/billing/pay', [BillingController::class, 'pay'])->name('billing.pay');
+        // Starts a Created payment and returns its slip. Nothing reaches the
+        // ledger or the office queue from here; the limit keeps it that cheap.
+        Route::post('/billing/transactions/initiate', [BillingController::class, 'initiatePayment'])
+            ->middleware('throttle:30,1')
+            ->name('billing.transactions.initiate');
         Route::match(['post', 'patch'], '/billing/autopay', [BillingController::class, 'updateAutoPay'])->name('billing.autopay');
         Route::post('/billing/payment-links', [BillingController::class, 'storePaymentLink'])->name('billing.payment-links.store');
         Route::post('/billing/wallet/topup', [BillingController::class, 'topUpWallet'])->name('billing.wallet.topup');
@@ -386,8 +391,10 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
             Route::post('/billing/channels/{channel}/toggle', [BillingController::class, 'toggleChannel'])->name('billing.channels.toggle');
             Route::post('/billing/payment-plans', [BillingController::class, 'storePaymentPlan'])->name('billing.payment-plans.store');
             Route::post('/billing/reconciliations', [BillingController::class, 'storeReconciliation'])->name('billing.reconciliations.store');
-            Route::post('/billing/transactions/{transaction}/confirm', [BillingController::class, 'confirmPayment'])->name('billing.transactions.confirm');
-            Route::post('/billing/transactions/{transaction}/reject', [BillingController::class, 'rejectPayment'])->name('billing.transactions.reject');
+            // Office payments: one administrator logs receipt; verification is
+            // part of storeReconciliation, by a different administrator.
+            Route::post('/billing/payments/{payment}/receive', [BillingController::class, 'receivePayment'])->name('billing.payments.receive');
+            Route::post('/billing/payments/{payment}/reject', [BillingController::class, 'rejectPayment'])->name('billing.payments.reject');
         });
         Route::get('/billing/transactions/{transaction}/receipt', [BillingController::class, 'downloadReceipt'])->name('billing.transactions.receipt');
         Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])

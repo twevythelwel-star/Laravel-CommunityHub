@@ -19,6 +19,9 @@ import {
   Layers,
   ChevronDown,
   ChevronUp,
+  Copy,
+  Check,
+  Loader2,
 } from 'lucide-react';
 import { channelSurcharge, type PaymentChannel } from '@/lib/payment-channels';
 import { toast } from '@/hooks/use-toast';
@@ -29,6 +32,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+
+export type TransactionSlipData = {
+  transaction_id: string;
+  public_transaction_id: string;
+  user: string;
+  property: string;
+  community: string;
+  purpose: string;
+  invoice: string;
+  amount: string | number;
+  currency: string;
+  status: string;
+  payment_method: string;
+  method: string;
+  provider: string;
+  provider_transaction_id?: string | null;
+  state_label?: string;
+  device?: string | null;
+  created: string;
+};
 
 export const CURRENCY_CONFIG: Record<string, { rate: number; symbol: string; name: string; flag: string }> = {
   JMD: { rate: 1, symbol: 'J$', name: 'Jamaican Dollar', flag: '🇯🇲' },
@@ -55,6 +78,20 @@ export type PaymentCenterProps = {
   availableChannels?: any[];
   autoPay?: any;
 };
+
+/** Who handles the money, in words; see Transaction::resolveDefaultProvider(). */
+function providerLabel(provider: string): string {
+  switch (provider) {
+    case 'stripe':
+      return 'Stripe';
+    case 'internal':
+      return 'Community Wallet';
+    case 'office':
+      return 'Confirmed by the community office';
+    default:
+      return provider;
+  }
+}
 
 export function PaymentCenterHero({
   amountDue,
@@ -137,6 +174,10 @@ export function PaymentCenterHero({
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [modalMethod, setModalMethod] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pendingSlip, setPendingSlip] = useState<TransactionSlipData | null>(null);
+  const [isInitiating, setIsInitiating] = useState(false);
+  const [slipError, setSlipError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState(false);
 
   // Compute selected total
   const baseSelectedTotal = itemizedCharges.length > 0 && showItemized
@@ -155,9 +196,34 @@ export function PaymentCenterHero({
     );
   };
 
-  const handleTriggerPay = (channelKey: string, methodLabel: string) => {
+  const handleTriggerPay = async (channelKey: string, methodLabel: string) => {
     setModalMethod(methodLabel);
     setActiveModal(channelKey);
+    setIsInitiating(true);
+    setPendingSlip(null);
+    setSlipError(null);
+
+    try {
+      // window.axios carries the CSRF token (resources/js/bootstrap.ts).
+      const res = await window.axios.post('/dashboard/billing/transactions/initiate', {
+        channel: channelKey,
+        amount: currentPayTotal,
+        currency: selectedCurrency,
+        purpose: 'HOA Assessment',
+      });
+      setPendingSlip(res.data?.slip ?? res.data?.transaction ?? null);
+    } catch (e: any) {
+      /*
+       * This used to show a made-up slip — CH-YYYY-0000012847, USR-000284,
+       * PROP-00481 — numbers that exist nowhere. Say what went wrong instead;
+       * the payment can still be submitted, and gets its number then.
+       */
+      setSlipError(
+        e?.response?.data?.message ?? 'Could not start this payment. You can still submit it below.',
+      );
+    } finally {
+      setIsInitiating(false);
+    }
   };
 
   const handleConfirmPayment = (channelKey: string) => {
@@ -169,6 +235,8 @@ export function PaymentCenterHero({
         channel: channelKey,
         amount: currentPayTotal,
         currency: selectedCurrency,
+        // Submit the payment on the slip, so its number is the one that settles.
+        transaction_id: pendingSlip?.transaction_id,
         item_ids: showItemized ? selectedChargeIds : undefined,
         split_wallet_amount: settlementMode === 'split' ? Number(splitWalletAmount) : undefined,
       },
@@ -614,7 +682,7 @@ export function PaymentCenterHero({
 
       {/* Interactive Payment Execution Dialog */}
       <Dialog open={activeModal !== null} onOpenChange={(open) => !open && setActiveModal(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -625,12 +693,103 @@ export function PaymentCenterHero({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4 space-y-4 text-sm">
+          <div className="py-2 space-y-4 text-sm">
+            {/* Canonical CommunityHub Transaction Record Card */}
+            <div className="rounded-xl border border-primary/20 bg-slate-50 dark:bg-slate-900/80 p-4 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] uppercase font-bold text-muted-foreground tracking-wider">
+                    Official Transaction Slip
+                  </span>
+                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-300 dark:border-amber-800 text-[10px] py-0 px-1.5 font-bold uppercase">
+                    {pendingSlip?.state_label || pendingSlip?.status || (slipError ? 'NOT STARTED' : '…')}
+                  </Badge>
+                </div>
+                {pendingSlip?.transaction_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(pendingSlip.transaction_id);
+                      setCopiedId(true);
+                      setTimeout(() => setCopiedId(false), 2000);
+                    }}
+                    className="flex items-center gap-1 text-[11px] font-mono font-bold text-primary hover:text-primary/80 transition-colors"
+                    title="Copy Transaction ID"
+                  >
+                    <span>{pendingSlip.transaction_id}</span>
+                    {copiedId ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 opacity-60" />}
+                  </button>
+                )}
+              </div>
+
+              {slipError && (
+                <p role="alert" className="text-xs text-amber-700 dark:text-amber-300">{slipError}</p>
+              )}
+
+              {isInitiating && !pendingSlip ? (
+                <div className="flex items-center justify-center py-4 text-xs text-muted-foreground gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span>Registering canonical CommunityHub transaction record...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">User</span>
+                    <span className="font-mono font-bold text-foreground">{pendingSlip?.user || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Property</span>
+                    <span className="font-mono font-bold text-foreground">{pendingSlip?.property || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Community</span>
+                    <span className="font-mono font-bold text-foreground">{pendingSlip?.community || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Purpose</span>
+                    <span className="font-semibold text-foreground">{pendingSlip?.purpose || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Invoice</span>
+                    <span className="font-mono text-foreground font-semibold">{pendingSlip?.invoice || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Amount & Currency</span>
+                    <span className="font-bold text-foreground text-xs">
+                      ${pendingSlip?.amount || Number(currentPayTotal).toFixed(2)} {pendingSlip?.currency || selectedCurrency}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Payment Method</span>
+                    <span className="font-semibold text-foreground">{pendingSlip?.payment_method || modalMethod}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Payment Processor</span>
+                    <span className="font-semibold text-foreground capitalize">
+                      {providerLabel(pendingSlip?.provider ?? (activeModal === 'card' ? 'stripe' : activeModal === 'wallet' ? 'internal' : 'office'))}
+                    </span>
+                  </div>
+                  {pendingSlip?.device && (
+                    <div className="col-span-2 pt-1 border-t border-border/40">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Terminal / Device</span>
+                      <span className="font-mono font-semibold text-purple-700 dark:text-purple-300">{pendingSlip.device}</span>
+                    </div>
+                  )}
+                  <div className="col-span-2 pt-1 border-t border-border/40 flex justify-between text-[10px] text-muted-foreground">
+                    <span>Created: {pendingSlip?.created || '—'}</span>
+                    {pendingSlip && (
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400">Pre-Created in CommunityHub</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {activeModal === 'apple_pay' && (
               <div className="p-5 rounded-2xl bg-slate-950 text-white text-center space-y-3">
                 <span className="text-3xl"></span>
                 <div className="font-bold text-base">Double-Click Side Button</div>
-                <p className="text-xs text-slate-400">Confirm biometric Touch ID or Face ID on your Apple device.</p>
+                <p className="text-xs text-slate-400">Confirm biometric Touch ID or Face ID on your Apple device. The community office confirms it once the money arrives.</p>
               </div>
             )}
 
@@ -638,7 +797,7 @@ export function PaymentCenterHero({
               <div className="p-5 rounded-2xl bg-card border border-border text-center space-y-3">
                 <span className="text-2xl font-black text-blue-600">G Pay</span>
                 <div className="font-bold text-sm">Confirm with your Google Account</div>
-                <p className="text-xs text-muted-foreground">Select saved Google Pay card ending in •••• 4242.</p>
+                <p className="text-xs text-muted-foreground">Select saved Google Pay card. The community office confirms it once the money arrives.</p>
               </div>
             )}
 
@@ -646,34 +805,21 @@ export function PaymentCenterHero({
               <div className="p-5 rounded-2xl bg-blue-900 text-white text-center space-y-3">
                 <span className="text-2xl font-bold">Samsung Wallet</span>
                 <div className="font-bold text-sm">Swipe up from the bottom of your Samsung phone</div>
-                <p className="text-xs text-blue-200">Authenticate with iris or fingerprint scanner.</p>
+                <p className="text-xs text-blue-200">Authenticate with biometric sensor. The community office confirms it once the money arrives.</p>
               </div>
             )}
 
             {activeModal === 'card' && (
               <div className="space-y-3">
-                {/*
-                  This was a card number, expiry and CVC field under a
-                  "🔒 PCI-DSS Compliant" badge. Nothing was submitted — the
-                  inputs were prefilled with dummy values and read by no
-                  handler — and this application holds no PCI-DSS attestation.
-                  Card details must be entered on the processor's own page,
-                  never in a field this application renders.
-                */}
                 <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-2">
                   <p className="font-semibold">Card checkout</p>
                   {cardCheckout ? (
                     <p className="text-muted-foreground">
-                      You&apos;ll be taken to Stripe&apos;s secure checkout to enter your card
-                      details — they are never typed into Community Hub. Your statement updates
-                      as soon as Stripe confirms the payment. Card payments are charged in the
-                      statement&apos;s currency.
+                      You&apos;ll be taken to Stripe&apos;s secure checkout to complete payment for <strong>{pendingSlip?.transaction_id || 'your transaction'}</strong>. Details are entered directly into Stripe, never stored in Community Hub.
                     </p>
                   ) : (
                     <p className="text-muted-foreground">
-                      Card payment is not yet in service. When it is, you will be taken to the
-                      payment provider&apos;s own secure page to enter your card details — they are
-                      never typed into Community Hub.
+                      Card payment is not yet in service. When it is, you will be taken to Stripe to enter your card details.
                     </p>
                   )}
                 </div>
@@ -682,11 +828,41 @@ export function PaymentCenterHero({
 
             {activeModal === 'bank_wire' && (
               <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2 text-xs">
-                <div className="font-bold text-emerald-900 dark:text-emerald-300">National Commercial Bank (NCB)</div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-900 dark:text-emerald-300">National Commercial Bank (NCB)</span>
+                  <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border-sky-300 text-[10px]">
+                    AWAITING BANK TRANSFER
+                  </Badge>
+                </div>
                 <div>Account Name: <strong>Cypress Bay Community HOA Ltd.</strong></div>
                 <div>Account Number: <strong>102938475</strong> (Checking)</div>
                 <div>Branch: <strong>Kingston 001</strong></div>
-                <div>Wire Reference: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded">WIRE-CB-LOT42</strong></div>
+                <div>Wire Reference: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
+                <p className="text-[11px] text-muted-foreground pt-1 border-t border-emerald-200 dark:border-emerald-800">
+                  ⚠️ Bank transfers require asynchronous reconciliation. CommunityHub matches the deposit from the bank feed and verifies with the ledger before marking your statement Paid.
+                </p>
+              </div>
+            )}
+
+            {activeModal === 'zelle' && (
+              <div className="p-4 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl space-y-2 text-xs">
+                <div className="font-bold text-purple-900 dark:text-purple-300">Zelle External Transfer</div>
+                <div>Recipient Email: <strong>payments@cypressbay.org</strong></div>
+                <div>Memo / Reference: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
+                <p className="text-[11px] text-muted-foreground pt-1 border-t border-purple-200 dark:border-purple-800">
+                  ℹ️ External consumer app: After sending via your banking app, CommunityHub flags this transaction for office reconciliation before updating the ledger.
+                </p>
+              </div>
+            )}
+
+            {activeModal === 'cash_app' && (
+              <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2 text-xs">
+                <div className="font-bold text-emerald-900 dark:text-emerald-300">Cash App External Transfer</div>
+                <div>Cashtag: <strong>$CypressBayHOA</strong></div>
+                <div>Note: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
+                <p className="text-[11px] text-muted-foreground pt-1 border-t border-emerald-200 dark:border-emerald-800">
+                  ℹ️ External consumer app: Send payment with your transaction ID in the note. Office will verify receipt before settling your statement.
+                </p>
               </div>
             )}
 

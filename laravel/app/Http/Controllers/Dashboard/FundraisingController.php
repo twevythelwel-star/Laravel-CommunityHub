@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Enums\PaymentState;
 use App\Http\Controllers\Controller;
 use App\Models\Community;
 use App\Models\Donation;
@@ -303,26 +304,14 @@ class FundraisingController extends Controller
         }
         $receiptNumber = 'DON-REC-'.date('Ymd').'-'.strtoupper(Str::random(5));
 
-        // Settle via Payment Orchestrator
-        $settlement = $this->orchestrator->settlePayment($channel, [
-            'amount_minor' => $amountMinor,
-            'currency' => $fundraiser->goal_currency,
-            'user_id' => $user->id,
-            'description' => "Contribution to {$fundraiser->title}",
-        ]);
-
-        if (! ($settlement['success'] ?? false)) {
-            return back()->withErrors(['channel' => $settlement['notes'] ?? 'The payment could not be taken.']);
-        }
-
         /*
-         | A gift by bank wire, cash, QR, NFC, a digital wallet, Zelle or Cash
-         | App waits for the office to confirm the money arrived. Until then it
-         | is `pending`: it is left out of every campaign total, the public
-         | donor feed, and receipts. Only the Community Wallet settles here.
+         | The gift is on record from the start, as `pending`, which leaves it
+         | out of every campaign total, the public donor feed and receipts.
+         | Its payment decides when it counts: the Community Wallet settles at
+         | once; bank wire, cash, QR, NFC, digital wallets, Zelle and Cash App
+         | wait for the office to log the money received and a second
+         | administrator to verify it in a bank reconciliation.
          */
-        $awaitsConfirmation = $this->orchestrator->requiresOfficeConfirmation($channel);
-
         $donation = $fundraiser->donations()->create([
             'user_id' => $user->id,
             'amount_minor' => $amountMinor,
@@ -331,34 +320,54 @@ class FundraisingController extends Controller
             'is_anonymous' => $request->boolean('is_anonymous'),
             'is_recurring' => $request->boolean('is_recurring'),
             'frequency' => $request->boolean('is_recurring') ? ($validated['frequency'] ?? 'monthly') : null,
-            'status' => $awaitsConfirmation ? 'pending' : 'completed',
+            'status' => 'pending',
             'receipt_number' => $receiptNumber,
             'payment_channel' => $channel,
             'donated_at' => now(),
         ]);
 
-        // Record in Master Ledger
-        $payment = $this->orchestrator->recordTransaction(
-            user: $user,
-            amountMinor: $amountMinor,
-            channel: $channel,
-            reference: $settlement['reference'] ?? ('DON-'.strtoupper(Str::random(8))),
-            fundraiserId: $fundraiser->id,
-            status: $awaitsConfirmation ? Transaction::STATUS_PENDING : 'completed',
-            notes: "Donation to {$fundraiser->title} by ".($request->boolean('is_anonymous') ? 'Anonymous' : ($validated['donor_name'] ?? $user->display_name))
-                .($awaitsConfirmation ? '; awaiting office confirmation' : ''),
-            currency: $fundraiser->goal_currency,
-        );
-
-        $payment->update(['donation_id' => $donation->id]);
+        $payment = $this->orchestrator->startPayment([
+            'user' => $user,
+            'channel' => $channel,
+            'fundraiser' => $fundraiser,
+            'donation' => $donation,
+            'amount_minor' => $amountMinor,
+            'currency' => $fundraiser->goal_currency,
+        ]);
 
         $amountLabel = "{$fundraiser->goal_currency} ".number_format($validated['amount'], 2);
 
-        if ($awaitsConfirmation) {
-            $user->recordActivity("Pledged {$amountLabel} to {$fundraiser->title} via {$channel}, awaiting confirmation");
+        if ($this->orchestrator->requiresOfficeConfirmation($channel)) {
+            $this->orchestrator->awaitTransfer($payment, $user);
 
-            return back()->with('success', 'Thank you! Your gift is recorded as pending and will count towards the campaign once the community office confirms it has arrived.');
+            $user->recordActivity("Pledged {$amountLabel} to {$fundraiser->title} via {$channel} ({$payment->transaction_id}), awaiting confirmation");
+
+            return back()->with('success', "Thank you! Your gift {$payment->transaction_id} is recorded as pending and will count towards the campaign once the community office has received and verified it.");
         }
+
+        // The Community Wallet: money the app holds, so it settles here.
+        $settlement = $this->orchestrator->settlePayment($channel, [
+            'amount_minor' => $amountMinor,
+            'currency' => $fundraiser->goal_currency,
+            'user_id' => $user->id,
+            'description' => "Contribution to {$fundraiser->title} ({$payment->transaction_id})",
+        ]);
+
+        if (! ($settlement['success'] ?? false)) {
+            $reason = $settlement['notes'] ?? 'The payment could not be taken.';
+            $payment->transitionTo(PaymentState::Failed, $user, 'resident', $reason, ['failure_reason' => $reason]);
+            $donation->update(['status' => 'rejected']);
+
+            return back()->withErrors(['channel' => $reason]);
+        }
+
+        $payment->transitionTo(PaymentState::Succeeded, $user, 'resident', 'Debited from the Community Wallet');
+
+        $this->orchestrator->applyPayment($payment, [
+            'reference' => $settlement['reference'] ?? $payment->transaction_id,
+            'provider_reference' => $settlement['reference'] ?? null,
+            'notes' => "Donation to {$fundraiser->title} by ".($request->boolean('is_anonymous') ? 'Anonymous' : ($validated['donor_name'] ?? $user->display_name)),
+        ], $user, 'resident');
 
         $user->recordActivity("Donated {$amountLabel} to {$fundraiser->title}");
 

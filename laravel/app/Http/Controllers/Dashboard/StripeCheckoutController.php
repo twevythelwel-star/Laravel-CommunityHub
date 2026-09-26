@@ -60,6 +60,8 @@ class StripeCheckoutController extends Controller
                 'error',
                 "Card checkout for invoice {$invoice->reference} could not be started. Please try again shortly.",
             );
+        } catch (DomainException $e) {
+            return redirect()->route('dashboard.billing')->with('error', $e->getMessage());
         }
 
         return Inertia::location($checkoutUrl);

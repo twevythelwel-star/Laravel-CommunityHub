@@ -139,6 +139,11 @@ class User extends Authenticatable
         return $this->hasMany(PaymentPlan::class);
     }
 
+    public function paymentMethods(): HasMany
+    {
+        return $this->hasMany(PaymentMethod::class);
+    }
+
     public function paymentLinks(): HasMany
     {
         return $this->hasMany(PaymentLink::class, 'created_by');

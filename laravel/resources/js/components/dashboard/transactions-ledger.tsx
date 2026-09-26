@@ -56,6 +56,8 @@ import { money, type Paginated } from '@/components/dashboard/billing-summary';
 
 export type MasterTransaction = {
   id: number;
+  transactionId?: string;
+  transaction_id?: string;
   reference: string;
   receiptNumber: string;
   homeowner: string;
@@ -63,22 +65,83 @@ export type MasterTransaction = {
   amount: number;
   currency: string;
   channel: string;
-  status: 'completed' | 'pending' | 'refunded' | 'failed' | string;
+  paymentMethod?: string;
+  userCode?: string;
+  propertyCode?: string;
+  communityCode?: string;
+  purpose?: string;
+  provider?: string;
+  device?: string | null;
+  status: 'completed' | 'pending' | 'paid' | 'refunded' | 'failed' | string;
   notes?: string | null;
   date: string;
   /** Present only for an administrator, on a Stripe payment with money left to return. */
   refundableAmount?: number | null;
   refundUrl?: string | null;
-  /** Present only for an administrator, on a payment awaiting office confirmation. */
-  confirmUrl?: string | null;
+  slip?: {
+    transaction_id?: string;
+    public_transaction_id?: string;
+    user?: string;
+    property?: string;
+    community?: string;
+    purpose?: string;
+    invoice?: string;
+    amount?: string | number;
+    currency?: string;
+    status?: string;
+    payment_method?: string;
+    method?: string;
+    provider?: string;
+    provider_transaction_id?: string | null;
+    device?: string | null;
+    created?: string;
+  } | null;
+  ledgerEntries?: Array<{
+    entryId: string;
+    accountCode?: string;
+    accountName?: string;
+    accountType?: string;
+    type: string;
+    amount: number;
+    currency: string;
+    description: string;
+  }>;
+};
+
+/**
+ * A payment by a channel the app cannot see, on its way through the office:
+ * awaiting transfer, then received (logged by one administrator), then
+ * verified in a bank reconciliation by another. See App\\Enums\\PaymentState.
+ */
+export type OfficePayment = {
+  id: number;
+  transactionId: string;
+  state: 'awaiting_transfer' | 'received' | string;
+  stateLabel: string;
+  channel: string;
+  paymentMethod: string;
+  amount: number;
+  currency: string;
+  purpose: string;
+  homeowner?: string | null;
+  lot?: string | null;
+  invoiceReference?: string | null;
+  isDonation: boolean;
+  payerReference?: string | null;
+  bankReference?: string | null;
+  receivedBy?: string | null;
+  receivedAt?: string | null;
+  submittedAt: string;
+  /** Administrators only, and only in the states that allow them. */
+  receiveUrl?: string | null;
   rejectUrl?: string | null;
-  isDonation?: boolean;
+  canVerify: boolean;
 };
 
 type Props = {
   transactions: Paginated<MasterTransaction>;
   /** Administrators only: every payment awaiting confirmation, oldest first. */
-  pendingPayments?: MasterTransaction[];
+  pendingPayments?: OfficePayment[];
   currency?: string;
 };
 
@@ -96,30 +159,32 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
   const [refundNote, setRefundNote] = useState('');
   const [refundError, setRefundError] = useState<string | null>(null);
   const [refundSaving, setRefundSaving] = useState(false);
-  const [confirmingId, setConfirmingId] = useState<number | null>(null);
-  const [rejecting, setRejecting] = useState<MasterTransaction | null>(null);
+  const [receiving, setReceiving] = useState<OfficePayment | null>(null);
+  const [bankReference, setBankReference] = useState('');
+  const [receiveSaving, setReceiveSaving] = useState(false);
+  const [rejecting, setRejecting] = useState<OfficePayment | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [rejectSaving, setRejectSaving] = useState(false);
+  const [viewingSlip, setViewingSlip] = useState<MasterTransaction | null>(null);
 
-  const confirmPayment = async (tx: MasterTransaction) => {
-    if (!tx.confirmUrl) return;
-    setConfirmingId(tx.id);
+  const receivePayment = async () => {
+    if (!receiving?.receiveUrl) return;
+    setReceiveSaving(true);
     try {
-      await submit('post', tx.confirmUrl);
+      await submit('post', receiving.receiveUrl, { bank_reference: bankReference.trim() === '' ? null : bankReference });
       toast({
-        title: 'Payment confirmed',
-        description: tx.isDonation
-          ? `${money(tx.amount, tx.currency || currency)} now counts towards the campaign.`
-          : `${money(tx.amount, tx.currency || currency)} from ${tx.homeowner} is applied to their statement.`,
+        title: 'Logged as received',
+        description: `${receiving.transactionId} counts once another administrator verifies it in a bank reconciliation.`,
       });
+      setReceiving(null);
     } catch (message) {
       toast({
         variant: 'destructive',
-        title: 'Could not confirm the payment',
+        title: 'Could not log the payment',
         description: typeof message === 'string' ? message : 'Please try again.',
       });
     } finally {
-      setConfirmingId(null);
+      setReceiveSaving(false);
     }
   };
 
@@ -128,7 +193,7 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
     setRejectSaving(true);
     try {
       await submit('post', rejecting.rejectUrl, { reason: rejectReason.trim() === '' ? null : rejectReason });
-      toast({ title: 'Payment marked as not received', description: `${rejecting.reference} will not count.` });
+      toast({ title: 'Payment marked as not received', description: `${rejecting.transactionId} will not count.` });
       setRejecting(null);
     } catch (message) {
       toast({
@@ -141,34 +206,41 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
     }
   };
 
-  /** Confirm / Not received buttons for a pending payment. */
-  const ReviewActions = ({ tx }: { tx: MasterTransaction }) =>
-    tx.confirmUrl ? (
-      <>
+  /** Log as received / Not received, where the payment's state allows them. */
+  const OfficeActions = ({ payment }: { payment: OfficePayment }) => (
+    <>
+      {payment.receiveUrl && (
         <Button
           variant="ghost"
           size="sm"
           className="h-8 px-2 text-xs gap-1 text-emerald-700 dark:text-emerald-400"
-          disabled={confirmingId === tx.id}
-          onClick={() => confirmPayment(tx)}
+          onClick={() => {
+            setReceiving(payment);
+            setBankReference(payment.payerReference ?? '');
+          }}
         >
           <CheckCircle2 className="h-3.5 w-3.5" />
-          {confirmingId === tx.id ? 'Confirming…' : 'Confirm'}
+          Log as received
         </Button>
+      )}
+      {payment.rejectUrl && (
         <Button
           variant="ghost"
           size="sm"
           className="h-8 px-2 text-xs gap-1 text-destructive"
           onClick={() => {
-            setRejecting(tx);
+            setRejecting(payment);
             setRejectReason('');
           }}
         >
           <XCircle className="h-3.5 w-3.5" />
           Not received
         </Button>
-      </>
-    ) : null;
+      )}
+    </>
+  );
+
+  const isAdminView = pendingPayments.some((p) => p.receiveUrl || p.rejectUrl);
 
   const openRefund = (tx: MasterTransaction) => {
     setRefunding(tx);
@@ -201,6 +273,10 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
   const filteredData = transactions.data.filter((tx) => {
     const matchesSearch =
       tx.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (tx.transactionId && tx.transactionId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (tx.userCode && tx.userCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (tx.propertyCode && tx.propertyCode.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (tx.purpose && tx.purpose.toLowerCase().includes(searchTerm.toLowerCase())) ||
       tx.receiptNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tx.homeowner.toLowerCase().includes(searchTerm.toLowerCase()) ||
       tx.lot.toLowerCase().includes(searchTerm.toLowerCase());
@@ -221,6 +297,7 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
       case 'google_pay':
       case 'samsung_wallet':
       case 'nfc':
+      case 'nfc_pos':
         return <Smartphone className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
       case 'bank_transfer':
       case 'bank_wire':
@@ -232,21 +309,44 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
 
   const getStatusBadge = (status: string) => {
     switch (status.toLowerCase()) {
+      case 'paid':
       case 'completed':
         return (
-          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 gap-1">
-            <CheckCircle2 className="h-3 w-3" /> Completed
+          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 gap-1 font-semibold">
+            <CheckCircle2 className="h-3 w-3" /> {status.toLowerCase() === 'paid' ? 'Paid' : 'Completed'}
+          </Badge>
+        );
+      case 'awaiting_bank_transfer':
+        return (
+          <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-800 gap-1 font-semibold">
+            <Clock className="h-3 w-3" /> Awaiting Bank Feed
+          </Badge>
+        );
+      case 'received':
+      case 'verifying':
+        return (
+          <Badge className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800 gap-1 font-semibold">
+            <Clock className="h-3 w-3" /> Verifying Transfer
           </Badge>
         );
       case 'pending':
+      case 'payment_started':
+      case 'requires_action':
         return (
-          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800 gap-1">
+          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border-amber-300 dark:border-amber-800 gap-1 font-semibold">
             <Clock className="h-3 w-3" /> Pending
+          </Badge>
+        );
+      case 'authorized':
+      case 'captured':
+        return (
+          <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-300 dark:border-blue-800 gap-1 font-semibold">
+            <CheckCircle2 className="h-3 w-3" /> {status.toUpperCase()}
           </Badge>
         );
       case 'refunded':
         return (
-          <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-800 gap-1">
+          <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-300 dark:border-purple-800 gap-1 font-semibold">
             <RotateCcw className="h-3 w-3" /> Refunded
           </Badge>
         );
@@ -258,13 +358,13 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
         );
       case 'reinstated':
         return (
-          <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-800 gap-1">
+          <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border-sky-300 dark:border-sky-800 gap-1 font-semibold">
             <ShieldCheck className="h-3 w-3" /> Reinstated
           </Badge>
         );
       default:
         return (
-          <Badge variant="destructive" className="gap-1">
+          <Badge variant="destructive" className="gap-1 font-semibold">
             <AlertCircle className="h-3 w-3" /> {status}
           </Badge>
         );
@@ -366,30 +466,47 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 id="pending-payments-heading" className="flex items-center gap-2 text-sm font-bold text-amber-900 dark:text-amber-200">
                 <Clock className="h-4 w-4" />
-                Awaiting confirmation ({pendingPayments.length})
+                {isAdminView ? 'Office payments in progress' : 'Your payments in progress'} ({pendingPayments.length})
               </h3>
               <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
-                Confirm each once the money shows in the bank, till or wallet account. Nothing counts until you do.
+                {isAdminView
+                  ? 'Log each as received when the money shows up. A different administrator then verifies it in a bank reconciliation — only then does it count.'
+                  : 'These count once the community office has received and verified the money.'}
               </p>
             </div>
             <ul className="divide-y divide-amber-200 dark:divide-amber-900">
-              {pendingPayments.map((tx) => (
-                <li key={tx.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+              {pendingPayments.map((payment) => (
+                <li key={payment.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">
-                      {money(tx.amount, tx.currency || currency)}
-                      <span className="ml-2 text-xs font-normal capitalize text-muted-foreground">
-                        via {tx.channel.replace(/_/g, ' ')}
-                        {tx.isDonation ? ' · donation' : ''}
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+                      {money(payment.amount, payment.currency || currency)}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        via {payment.paymentMethod}
+                        {payment.isDonation ? ' · donation' : ''}
                       </span>
+                      <Badge variant="outline" className="text-[10px] font-semibold">
+                        {payment.stateLabel}
+                      </Badge>
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {tx.homeowner || 'Unknown payer'}
-                      {tx.lot ? ` · ${tx.lot}` : ''} · {tx.date} · <span className="font-mono">{tx.reference}</span>
+                      <span className="font-mono">{payment.transactionId}</span>
+                      {payment.homeowner ? ` · ${payment.homeowner}` : ''}
+                      {payment.lot ? ` · ${payment.lot}` : ''}
+                      {payment.invoiceReference ? ` · ${payment.invoiceReference}` : ''} · {payment.submittedAt}
                     </p>
+                    {payment.state === 'received' && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Received by {payment.receivedBy ?? 'an administrator'} on {payment.receivedAt ?? '—'}
+                        {payment.bankReference ? ` · bank ref ${payment.bankReference}` : ''}
+                        {isAdminView &&
+                          (payment.canVerify
+                            ? ' — verify it in the next bank reconciliation.'
+                            : ' — you logged this; another administrator must verify it.')}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <ReviewActions tx={tx} />
+                    <OfficeActions payment={payment} />
                   </div>
                 </li>
               ))}
@@ -407,13 +524,13 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50 dark:bg-slate-900/50">
-                  <TableHead className="w-[180px]">Date & Time</TableHead>
-                  <TableHead>Reference / Receipt</TableHead>
-                  <TableHead>Member / Lot</TableHead>
-                  <TableHead>Channel</TableHead>
+                  <TableHead className="w-[170px]">Date & Time</TableHead>
+                  <TableHead>CommunityHub Transaction</TableHead>
+                  <TableHead>Member & Property</TableHead>
+                  <TableHead>Method & Provider</TableHead>
                   <TableHead className="text-right">Amount & Currency</TableHead>
                   <TableHead className="text-center">Status</TableHead>
-                  <TableHead className="text-right">Receipt</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -423,19 +540,39 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
                       {tx.date}
                     </TableCell>
                     <TableCell>
-                      <div className="font-semibold text-xs font-mono text-foreground">
-                        {tx.reference}
+                      <button
+                        type="button"
+                        onClick={() => setViewingSlip(tx)}
+                        className="text-left font-semibold text-xs font-mono text-primary hover:underline flex items-center gap-1 group"
+                        title="View Official CommunityHub Transaction Slip"
+                      >
+                        <span>{tx.transactionId || tx.reference}</span>
+                      </button>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/80">{tx.purpose || 'HOA Assessment'}</span>
+                        {tx.reference && tx.reference !== (tx.transactionId || '') && (
+                          <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px]">
+                            • {tx.reference}
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[11px] text-muted-foreground">{tx.receiptNumber}</div>
                     </TableCell>
                     <TableCell>
                       <div className="text-xs font-medium text-foreground">{tx.homeowner}</div>
-                      <div className="text-[11px] text-muted-foreground">{tx.lot}</div>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-mono">
+                        <span>{tx.userCode || 'USR-RESIDENT'}</span>
+                        <span>•</span>
+                        <span>{tx.propertyCode || tx.lot}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1.5 text-xs capitalize text-muted-foreground">
                         {getChannelIcon(tx.channel)}
-                        {tx.channel.replace(/_/g, ' ')}
+                        <span>{tx.paymentMethod || tx.channel.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        Route: <span className="font-semibold capitalize">{tx.provider || 'Stripe'}</span>
+                        {tx.device ? ` (${tx.device})` : ''}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
@@ -448,32 +585,42 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
                     </TableCell>
                     <TableCell className="text-center">{getStatusBadge(tx.status)}</TableCell>
                     <TableCell className="text-right">
-                      <ReviewActions tx={tx} />
-                      {hasReceipt(tx) && (
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-8 px-2 text-xs gap-1 text-primary"
-                          onClick={() => {
-                            // Was /dashboard/billing/receipt/{id}, which is not a route.
-                            window.open(`/dashboard/billing/transactions/${tx.id}/receipt`, '_blank');
-                          }}
+                          className="h-8 px-2 text-xs gap-1 text-slate-700 dark:text-slate-300 hover:text-primary"
+                          onClick={() => setViewingSlip(tx)}
+                          title="View CommunityHub Transaction Card"
                         >
-                          <Download className="h-3.5 w-3.5" />
-                          PDF
+                          <Receipt className="h-3.5 w-3.5" />
+                          Slip
                         </Button>
-                      )}
-                      {tx.refundUrl && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 px-2 text-xs gap-1 text-destructive"
-                          onClick={() => openRefund(tx)}
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          Refund
-                        </Button>
-                      )}
+                        {hasReceipt(tx) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs gap-1 text-primary"
+                            onClick={() => {
+                              window.open(`/dashboard/billing/transactions/${tx.id}/receipt`, '_blank');
+                            }}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            PDF
+                          </Button>
+                        )}
+                        {tx.refundUrl && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs gap-1 text-destructive"
+                            onClick={() => openRefund(tx)}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            Refund
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -538,6 +685,39 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
         </DialogContent>
       </Dialog>
 
+      <Dialog open={receiving !== null} onOpenChange={(open) => !open && setReceiving(null)}>
+        <DialogContent className="sm:max-w-md">
+          {receiving && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Log payment as received</DialogTitle>
+                <DialogDescription>
+                  {money(receiving.amount, receiving.currency || currency)} via {receiving.paymentMethod} from{' '}
+                  {receiving.homeowner || 'an unknown payer'} ({receiving.transactionId}). This does not settle anything yet:
+                  a different administrator verifies it in a bank reconciliation.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2">
+                <Label htmlFor="receive-bank-reference">Bank or till reference (optional)</Label>
+                <Input
+                  id="receive-bank-reference"
+                  maxLength={120}
+                  placeholder="e.g., NCB deposit 004421"
+                  value={bankReference}
+                  onChange={(e) => setBankReference(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setReceiving(null)}>Cancel</Button>
+                <Button type="button" disabled={receiveSaving} onClick={receivePayment}>
+                  {receiveSaving ? 'Saving…' : 'Log as received'}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={rejecting !== null} onOpenChange={(open) => !open && setRejecting(null)}>
         <DialogContent className="sm:max-w-md">
           {rejecting && (
@@ -545,9 +725,9 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
               <DialogHeader>
                 <DialogTitle>Mark payment as not received</DialogTitle>
                 <DialogDescription>
-                  {money(rejecting.amount, rejecting.currency || currency)} via {rejecting.channel.replace(/_/g, ' ')} from{' '}
-                  {rejecting.homeowner || 'an unknown payer'}. It will never count towards
-                  {rejecting.isDonation ? ' the campaign' : ' their statement'}, and no receipt is issued.
+                  {money(rejecting.amount, rejecting.currency || currency)} via {rejecting.paymentMethod} from{' '}
+                  {rejecting.homeowner || 'an unknown payer'} ({rejecting.transactionId}). It will never count towards
+                  {rejecting.isDonation ? ' the campaign' : ' their statement'}.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-2">
@@ -565,6 +745,148 @@ export function TransactionsLedger({ transactions, pendingPayments = [], currenc
                 <Button type="button" variant="destructive" disabled={rejectSaving} onClick={rejectPayment}>
                   {rejectSaving ? 'Saving…' : 'Mark not received'}
                 </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Official CommunityHub Transaction Slip Dialog */}
+      <Dialog open={viewingSlip !== null} onOpenChange={(open) => !open && setViewingSlip(null)}>
+        <DialogContent className="sm:max-w-md">
+          {viewingSlip && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <DialogTitle className="text-base font-bold flex items-center gap-2">
+                    <Receipt className="h-4 w-4 text-primary" />
+                    <span>Transaction Slip</span>
+                  </DialogTitle>
+                  {getStatusBadge(viewingSlip.status)}
+                </div>
+                <DialogDescription className="text-xs">
+                  Official CommunityHub ledger transaction record
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-border/60">
+                  <span className="text-muted-foreground font-semibold">Transaction ID</span>
+                  <span className="font-mono font-bold text-primary text-sm">{viewingSlip.transactionId || viewingSlip.reference}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">User</span>
+                    <span className="font-mono font-semibold">{viewingSlip.userCode || 'USR-RESIDENT'}</span>
+                    <span className="block text-[11px] text-muted-foreground">{viewingSlip.homeowner}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Property</span>
+                    <span className="font-mono font-semibold">{viewingSlip.propertyCode || viewingSlip.lot}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/40">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Community</span>
+                    <span className="font-semibold">{viewingSlip.communityCode || 'COMM-001'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Purpose</span>
+                    <span className="font-semibold">{viewingSlip.purpose || 'HOA Assessment'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/40">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Amount</span>
+                    <span className="font-bold text-sm text-foreground">
+                      {money(viewingSlip.amount, viewingSlip.currency || currency)} {viewingSlip.currency || 'USD'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Status</span>
+                    <span className="font-mono font-bold uppercase">{viewingSlip.status}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/40">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Payment Method</span>
+                    <span className="font-semibold">{viewingSlip.paymentMethod || viewingSlip.channel.replace(/_/g, ' ')}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">Payment Processor</span>
+                    <span className="font-semibold capitalize">{viewingSlip.provider || 'Stripe'}</span>
+                  </div>
+                </div>
+
+                {viewingSlip.device && (
+                  <div className="pt-2 border-t border-border/40">
+                    <span className="text-muted-foreground block text-[11px]">Device Identifier</span>
+                    <span className="font-mono font-semibold">{viewingSlip.device}</span>
+                  </div>
+                )}
+
+                {viewingSlip.slip?.provider_transaction_id && (
+                  <div className="pt-2 border-t border-border/40">
+                    <span className="text-muted-foreground block text-[11px]">Provider Reference</span>
+                    <span className="font-mono text-[11px] text-muted-foreground break-all">{viewingSlip.slip.provider_transaction_id}</span>
+                  </div>
+                )}
+
+                {viewingSlip.ledgerEntries && viewingSlip.ledgerEntries.length > 0 && (
+                  <div className="pt-2 border-t border-border/40 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground block text-[10px] font-bold uppercase tracking-wider">
+                        General Ledger Double-Entry Impact
+                      </span>
+                      <Badge variant="outline" className="text-[9px] font-mono border-emerald-500/30 text-emerald-600 bg-emerald-500/5">
+                        Balanced (ΣD = ΣC)
+                      </Badge>
+                    </div>
+                    <div className="space-y-1.5">
+                      {viewingSlip.ledgerEntries.map((entry, idx) => (
+                        <div key={idx} className="flex items-center justify-between text-[11px] p-2 rounded-lg bg-background/80 border border-border/60">
+                          <div>
+                            <span className="font-semibold text-foreground block">{entry.accountName}</span>
+                            <span className="text-[10px] font-mono text-muted-foreground">Code: {entry.accountCode} &bull; {entry.description}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-right shrink-0">
+                            <Badge variant={entry.type === 'debit' ? 'default' : 'secondary'} className={`text-[9px] font-mono uppercase px-1 py-0 ${entry.type === 'debit' ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-foreground'}`}>
+                              {entry.type}
+                            </Badge>
+                            <span className={`font-mono font-bold text-xs ${entry.type === 'debit' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                              {entry.type === 'debit' ? '+' : '-'}{money(entry.amount, entry.currency)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-border/40 flex justify-between text-[11px] text-muted-foreground">
+                  <span>Date: {viewingSlip.date}</span>
+                  <span>Invoice: {viewingSlip.slip?.invoice || 'INV-CURRENT'}</span>
+                </div>
+              </div>
+
+              <DialogFooter className="flex sm:justify-between items-center gap-2">
+                {hasReceipt(viewingSlip) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    onClick={() => window.open(`/dashboard/billing/transactions/${viewingSlip.id}/receipt`, '_blank')}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download PDF Receipt
+                  </Button>
+                )}
+                <Button type="button" size="sm" onClick={() => setViewingSlip(null)}>Close</Button>
               </DialogFooter>
             </>
           )}

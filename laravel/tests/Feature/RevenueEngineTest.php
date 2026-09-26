@@ -86,12 +86,18 @@ class RevenueEngineTest extends TestCase
 
         $response->assertRedirect();
 
-        // Apple Pay is an office-confirmed channel: recorded, but pending until
-        // an administrator confirms the money arrived.
-        $this->assertDatabaseHas('transactions', [
+        // Apple Pay is an office-confirmed channel: the payment waits for the
+        // office, and nothing reaches the ledger until the money is verified.
+        $this->assertDatabaseHas('payments', [
+            'user_id' => $resident->id,
+            'channel' => 'apple_pay',
+            'provider' => 'office',
+            'state' => 'awaiting_transfer',
+            'amount_minor' => 5000000,
+        ]);
+        $this->assertDatabaseMissing('transactions', [
             'user_id' => $resident->id,
             'payment_channel' => 'apple_pay',
-            'status' => 'pending',
             'amount_minor' => 5000000,
         ]);
         $this->assertSame('Unpaid', $invoice->fresh()->status);
@@ -192,12 +198,12 @@ class RevenueEngineTest extends TestCase
 
             $response->assertRedirect();
 
-            $this->assertDatabaseHas('transactions', [
+            $this->assertDatabaseHas('payments', [
                 'user_id' => $resident->id,
                 'currency' => $curr,
                 'amount_minor' => 15000,
-                'payment_channel' => 'apple_pay',
-                'status' => 'pending',
+                'channel' => 'apple_pay',
+                'state' => 'awaiting_transfer',
             ]);
         }
     }
