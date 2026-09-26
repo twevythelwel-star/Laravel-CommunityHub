@@ -179,7 +179,7 @@ class LedgerService
         // Only card money passes through Stripe. Apple/Google/Samsung Pay and
         // NFC were booked to Stripe clearing, but they are office-confirmed
         // channels whose money Stripe never holds.
-        if (in_array($channel, ['card', 'stripe_card'], true)) {
+        if ($transaction->provider === 'stripe' || $channel === 'stripe_card') {
             return Account::firstOrCreate(
                 ['code' => Account::CODE_STRIPE_CLEARING],
                 [

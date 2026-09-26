@@ -7,8 +7,8 @@ use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Models\Warning;
 use App\Services\GeofenceService;
+use App\Services\Payments\Providers\ProviderRegistry;
 use App\Services\SmsService;
-use App\Services\StripePaymentService;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -110,7 +110,9 @@ class HandleInertiaRequests extends Middleware
              | is unavailable otherwise, rather than offering a button that fails.
              */
             'payments' => fn () => $user ? [
-                'cardCheckout' => app(StripePaymentService::class)->isLive(),
+                'cardCheckout' => ($cardProvider = app(ProviderRegistry::class)->cardProvider()) !== null,
+                // Named on the card options: "You'll finish on WiPay's secure page".
+                'cardProvider' => $cardProvider?->label(),
             ] : null,
 
             'flash' => [

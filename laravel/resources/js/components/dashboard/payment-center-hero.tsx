@@ -112,10 +112,11 @@ export function PaymentCenterHero({
    */
   const configuredChannels: PaymentChannel[] = availableChannels ?? [];
 
-  // Shared by HandleInertiaRequests: true only when a Stripe key is configured.
-  const cardCheckout = Boolean(
-    (usePage().props as { payments?: { cardCheckout?: boolean } | null }).payments?.cardCheckout,
-  );
+  // Shared by HandleInertiaRequests from ProviderRegistry: whether the estate
+  // has a card processor configured, and which (Stripe, WiPay, ...).
+  const paymentsProps = (usePage().props as { payments?: { cardCheckout?: boolean; cardProvider?: string | null } | null }).payments;
+  const cardCheckout = Boolean(paymentsProps?.cardCheckout);
+  const cardProvider = paymentsProps?.cardProvider ?? 'the card processor';
 
   const channelEnabled = (key: string): boolean =>
     configuredChannels.length === 0 || configuredChannels.some((c) => c.key === key);
@@ -815,11 +816,11 @@ export function PaymentCenterHero({
                   <p className="font-semibold">Card checkout</p>
                   {cardCheckout ? (
                     <p className="text-muted-foreground">
-                      You&apos;ll be taken to Stripe&apos;s secure checkout to complete payment for <strong>{pendingSlip?.transaction_id || 'your transaction'}</strong>. Details are entered directly into Stripe, never stored in Community Hub.
+                      You&apos;ll be taken to {cardProvider}&apos;s secure payment page to complete payment for <strong>{pendingSlip?.transaction_id || 'your transaction'}</strong>. Card details are entered there, never stored in Community Hub. Your statement updates once {cardProvider} confirms the payment.
                     </p>
                   ) : (
                     <p className="text-muted-foreground">
-                      Card payment is not yet in service. When it is, you will be taken to Stripe to enter your card details.
+                      Card payment is not yet in service. When it is, you will be taken to the card processor's own secure page to enter your card details.
                     </p>
                   )}
                 </div>

@@ -18,6 +18,7 @@ use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OverviewController;
+use App\Http\Controllers\Dashboard\PaymentReturnController;
 use App\Http\Controllers\Dashboard\ProfileController;
 use App\Http\Controllers\Dashboard\RenterController;
 use App\Http\Controllers\Dashboard\ReviewFeedbackController;
@@ -86,6 +87,11 @@ Route::match(['get', 'post'], '/logout', [AuthenticatedSessionController::class,
 Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->group(function () {
 
     Route::get('/', OverviewController::class)->name('index');
+
+    // Where a hosted payment page (WiPay) sends the payer back. The provider
+    // verifies what the browser brings before anything changes; the
+    // controller admits only the payment's own payer.
+    Route::get('/payments/{payment}/return', PaymentReturnController::class)->name('payments.return');
 
     // ── Profile & personal settings ──
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');

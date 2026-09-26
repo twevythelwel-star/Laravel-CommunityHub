@@ -23,6 +23,8 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\Ledger\LedgerService;
 use App\Services\Payments\PaymentOrchestratorService;
+use App\Services\Payments\Providers\PaymentRequest;
+use App\Services\Payments\Providers\ProviderRegistry;
 use App\Services\StripePaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -556,7 +558,7 @@ class BillingController extends Controller
      * money taken. Card now hands the resident to Stripe Checkout for the
      * amount they chose, and the invoice settles only when Stripe confirms.
      */
-    public function pay(Request $request, StripePaymentService $stripe): HttpResponse
+    public function pay(Request $request, ProviderRegistry $providers): HttpResponse
     {
         $user = $request->user();
 
@@ -604,11 +606,15 @@ class BillingController extends Controller
 
         $isCard = $validated['channel'] === 'card';
 
-        if ($isCard) {
-            if (! $stripe->isLive()) {
-                return back()->withErrors(['channel' => 'Card payments are not available yet. Please choose another method or pay at the community office.']);
-            }
+        // Whichever processor the estate has configured for cards (Stripe,
+        // WiPay, ...), or none: see ProviderRegistry::cardProvider().
+        $provider = $providers->forChannel($validated['channel']);
 
+        if (! $provider) {
+            return back()->withErrors(['channel' => 'Card payments are not available yet. Please choose another method or pay at the community office.']);
+        }
+
+        if ($isCard) {
             if (! $invoice) {
                 return back()->withErrors(['invoice_id' => 'There is no open statement to pay by card.']);
             }
@@ -670,10 +676,16 @@ class BillingController extends Controller
         // The Community Wallet share is money the app holds, so it is taken
         // and applied at once, as a payment of its own.
         if ($walletShareMinor > 0) {
-            $walletError = $this->payFromWallet($user, $walletShareMinor, $currency, $invoice);
-
-            if ($walletError) {
-                return back()->withErrors(['split_wallet_amount' => $walletError]);
+            try {
+                $providers->forChannel('wallet')->createPayment(new PaymentRequest(
+                    payer: $user,
+                    channel: 'wallet',
+                    amountMinor: $walletShareMinor,
+                    currency: $currency,
+                    invoice: $invoice,
+                ));
+            } catch (\DomainException $e) {
+                return back()->withErrors(['split_wallet_amount' => $e->getMessage()]);
             }
 
             $amountMinor -= $walletShareMinor;
@@ -688,120 +700,49 @@ class BillingController extends Controller
             return back()->with('success', "Payment of {$amountLabel} recorded.");
         }
 
-        if ($isCard) {
-            try {
-                $checkoutUrl = $stripe->createCheckoutSession(
-                    $invoice,
-                    route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]),
-                    route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]),
-                    $amountMinor,
-                    $payment,
-                );
-            } catch (\DomainException $e) {
-                return back()->withErrors(['amount' => $e->getMessage()]);
-            } catch (ApiErrorException $e) {
-                report($e);
+        /*
+         | The provider takes it from here. Card goes to the configured
+         | processor's hosted page; the wallet settles at once; every other
+         | channel — bank wire, cash, QR, NFC, digital wallets, Zelle, Cash
+         | App — becomes AwaitingTransfer and settles nothing until one
+         | administrator logs the money received and another verifies it in a
+         | bank reconciliation.
+         */
+        try {
+            $instruction = $provider->createPayment(new PaymentRequest(
+                payer: $user,
+                channel: $channel,
+                amountMinor: $amountMinor,
+                currency: $currency,
+                invoice: $invoice,
+                payment: $payment,
+                itemIds: $itemIds,
+                payerReference: $validated['payer_reference'] ?? null,
+                deviceIdentifier: $validated['device_identifier'] ?? null,
+            ));
+        } catch (\DomainException $e) {
+            return back()->withErrors([$isCard ? 'amount' : 'channel' => $e->getMessage()]);
+        } catch (ApiErrorException $e) {
+            report($e);
 
-                return back()->withErrors(['channel' => 'Card checkout could not be started. Please try again shortly.']);
-            }
-
-            return Inertia::location($checkoutUrl);
+            return back()->withErrors(['channel' => 'Card checkout could not be started. Please try again shortly.']);
         }
 
-        if ($channel === 'wallet') {
-            $walletError = $this->payFromWallet($user, $amountMinor, $currency, $invoice, $itemIds, $payment);
+        if ($instruction->isRedirect()) {
+            return Inertia::location($instruction->url);
+        }
 
-            if ($walletError) {
-                return back()->withErrors(['channel' => $walletError]);
-            }
+        $number = $instruction->payment->transaction_id;
 
-            $user->recordActivity("Paid {$amountLabel} from the Community Wallet");
+        if ($instruction->type === 'completed') {
+            $user->recordActivity("Paid {$amountLabel} via {$channel} ({$number})");
 
             return back()->with('success', "Payment of {$amountLabel} recorded.");
         }
 
-        /*
-         | Channels the app cannot see — bank wire, cash, QR, NFC, digital
-         | wallets, Zelle, Cash App — become AwaitingTransfer and settle nothing
-         | until one administrator logs the money as received and another
-         | verifies it in a bank reconciliation. Their drivers report success
-         | for any amount, so nothing they say is taken as proof of payment.
-         */
-        $payment ??= $this->orchestrator->startPayment([
-            'user' => $user,
-            'channel' => $channel,
-            'invoice' => $invoice,
-            'amount_minor' => $amountMinor,
-            'currency' => $currency,
-        ]);
+        $user->recordActivity("Reported a payment of {$amountLabel} via {$channel} ({$number}), awaiting confirmation");
 
-        $payment->update([
-            'channel' => $channel,
-            'provider' => Transaction::resolveDefaultProvider($channel),
-            'invoice_id' => $invoice?->id,
-            'applies_to' => $invoice ? 'invoice' : $payment->applies_to,
-            'amount_minor' => $amountMinor,
-            'currency' => $currency,
-            'invoice_item_ids' => $itemIds ?: null,
-            'device_identifier' => $validated['device_identifier'] ?? $payment->device_identifier,
-        ]);
-
-        $this->orchestrator->awaitTransfer($payment, $user, $validated['payer_reference'] ?? null);
-
-        $user->recordActivity("Reported a payment of {$amountLabel} via {$channel} ({$payment->transaction_id}), awaiting confirmation");
-
-        return back()->with('success', "Payment {$payment->transaction_id} of {$amountLabel} submitted. Your statement updates once the community office has received and verified it.");
-    }
-
-    /**
-     * Take money from the payer's Community Wallet and apply it at once.
-     * Returns an error message, or null on success.
-     *
-     * @param  list<int>  $itemIds
-     */
-    private function payFromWallet(User $user, int $amountMinor, string $currency, ?Invoice $invoice, array $itemIds = [], ?Payment $payment = null): ?string
-    {
-        $payment ??= $this->orchestrator->startPayment([
-            'user' => $user,
-            'channel' => 'wallet',
-            'invoice' => $invoice,
-            'amount_minor' => $amountMinor,
-            'currency' => $currency,
-        ]);
-
-        $payment->update([
-            'channel' => 'wallet',
-            'provider' => 'internal',
-            'invoice_id' => $invoice?->id,
-            'amount_minor' => $amountMinor,
-            'invoice_item_ids' => $itemIds ?: null,
-        ]);
-
-        $settlement = $this->orchestrator->settlePayment('wallet', [
-            'amount_minor' => $amountMinor,
-            'currency' => $currency,
-            'user_id' => $user->id,
-            'description' => "Payment {$payment->transaction_id}".($invoice ? " for invoice {$invoice->reference}" : ''),
-        ]);
-
-        // The wallet refuses when the balance is short; that refusal was
-        // ignored once, and a short wallet recorded a completed payment.
-        if (! ($settlement['success'] ?? false)) {
-            $reason = 'Your Community Wallet does not hold that much.';
-            $payment->transitionTo(PaymentState::Failed, $user, 'resident', $reason, ['failure_reason' => $reason]);
-
-            return $reason;
-        }
-
-        $payment->transitionTo(PaymentState::Succeeded, $user, 'resident', 'Debited from the Community Wallet');
-
-        $this->orchestrator->applyPayment($payment, [
-            'reference' => $settlement['reference'] ?? $payment->transaction_id,
-            'provider_reference' => $settlement['reference'] ?? null,
-            'notes' => 'Paid from the Community Wallet',
-        ], $user, 'resident');
-
-        return null;
+        return back()->with('success', "Payment {$number} of {$amountLabel} submitted. Your statement updates once the community office has received and verified it.");
     }
 
     /**

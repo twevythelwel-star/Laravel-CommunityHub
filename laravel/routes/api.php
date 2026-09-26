@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\GatePassApiController;
 use App\Http\Controllers\Api\MapApiController;
 use App\Http\Controllers\Api\VisitorApiController;
+use App\Http\Controllers\ProviderWebhookController;
 use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +26,12 @@ Route::post('/auth/login', [AuthApiController::class, 'login'])->middleware('thr
 // Stripe calls this, not a user: no session, no token. Authenticity comes from
 // the Stripe-Signature header, verified against STRIPE_WEBHOOK_SECRET.
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('webhooks.stripe');
+
+// Any other provider that reports server-to-server (PaymentProvider with
+// HandlesWebhooks). Each verifies its own signature; see ProviderWebhookController.
+Route::post('/webhooks/{provider}', ProviderWebhookController::class)
+    ->where('provider', '[a-z0-9_]+')
+    ->name('webhooks.provider');
 
 Route::middleware('auth:sanctum')->group(function () {
 

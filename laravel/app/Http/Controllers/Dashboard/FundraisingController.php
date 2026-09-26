@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Dashboard;
 
-use App\Enums\PaymentState;
 use App\Http\Controllers\Controller;
 use App\Models\Community;
 use App\Models\Donation;
@@ -10,6 +9,8 @@ use App\Models\Fundraiser;
 use App\Models\FundraiserUpdate;
 use App\Models\Transaction;
 use App\Services\Payments\PaymentOrchestratorService;
+use App\Services\Payments\Providers\PaymentRequest;
+use App\Services\Payments\Providers\ProviderRegistry;
 use App\Services\StripePaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -253,7 +254,7 @@ class FundraisingController extends Controller
      * go through the card driver, which returned success for every request, so
      * the default channel recorded a completed donation with no money taken.
      */
-    public function donate(Request $request, Fundraiser $fundraiser, StripePaymentService $stripe): SymfonyResponse
+    public function donate(Request $request, Fundraiser $fundraiser, ProviderRegistry $providers): SymfonyResponse
     {
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1', 'max:100000000'],
@@ -274,104 +275,76 @@ class FundraisingController extends Controller
         $user = $request->user();
         $channel = $validated['channel'] ?? 'card';
         $amountMinor = (int) round($validated['amount'] * 100);
-
-        if ($channel === 'card') {
-            if (! $stripe->isLive()) {
-                return back()->withErrors(['channel' => 'Card donations are not available yet. Please choose another method.']);
-            }
-
-            try {
-                $checkoutUrl = $stripe->createDonationCheckoutSession(
-                    $fundraiser,
-                    $user,
-                    $amountMinor,
-                    [
-                        'donor_name' => $validated['donor_name'] ?? $user->display_name,
-                        'is_anonymous' => $request->boolean('is_anonymous'),
-                        'is_recurring' => $request->boolean('is_recurring'),
-                        'frequency' => $validated['frequency'] ?? null,
-                    ],
-                    route('dashboard.fundraising.donate.stripe.success', $fundraiser),
-                    route('dashboard.fundraising.donate.stripe.cancel', $fundraiser),
-                );
-            } catch (ApiErrorException $e) {
-                report($e);
-
-                return back()->withErrors(['channel' => 'Card checkout could not be started. Please try again shortly.']);
-            }
-
-            return Inertia::location($checkoutUrl);
-        }
-        $receiptNumber = 'DON-REC-'.date('Ymd').'-'.strtoupper(Str::random(5));
-
-        /*
-         | The gift is on record from the start, as `pending`, which leaves it
-         | out of every campaign total, the public donor feed and receipts.
-         | Its payment decides when it counts: the Community Wallet settles at
-         | once; bank wire, cash, QR, NFC, digital wallets, Zelle and Cash App
-         | wait for the office to log the money received and a second
-         | administrator to verify it in a bank reconciliation.
-         */
-        $donation = $fundraiser->donations()->create([
-            'user_id' => $user->id,
-            'amount_minor' => $amountMinor,
-            'currency' => $fundraiser->goal_currency,
+        $amountLabel = "{$fundraiser->goal_currency} ".number_format($validated['amount'], 2);
+        $donor = [
             'donor_name' => $validated['donor_name'] ?? $user->display_name,
             'is_anonymous' => $request->boolean('is_anonymous'),
             'is_recurring' => $request->boolean('is_recurring'),
-            'frequency' => $request->boolean('is_recurring') ? ($validated['frequency'] ?? 'monthly') : null,
+            'frequency' => $validated['frequency'] ?? null,
+        ];
+
+        // The estate's card processor, or none; see ProviderRegistry.
+        $provider = $providers->forChannel($channel);
+
+        if (! $provider) {
+            return back()->withErrors(['channel' => 'Card donations are not available yet. Please choose another method.']);
+        }
+
+        /*
+         | A card gift is written as a Donation only once the processor
+         | confirms the money, from details carried with the payment. Other
+         | gifts are on record from the start as `pending`, which leaves them
+         | out of every campaign total, the public donor feed and receipts:
+         | the Community Wallet settles at once; bank wire, cash, QR, NFC,
+         | digital wallets, Zelle and Cash App wait for the office to log the
+         | money received and a second administrator to verify it.
+         */
+        $donation = $channel === 'card' ? null : $fundraiser->donations()->create([
+            'user_id' => $user->id,
+            'amount_minor' => $amountMinor,
+            'currency' => $fundraiser->goal_currency,
+            'donor_name' => $donor['donor_name'],
+            'is_anonymous' => $donor['is_anonymous'],
+            'is_recurring' => $donor['is_recurring'],
+            'frequency' => $donor['is_recurring'] ? ($donor['frequency'] ?? 'monthly') : null,
             'status' => 'pending',
-            'receipt_number' => $receiptNumber,
+            'receipt_number' => 'DON-REC-'.date('Ymd').'-'.strtoupper(Str::random(5)),
             'payment_channel' => $channel,
             'donated_at' => now(),
         ]);
 
-        $payment = $this->orchestrator->startPayment([
-            'user' => $user,
-            'channel' => $channel,
-            'fundraiser' => $fundraiser,
-            'donation' => $donation,
-            'amount_minor' => $amountMinor,
-            'currency' => $fundraiser->goal_currency,
-        ]);
+        try {
+            $instruction = $provider->createPayment(new PaymentRequest(
+                payer: $user,
+                channel: $channel,
+                amountMinor: $amountMinor,
+                currency: $fundraiser->goal_currency,
+                fundraiser: $fundraiser,
+                donation: $donation,
+                donor: $donor,
+            ));
+        } catch (\DomainException $e) {
+            return back()->withErrors(['channel' => $e->getMessage()]);
+        } catch (ApiErrorException $e) {
+            report($e);
 
-        $amountLabel = "{$fundraiser->goal_currency} ".number_format($validated['amount'], 2);
-
-        if ($this->orchestrator->requiresOfficeConfirmation($channel)) {
-            $this->orchestrator->awaitTransfer($payment, $user);
-
-            $user->recordActivity("Pledged {$amountLabel} to {$fundraiser->title} via {$channel} ({$payment->transaction_id}), awaiting confirmation");
-
-            return back()->with('success', "Thank you! Your gift {$payment->transaction_id} is recorded as pending and will count towards the campaign once the community office has received and verified it.");
+            return back()->withErrors(['channel' => 'Card checkout could not be started. Please try again shortly.']);
         }
 
-        // The Community Wallet: money the app holds, so it settles here.
-        $settlement = $this->orchestrator->settlePayment($channel, [
-            'amount_minor' => $amountMinor,
-            'currency' => $fundraiser->goal_currency,
-            'user_id' => $user->id,
-            'description' => "Contribution to {$fundraiser->title} ({$payment->transaction_id})",
-        ]);
-
-        if (! ($settlement['success'] ?? false)) {
-            $reason = $settlement['notes'] ?? 'The payment could not be taken.';
-            $payment->transitionTo(PaymentState::Failed, $user, 'resident', $reason, ['failure_reason' => $reason]);
-            $donation->update(['status' => 'rejected']);
-
-            return back()->withErrors(['channel' => $reason]);
+        if ($instruction->isRedirect()) {
+            return Inertia::location($instruction->url);
         }
 
-        $payment->transitionTo(PaymentState::Succeeded, $user, 'resident', 'Debited from the Community Wallet');
+        if ($instruction->type === 'completed') {
+            $user->recordActivity("Donated {$amountLabel} to {$fundraiser->title}");
 
-        $this->orchestrator->applyPayment($payment, [
-            'reference' => $settlement['reference'] ?? $payment->transaction_id,
-            'provider_reference' => $settlement['reference'] ?? null,
-            'notes' => "Donation to {$fundraiser->title} by ".($request->boolean('is_anonymous') ? 'Anonymous' : ($validated['donor_name'] ?? $user->display_name)),
-        ], $user, 'resident');
+            return back()->with('success', 'Thank you for your generous donation! Your official receipt is available.');
+        }
 
-        $user->recordActivity("Donated {$amountLabel} to {$fundraiser->title}");
+        $number = $instruction->payment->transaction_id;
+        $user->recordActivity("Pledged {$amountLabel} to {$fundraiser->title} via {$channel} ({$number}), awaiting confirmation");
 
-        return back()->with('success', 'Thank you for your generous donation! Your official receipt is available.');
+        return back()->with('success', "Thank you! Your gift {$number} is recorded as pending and will count towards the campaign once the community office has received and verified it.");
     }
 
     /**

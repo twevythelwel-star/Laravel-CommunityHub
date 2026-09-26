@@ -94,9 +94,11 @@ export function DonateForm({
 
   // The server treats a missing channel as card, so this does too.
   const isCardGift = (channelKey ?? 'card') === 'card';
-  const cardCheckout = Boolean(
-    (usePage().props as { payments?: { cardCheckout?: boolean } | null }).payments?.cardCheckout,
-  );
+  // Shared by HandleInertiaRequests from ProviderRegistry: whether the estate
+  // has a card processor configured, and which (Stripe, WiPay, ...).
+  const paymentsProps = (usePage().props as { payments?: { cardCheckout?: boolean; cardProvider?: string | null } | null }).payments;
+  const cardCheckout = Boolean(paymentsProps?.cardCheckout);
+  const cardProvider = paymentsProps?.cardProvider ?? 'the card processor';
   const suggestedPills = fundraiser.suggestedAmounts ?? [1000, 2500, 5000, 10000];
 
   const form = useForm<DonateFormValues>({
@@ -376,7 +378,7 @@ export function DonateForm({
                 {isCardGift && (
                   <p className="rounded-md bg-muted/50 p-2 text-xs text-muted-foreground">
                     {cardCheckout
-                      ? "You'll finish on Stripe's secure checkout. Your gift is recorded, with a receipt, once Stripe confirms it."
+                      ? `You'll finish on ${cardProvider}'s secure payment page. Your gift is recorded, with a receipt, once ${cardProvider} confirms it.`
                       : 'Card donations are not available yet. Please choose another method.'}
                   </p>
                 )}

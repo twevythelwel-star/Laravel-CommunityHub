@@ -338,7 +338,9 @@ class PaymentOrchestratorService
             'fee_minor' => 0,
             'net_amount_minor' => $payment->amount_minor,
             'currency' => $payment->currency,
-            'payment_channel' => $payment->channel === 'card' ? StripePaymentService::CHANNEL : $payment->channel,
+            // `stripe_card` is the ledger channel Stripe refunds and payouts key
+            // on; other card processors book as plain `card`.
+            'payment_channel' => $payment->provider === 'stripe' ? StripePaymentService::CHANNEL : $payment->channel,
             'provider' => $payment->provider,
             'device_identifier' => $payment->device_identifier,
             'status' => Transaction::STATUS_COMPLETED,

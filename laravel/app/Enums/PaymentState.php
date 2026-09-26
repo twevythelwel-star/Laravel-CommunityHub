@@ -16,6 +16,7 @@ namespace App\Enums;
  *                    │   (a declined card may be retried on the same
  *                    └── checkout page, so Failed can still succeed)
  *              Created / RequiresAction / Failed ─► Expired   (terminal)
+ *              Created / RequiresAction ─► Canceled              (payer withdrew; terminal)
  *
  * Office-confirmed payments (bank wire, cash, QR, NFC, digital wallets,
  * Zelle, Cash App — channels the app cannot see). Received is logged by one
@@ -23,6 +24,7 @@ namespace App\Enums;
  *
  *     Created ─► AwaitingTransfer ─► Received ─► Verified ─► Paid
  *            └───────────────┴─► Rejected   (terminal)
+ *     AwaitingTransfer ─► Canceled   (payer withdrew before sending; terminal)
  *
  * After payment, for both:
  *
@@ -41,6 +43,7 @@ enum PaymentState: string
     case Processing = 'processing';
     case Failed = 'failed';
     case Expired = 'expired';
+    case Canceled = 'canceled';
     case Succeeded = 'succeeded';
 
     case AwaitingTransfer = 'awaiting_transfer';
@@ -60,13 +63,13 @@ enum PaymentState: string
         return match ($this) {
             // A payment is created before its channel is known (the slip shown
             // to the payer); an office channel then moves it to AwaitingTransfer.
-            self::Created => [self::RequiresAction, self::Processing, self::Succeeded, self::Failed, self::Expired, self::AwaitingTransfer],
-            self::RequiresAction => [self::Processing, self::Succeeded, self::Failed, self::Expired],
+            self::Created => [self::RequiresAction, self::Processing, self::Succeeded, self::Failed, self::Expired, self::AwaitingTransfer, self::Canceled],
+            self::RequiresAction => [self::Processing, self::Succeeded, self::Failed, self::Expired, self::Canceled],
             self::Processing => [self::Succeeded, self::Failed],
             self::Failed => [self::RequiresAction, self::Processing, self::Succeeded, self::Expired],
             self::Succeeded => [self::Paid, self::PartiallyRefunded, self::Refunded, self::Disputed],
 
-            self::AwaitingTransfer => [self::Received, self::Rejected],
+            self::AwaitingTransfer => [self::Received, self::Rejected, self::Canceled],
             self::Received => [self::Verified, self::Rejected],
             self::Verified => [self::Paid],
 
@@ -74,7 +77,7 @@ enum PaymentState: string
             self::PartiallyRefunded => [self::Refunded, self::Disputed],
             self::Disputed => [self::Paid, self::ChargedBack],
 
-            self::Expired, self::Rejected, self::Refunded, self::ChargedBack => [],
+            self::Expired, self::Canceled, self::Rejected, self::Refunded, self::ChargedBack => [],
         };
     }
 
@@ -111,6 +114,7 @@ enum PaymentState: string
             self::Processing => 'Processing',
             self::Failed => 'Failed',
             self::Expired => 'Expired',
+            self::Canceled => 'Canceled',
             self::Succeeded => 'Received by processor',
             self::AwaitingTransfer => 'Awaiting transfer',
             self::Received => 'Received, awaiting verification',
