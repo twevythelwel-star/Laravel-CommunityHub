@@ -79,25 +79,26 @@ class RevenueEngineTest extends TestCase
 
         $response = $this->actingAs($resident)->post('/dashboard/billing/pay', [
             'amount' => 50000,
-            'payment_channel' => 'apple_pay',
+            'payment_channel' => 'zelle',
             'settlement_mode' => 'partial',
             'invoice_id' => $invoice->id,
         ]);
 
         $response->assertRedirect();
 
-        // Apple Pay is an office-confirmed channel: the payment waits for the
+        // Zelle is an office-confirmed channel: the payment waits for the
         // office, and nothing reaches the ledger until the money is verified.
+        // (Apple Pay is not: it goes through the card processor.)
         $this->assertDatabaseHas('payments', [
             'user_id' => $resident->id,
-            'channel' => 'apple_pay',
+            'channel' => 'zelle',
             'provider' => 'office',
             'state' => 'awaiting_transfer',
             'amount_minor' => 5000000,
         ]);
         $this->assertDatabaseMissing('transactions', [
             'user_id' => $resident->id,
-            'payment_channel' => 'apple_pay',
+            'payment_channel' => 'zelle',
             'amount_minor' => 5000000,
         ]);
         $this->assertSame('Unpaid', $invoice->fresh()->status);
@@ -192,7 +193,7 @@ class RevenueEngineTest extends TestCase
             $response = $this->actingAs($resident)->post('/dashboard/billing/pay', [
                 'amount' => 150.00,
                 'currency' => $curr,
-                'payment_channel' => 'apple_pay',
+                'payment_channel' => 'zelle',
                 'settlement_mode' => 'full',
             ]);
 
@@ -202,7 +203,7 @@ class RevenueEngineTest extends TestCase
                 'user_id' => $resident->id,
                 'currency' => $curr,
                 'amount_minor' => 15000,
-                'channel' => 'apple_pay',
+                'channel' => 'zelle',
                 'state' => 'awaiting_transfer',
             ]);
         }

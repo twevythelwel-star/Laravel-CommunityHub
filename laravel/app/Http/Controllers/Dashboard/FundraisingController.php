@@ -287,7 +287,9 @@ class FundraisingController extends Controller
         $provider = $providers->forChannel($channel);
 
         if (! $provider) {
-            return back()->withErrors(['channel' => 'Card donations are not available yet. Please choose another method.']);
+            $method = $channel === 'card' ? 'Card' : Transaction::formatPaymentMethod($channel);
+
+            return back()->withErrors(['channel' => "{$method} donations are not available yet. Please choose another method."]);
         }
 
         /*
@@ -299,7 +301,10 @@ class FundraisingController extends Controller
          | digital wallets, Zelle and Cash App wait for the office to log the
          | money received and a second administrator to verify it.
          */
-        $donation = $channel === 'card' ? null : $fundraiser->donations()->create([
+        // Card and device wallets: written on the processor's confirmation.
+        $viaProcessor = $channel === 'card' || in_array($channel, ProviderRegistry::WALLET_CHANNELS, true);
+
+        $donation = $viaProcessor ? null : $fundraiser->donations()->create([
             'user_id' => $user->id,
             'amount_minor' => $amountMinor,
             'currency' => $fundraiser->goal_currency,

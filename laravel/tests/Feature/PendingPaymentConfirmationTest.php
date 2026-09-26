@@ -121,7 +121,7 @@ class PendingPaymentConfirmationTest extends TestCase
     {
         $resident = $this->resident();
 
-        foreach (['bank_wire', 'cash_office', 'qr_code', 'nfc_pos', 'apple_pay', 'google_pay', 'samsung_wallet', 'zelle', 'cash_app'] as $channel) {
+        foreach (['bank_wire', 'cash_office', 'qr_code', 'nfc_pos', 'zelle', 'cash_app'] as $channel) {
             $invoice = $this->invoiceFor($resident);
 
             $payment = $this->pay($resident, $invoice, ['channel' => $channel]);
@@ -329,8 +329,26 @@ class PendingPaymentConfirmationTest extends TestCase
             );
     }
 
+    public function test_device_wallets_are_never_confirmed_by_the_office(): void
+    {
+        // Apple Pay, Google Pay and Samsung Pay were office channels: a
+        // resident "paid" by saying so. Only a card processor can take them,
+        // and with none configured they are refused outright.
+        config(['payments.card_provider' => null, 'services.stripe.secret' => null]);
+        $resident = $this->resident();
+
+        foreach (['apple_pay', 'google_pay', 'samsung_wallet'] as $channel) {
+            $this->actingAs($resident)
+                ->post(route('dashboard.billing.pay'), ['channel' => $channel, 'amount' => 100, 'invoice_id' => $this->invoiceFor($resident)->id])
+                ->assertSessionHasErrors('channel');
+        }
+
+        $this->assertSame(0, Payment::count());
+    }
+
     public function test_a_card_attempt_never_reaches_the_office_queue(): void
     {
+        config(['services.stripe.secret' => 'sk_test_card_attempt']);
         $resident = $this->resident();
         $invoice = $this->invoiceFor($resident);
 

@@ -14,7 +14,8 @@ use App\Services\Payments\Providers\PaymentRequest;
 
 /**
  * Payments the app cannot see: bank transfer, cash at the office, QR, NFC,
- * Apple/Google/Samsung Pay, Zelle and Cash App.
+ * Zelle and Cash App. (Apple, Google and Samsung Pay are not among them: a
+ * device wallet is taken only by a card processor; see OffersWalletPayments.)
  *
  * One provider for all of them, because they work the same way: the payer
  * sends the money outside the app, one administrator logs it as received, a

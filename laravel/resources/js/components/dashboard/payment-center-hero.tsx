@@ -79,11 +79,19 @@ export type PaymentCenterProps = {
   autoPay?: any;
 };
 
+/** Device wallets: offered only through a card processor that supports them. */
+const WALLET_CHANNELS = ['apple_pay', 'google_pay', 'samsung_wallet'];
+
+/** Card and device wallets are taken on the card processor's own page. */
+const isProcessorChannel = (channel: string): boolean => channel === 'card' || WALLET_CHANNELS.includes(channel);
+
 /** Who handles the money, in words; see Transaction::resolveDefaultProvider(). */
 function providerLabel(provider: string): string {
   switch (provider) {
     case 'stripe':
       return 'Stripe';
+    case 'wipay':
+      return 'WiPay';
     case 'internal':
       return 'Community Wallet';
     case 'office':
@@ -767,7 +775,11 @@ export function PaymentCenterHero({
                   <div>
                     <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Payment Processor</span>
                     <span className="font-semibold text-foreground capitalize">
-                      {providerLabel(pendingSlip?.provider ?? (activeModal === 'card' ? 'stripe' : activeModal === 'wallet' ? 'internal' : 'office'))}
+                      {pendingSlip?.provider
+                        ? providerLabel(pendingSlip.provider)
+                        : isProcessorChannel(activeModal || 'card')
+                          ? cardProvider
+                          : providerLabel(activeModal === 'wallet' ? 'internal' : 'office')}
                     </span>
                   </div>
                   {pendingSlip?.device && (
@@ -786,27 +798,25 @@ export function PaymentCenterHero({
               )}
             </div>
 
-            {activeModal === 'apple_pay' && (
-              <div className="p-5 rounded-2xl bg-slate-950 text-white text-center space-y-3">
-                <span className="text-3xl"></span>
-                <div className="font-bold text-base">Double-Click Side Button</div>
-                <p className="text-xs text-slate-400">Confirm biometric Touch ID or Face ID on your Apple device. The community office confirms it once the money arrives.</p>
-              </div>
-            )}
-
-            {activeModal === 'google_pay' && (
-              <div className="p-5 rounded-2xl bg-card border border-border text-center space-y-3">
-                <span className="text-2xl font-black text-blue-600">G Pay</span>
-                <div className="font-bold text-sm">Confirm with your Google Account</div>
-                <p className="text-xs text-muted-foreground">Select saved Google Pay card. The community office confirms it once the money arrives.</p>
-              </div>
-            )}
-
-            {activeModal === 'samsung_wallet' && (
-              <div className="p-5 rounded-2xl bg-blue-900 text-white text-center space-y-3">
-                <span className="text-2xl font-bold">Samsung Wallet</span>
-                <div className="font-bold text-sm">Swipe up from the bottom of your Samsung phone</div>
-                <p className="text-xs text-blue-200">Authenticate with biometric sensor. The community office confirms it once the money arrives.</p>
+            {/*
+              Device wallets. This showed Apple/Google/Samsung-styled panels —
+              "Double-Click Side Button", "Swipe up from the bottom" — while
+              nothing was being authenticated, and the payment then went to the
+              office to confirm on the payer's word. A wallet payment is taken
+              by the card processor: its page shows the wallet, the wallet
+              authenticates the payer and hands the processor a token, and the
+              processor reports the result. These options appear only when the
+              estate's card processor offers them (ProviderRegistry).
+            */}
+            {WALLET_CHANNELS.includes(activeModal ?? '') && (
+              <div className="p-3 bg-muted/40 rounded-lg text-xs space-y-2">
+                <p className="font-semibold">{modalMethod}</p>
+                <p className="text-muted-foreground">
+                  You&apos;ll continue to {cardProvider}&apos;s secure payment page for{' '}
+                  <strong>{pendingSlip?.transaction_id || 'your transaction'}</strong>. Choose {modalMethod} there on a
+                  device that supports it: your wallet confirms it&apos;s you, {cardProvider} charges your card, and your
+                  statement updates once {cardProvider} confirms the payment.
+                </p>
               </div>
             )}
 
@@ -899,12 +909,12 @@ export function PaymentCenterHero({
 
             <Button
               className="w-full font-bold py-3 mt-4"
-              disabled={isProcessing || ((activeModal || 'card') === 'card' && !cardCheckout)}
+              disabled={isProcessing || (isProcessorChannel(activeModal || 'card') && !cardCheckout)}
               onClick={() => handleConfirmPayment(activeModal || 'card')}
             >
               {isProcessing
                 ? 'Processing Settlement...'
-                : (activeModal || 'card') === 'card'
+                : isProcessorChannel(activeModal || 'card')
                 ? `Continue to secure checkout (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`
                 : `Confirm & Authorize Payment (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`}
             </Button>

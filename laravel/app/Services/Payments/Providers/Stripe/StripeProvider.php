@@ -7,6 +7,7 @@ use App\Models\Payment;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Payments\Providers\Contracts\HandlesWebhooks;
+use App\Services\Payments\Providers\Contracts\OffersWalletPayments;
 use App\Services\Payments\Providers\Contracts\PaymentProvider;
 use App\Services\Payments\Providers\Contracts\RefundsPayments;
 use App\Services\Payments\Providers\PaymentInstruction;
@@ -29,7 +30,7 @@ use Throwable;
  * The Stripe work itself stays in StripePaymentService; this adapts it to
  * the provider contract.
  */
-class StripeProvider implements HandlesWebhooks, PaymentProvider, RefundsPayments
+class StripeProvider implements HandlesWebhooks, OffersWalletPayments, PaymentProvider, RefundsPayments
 {
     public const KEY = 'stripe';
 
@@ -91,6 +92,17 @@ class StripeProvider implements HandlesWebhooks, PaymentProvider, RefundsPayment
         }
 
         throw new DomainException('Card checkout needs a statement or a campaign to pay.');
+    }
+
+    /**
+     * Stripe's hosted Checkout shows Apple Pay and Google Pay itself, on
+     * devices that have them, with no domain registration for hosted pages.
+     * The payer picks the wallet on Stripe's page; the outcome arrives by
+     * webhook like any card payment.
+     */
+    public function walletMethods(): array
+    {
+        return ['apple_pay', 'google_pay'];
     }
 
     public function getPaymentStatus(Payment $payment): PaymentState

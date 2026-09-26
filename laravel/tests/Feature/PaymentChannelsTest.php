@@ -114,6 +114,9 @@ class PaymentChannelsTest extends TestCase
          | reading "Zero Surcharges". It has to reach the page before it can be
          | shown to the person paying it.
          */
+        // Card is offered only with a card processor configured.
+        config(['services.stripe.secret' => 'sk_test_surcharge']);
+
         PaymentChannelSetting::updateOrCreate(
             ['channel_key' => 'card'],
             ['enabled' => true, 'display_label' => 'Debit / Credit Card', 'fee_surcharge_percent' => 2.5]

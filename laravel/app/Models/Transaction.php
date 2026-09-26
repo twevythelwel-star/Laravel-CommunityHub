@@ -229,11 +229,13 @@ class Transaction extends Model
     }
 
     /**
-     * Who actually handles the money for a channel.
+     * The default provider label for a ledger row that does not name one.
      *
-     * Only card goes through Stripe. Apple Pay, Google Pay, Samsung Wallet,
-     * NFC and QR were labelled `stripe` here, but they are office-confirmed
-     * channels whose money Stripe never sees; see PaymentOrchestratorService.
+     * Payments set their provider explicitly (ProviderRegistry): card and
+     * device wallets name the estate's card processor. This default covers
+     * rows written without one — older rows, where Apple/Google/Samsung Pay
+     * were still office-confirmed — so it does not claim Stripe for money
+     * Stripe never handled.
      */
     public static function resolveDefaultProvider(string $channel): string
     {

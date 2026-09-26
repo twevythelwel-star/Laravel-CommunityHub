@@ -604,14 +604,18 @@ class BillingController extends Controller
         $currency = strtoupper($validated['currency'] ?? ($invoice?->currency ?? 'JMD'));
         $amountMinor = (int) round($validated['amount'] * 100);
 
-        $isCard = $validated['channel'] === 'card';
+        // Card and device wallets (Apple Pay, Google Pay) are taken by the
+        // card processor, on its own page.
+        $isCard = $validated['channel'] === 'card' || in_array($validated['channel'], ProviderRegistry::WALLET_CHANNELS, true);
 
         // Whichever processor the estate has configured for cards (Stripe,
-        // WiPay, ...), or none: see ProviderRegistry::cardProvider().
+        // WiPay, ...) — and for a wallet, only if it offers that wallet.
         $provider = $providers->forChannel($validated['channel']);
 
         if (! $provider) {
-            return back()->withErrors(['channel' => 'Card payments are not available yet. Please choose another method or pay at the community office.']);
+            $method = Transaction::formatPaymentMethod($validated['channel']);
+
+            return back()->withErrors(['channel' => "{$method} payments are not available yet. Please choose another method or pay at the community office."]);
         }
 
         if ($isCard) {
@@ -769,6 +773,12 @@ class BillingController extends Controller
             'purpose' => ['nullable', 'string', 'in:'.implode(',', self::PAYMENT_PURPOSES)],
             'device_identifier' => ['nullable', 'string', 'max:100'],
         ]);
+
+        if (! app(ProviderRegistry::class)->isAvailable($validated['channel'])) {
+            $message = Transaction::formatPaymentMethod($validated['channel']).' payments are not available yet.';
+
+            return response()->json(['message' => $message, 'errors' => ['channel' => [$message]]], 422);
+        }
 
         $invoice = isset($validated['invoice_id'])
             ? $user->invoices()->whereKey($validated['invoice_id'])->first()

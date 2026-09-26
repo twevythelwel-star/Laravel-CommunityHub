@@ -24,6 +24,7 @@ use App\Services\Payments\Drivers\PaymentDriverInterface;
 use App\Services\Payments\Drivers\PeerPaymentDriver;
 use App\Services\Payments\Drivers\QrPaymentDriver;
 use App\Services\Payments\Drivers\StripeCardDriver;
+use App\Services\Payments\Providers\ProviderRegistry;
 use App\Services\SmsService;
 use App\Services\StripePaymentService;
 use DomainException;
@@ -36,14 +37,15 @@ class PaymentOrchestratorService
     /**
      * Channels whose money the app itself can see move.
      *
-     * The wallet debits a balance held in this database. Card is taken by
-     * Stripe Checkout and never settles through a driver. Every other channel
-     * — bank wire, cash, QR, NFC, Apple/Google/Samsung Pay, Zelle, Cash App —
+     * The wallet debits a balance held in this database. Card and device
+     * wallets (Apple/Google/Samsung Pay) are taken by the card processor and
+     * confirmed by it. Every other channel — bank wire, cash, QR, NFC, Zelle,
+     * Cash App —
      * has a driver that cannot see the money, and used to report success for
      * any amount anyone typed. Those payments are recorded as pending and
      * count only once an administrator confirms the money arrived.
      */
-    private const SELF_VERIFYING_CHANNELS = ['wallet', 'card'];
+    private const SELF_VERIFYING_CHANNELS = ['wallet', 'card', 'apple_pay', 'google_pay', 'samsung_wallet'];
 
     /** @var array<string, PaymentDriverInterface> */
     protected array $drivers = [];
@@ -119,7 +121,10 @@ class PaymentOrchestratorService
             default => 'payment_link',
         };
 
-        $provider = Transaction::resolveDefaultProvider($channel);
+        // The provider that will actually take this channel: the card
+        // processor for card and device wallets, the office otherwise.
+        $provider = app(ProviderRegistry::class)->forChannel($channel)?->key()
+            ?? Transaction::resolveDefaultProvider($channel);
 
         return Payment::start($params['state'] ?? PaymentState::Created, [
             'applies_to' => $appliesTo,
@@ -413,7 +418,11 @@ class PaymentOrchestratorService
             $setting = $settings->get($key);
             $enabled = $setting ? $setting->enabled : true;
 
-            if ($enabled) {
+            // Offered only when something can take it: card and device wallets
+            // need a card processor that supports them (ProviderRegistry).
+            $provider = app(ProviderRegistry::class)->forChannel($key);
+
+            if ($enabled && $provider) {
                 $channels[] = [
                     'key' => $key,
                     'label' => $setting?->display_label ?? $driver->label(),
@@ -421,6 +430,7 @@ class PaymentOrchestratorService
                     'account_identifier' => $setting?->account_identifier,
                     'fee_surcharge_percent' => (float) ($setting?->fee_surcharge_percent ?? 0),
                     'requires_confirmation' => $this->requiresOfficeConfirmation($key),
+                    'provider' => $provider->label(),
                 ];
             }
         }

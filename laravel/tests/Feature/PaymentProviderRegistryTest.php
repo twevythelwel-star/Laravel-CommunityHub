@@ -96,11 +96,49 @@ class PaymentProviderRegistryTest extends TestCase
 
     public function test_every_other_channel_goes_to_its_provider(): void
     {
-        foreach (['bank_wire', 'cash_office', 'qr_code', 'nfc_pos', 'apple_pay', 'google_pay', 'samsung_wallet', 'zelle', 'cash_app'] as $channel) {
+        foreach (['bank_wire', 'cash_office', 'qr_code', 'nfc_pos', 'zelle', 'cash_app'] as $channel) {
             $this->assertSame('office', $this->registry()->forChannel($channel)->key(), $channel);
         }
 
         $this->assertSame('internal', $this->registry()->forChannel('wallet')->key());
+    }
+
+    public function test_device_wallets_go_only_to_a_card_processor_that_offers_them(): void
+    {
+        // No processor: no wallets. They are never the office's to confirm.
+        config(['payments.card_provider' => null, 'services.stripe.secret' => null]);
+        foreach (['apple_pay', 'google_pay', 'samsung_wallet'] as $channel) {
+            $this->assertNull($this->registry()->forChannel($channel), $channel);
+        }
+
+        // Stripe's hosted Checkout offers Apple Pay and Google Pay.
+        config(['services.stripe.secret' => 'sk_test_wallets']);
+        $this->assertSame('stripe', $this->registry()->forChannel('apple_pay')?->key());
+        $this->assertSame('stripe', $this->registry()->forChannel('google_pay')?->key());
+        $this->assertNull($this->registry()->forChannel('samsung_wallet'), 'No provider here offers Samsung Pay.');
+
+        // WiPay's Payments API takes credit_card only.
+        $this->wipayConfigured();
+        config(['payments.card_provider' => 'wipay']);
+        $this->assertSame('wipay', $this->registry()->forChannel('card')?->key());
+        $this->assertNull($this->registry()->forChannel('apple_pay'));
+        $this->assertNull($this->registry()->forChannel('google_pay'));
+    }
+
+    public function test_unavailable_wallets_are_not_offered_to_payers(): void
+    {
+        config(['payments.card_provider' => null, 'services.stripe.secret' => null]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard.billing'))
+            ->assertInertia(function (Assert $page) {
+                $keys = collect($page->toArray()['props']['paymentCenter']['availableChannels'])->pluck('key');
+
+                $this->assertNotContains('apple_pay', $keys);
+                $this->assertNotContains('google_pay', $keys);
+                $this->assertNotContains('card', $keys);
+                $this->assertContains('bank_wire', $keys);
+            });
     }
 
     public function test_providers_declare_only_what_they_can_do(): void

@@ -33,6 +33,9 @@ use Illuminate\Support\Str;
  *      and — for successes only — hash = md5(transaction_id . original total
  *      . API key).
  *
+ * No device wallets: the API's only `method` is credit_card, so Apple Pay
+ * and Google Pay are not offered while WiPay is the card processor.
+ *
  * That browser return is WiPay's only report: the API has no webhook, no
  * status lookup, no refund and no recurring billing. So this provider
  * implements ConfirmsReturns and nothing more. A payer who closes the tab

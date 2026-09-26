@@ -250,7 +250,7 @@ class CommunityHubTransactionIdTest extends TestCase
         $invoice = $this->createInvoice($user);
 
         $response = $this->actingAs($user)->postJson(route('dashboard.billing.transactions.initiate'), [
-            'channel' => 'apple_pay',
+            'channel' => 'bank_wire',
             'amount' => 250.00,
             'currency' => 'USD',
             'invoice_id' => $invoice->id,
@@ -276,10 +276,27 @@ class CommunityHubTransactionIdTest extends TestCase
         $this->assertSame('USD', $json['transaction']['currency']);
         $this->assertSame('250.00', $json['transaction']['amount']);
         $this->assertSame('HOA Assessment', $json['transaction']['purpose']);
-        $this->assertSame('Apple Pay', $json['transaction']['payment_method']);
+        $this->assertSame('Bank Transfer', $json['transaction']['payment_method']);
         $this->assertSame('office', $json['transaction']['provider']);
 
         $this->assertSame(0, Transaction::count(), 'A started payment is not on the ledger.');
+    }
+
+    public function test_an_apple_pay_slip_names_the_card_processor_not_the_office(): void
+    {
+        $user = User::factory()->create(['role' => 'Homeowner', 'status' => 'Active']);
+        $invoice = $this->createInvoice($user);
+        $initiate = fn () => $this->actingAs($user)->postJson(route('dashboard.billing.transactions.initiate'), [
+            'channel' => 'apple_pay', 'amount' => 250, 'currency' => 'USD', 'invoice_id' => $invoice->id,
+        ]);
+
+        // No card processor: Apple Pay cannot be taken at all.
+        config(['payments.card_provider' => null, 'services.stripe.secret' => null]);
+        $initiate()->assertUnprocessable()->assertJsonValidationErrors('channel');
+
+        // Through Stripe, the processor Apple Pay actually runs on.
+        config(['services.stripe.secret' => 'sk_test_slip']);
+        $initiate()->assertOk()->assertJsonPath('transaction.provider', 'stripe');
     }
 
     public function test_the_initiate_endpoint_refuses_what_it_cannot_start(): void
