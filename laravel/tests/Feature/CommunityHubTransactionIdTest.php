@@ -295,7 +295,7 @@ class CommunityHubTransactionIdTest extends TestCase
         $initiate()->assertUnprocessable()->assertJsonValidationErrors('channel');
 
         // Through Stripe, the processor Apple Pay actually runs on.
-        config(['services.stripe.secret' => 'sk_test_slip']);
+        config(['services.stripe.secret' => 'sk_test_slip', 'payments.wallets' => ['apple_pay']]);
         $initiate()->assertOk()->assertJsonPath('transaction.provider', 'stripe');
     }
 

@@ -16,15 +16,20 @@ namespace App\Services\Payments\Providers\Contracts;
  *       → the processor tells CommunityHub (webhook)
  *
  * Apple states that the merchant's payment processor must support Apple
- * Pay, so a wallet is offered only through a provider implementing this,
- * and only for the methods it lists. These were office-confirmed channels,
- * which a resident could "pay" by saying so; nothing but a processor can
- * confirm a wallet payment.
+ * Pay, and Google Pay needs merchant setup with the processor even in
+ * countries where Google Pay is available. So a wallet is offered only
+ * through a provider implementing this, only for the methods it lists, and
+ * only once the estate has validated its merchant account accepts it
+ * (config payments.wallets; see ProviderRegistry::walletProvider()).
+ *
+ * These were office-confirmed channels, which a resident could "pay" by
+ * saying so; nothing but a processor can confirm a wallet payment.
  */
 interface OffersWalletPayments
 {
     /**
-     * Channel keys of the wallets offered on this processor's page.
+     * Channel keys of the wallets this processor's page can offer, in
+     * general. Whether this estate's account may use them is separate.
      *
      * @return list<string> e.g. ['apple_pay', 'google_pay']
      */

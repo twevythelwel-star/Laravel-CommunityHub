@@ -111,8 +111,9 @@ class PaymentProviderRegistryTest extends TestCase
             $this->assertNull($this->registry()->forChannel($channel), $channel);
         }
 
-        // Stripe's hosted Checkout offers Apple Pay and Google Pay.
-        config(['services.stripe.secret' => 'sk_test_wallets']);
+        // Stripe's hosted Checkout offers Apple Pay and Google Pay — once the
+        // estate has validated its merchant account accepts them.
+        config(['services.stripe.secret' => 'sk_test_wallets', 'payments.wallets' => ['apple_pay', 'google_pay', 'samsung_wallet']]);
         $this->assertSame('stripe', $this->registry()->forChannel('apple_pay')?->key());
         $this->assertSame('stripe', $this->registry()->forChannel('google_pay')?->key());
         $this->assertNull($this->registry()->forChannel('samsung_wallet'), 'No provider here offers Samsung Pay.');
@@ -121,6 +122,32 @@ class PaymentProviderRegistryTest extends TestCase
         $this->wipayConfigured();
         config(['payments.card_provider' => 'wipay']);
         $this->assertSame('wipay', $this->registry()->forChannel('card')?->key());
+        $this->assertNull($this->registry()->forChannel('apple_pay'));
+        $this->assertNull($this->registry()->forChannel('google_pay'));
+    }
+
+    public function test_a_wallet_the_processor_supports_is_not_offered_until_the_merchant_account_is_validated(): void
+    {
+        config(['services.stripe.secret' => 'sk_test_wallets', 'payments.wallets' => []]);
+
+        // Stripe supports both; this estate has validated neither.
+        $this->assertNull($this->registry()->forChannel('apple_pay'));
+        $this->assertNull($this->registry()->forChannel('google_pay'));
+
+        // Validated Google Pay only.
+        config(['payments.wallets' => ['google_pay']]);
+        $this->assertSame('stripe', $this->registry()->forChannel('google_pay')?->key());
+        $this->assertNull($this->registry()->forChannel('apple_pay'));
+    }
+
+    public function test_listing_a_wallet_the_processor_does_not_support_offers_nothing(): void
+    {
+        // Validation is for the account, not a way round the processor.
+        config(['payments.providers.wipay' => [
+            'account_number' => '1234567890', 'api_key' => '123', 'environment' => 'sandbox',
+            'country_code' => 'JM', 'fee_structure' => 'merchant_absorb', 'origin' => 'CommunityHub',
+        ], 'payments.card_provider' => 'wipay', 'payments.wallets' => ['apple_pay', 'google_pay']]);
+
         $this->assertNull($this->registry()->forChannel('apple_pay'));
         $this->assertNull($this->registry()->forChannel('google_pay'));
     }

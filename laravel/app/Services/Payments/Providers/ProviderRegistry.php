@@ -17,9 +17,12 @@ use App\Services\Payments\Providers\WiPay\WiPayProvider;
  *             Stripe is used if its keys are set; otherwise card is off.
  *   apple_pay, google_pay, samsung_wallet
  *             the card processor, if it offers that wallet
- *             (OffersWalletPayments); otherwise unavailable. Apple requires
- *             the merchant's processor to support Apple Pay — a wallet is
- *             never something the office can confirm.
+ *             (OffersWalletPayments) AND the estate has validated that its
+ *             merchant account accepts it (config payments.wallets);
+ *             otherwise unavailable. Apple requires the merchant's processor
+ *             to support Apple Pay, and Google Pay needs merchant setup with
+ *             the processor even where Google Pay itself is available — a
+ *             wallet is never something the office can confirm.
  *   wallet    the Community Wallet.
  *   anything  else the community office (bank wire, cash, QR, NFC, Zelle,
  *             Cash App).
@@ -66,12 +69,21 @@ class ProviderRegistry
         };
     }
 
-    /** The card processor, if it offers this device wallet. */
+    /**
+     * The card processor, if it offers this device wallet and the estate has
+     * validated that its merchant account accepts it.
+     *
+     * Both are needed. The processor's support is general; whether this
+     * merchant account, in this country, can take the wallet is confirmed
+     * with the processor and recorded in config payments.wallets.
+     */
     public function walletProvider(string $channel): ?PaymentProvider
     {
         $provider = $this->cardProvider();
 
-        return $provider instanceof OffersWalletPayments && in_array($channel, $provider->walletMethods(), true)
+        return $provider instanceof OffersWalletPayments
+            && in_array($channel, $provider->walletMethods(), true)
+            && in_array($channel, (array) config('payments.wallets', []), true)
             ? $provider
             : null;
     }

@@ -37,6 +37,23 @@ return [
 
     'card_provider' => env('PAYMENTS_CARD_PROVIDER'),
 
+    /*
+    |---------------------------------------------------------------------------
+    | Device wallets this estate's merchant account can accept
+    |---------------------------------------------------------------------------
+    |
+    | A processor supporting Apple Pay or Google Pay in general does not mean
+    | this estate's merchant account can take it: the wallet has to be
+    | enabled and approved for the account, in the country it trades in.
+    | List a wallet here only once that is validated with the processor
+    | (e.g. "apple_pay,google_pay"). A wallet is offered only when it is
+    | listed here AND the configured card processor supports it; empty
+    | offers none.
+    |
+    */
+
+    'wallets' => array_values(array_filter(array_map('trim', explode(',', (string) env('PAYMENTS_WALLETS', ''))))),
+
     'providers' => [
 
         /*
