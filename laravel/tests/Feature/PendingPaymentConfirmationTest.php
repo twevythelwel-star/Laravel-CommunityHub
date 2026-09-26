@@ -121,7 +121,9 @@ class PendingPaymentConfirmationTest extends TestCase
     {
         $resident = $this->resident();
 
-        foreach (['bank_wire', 'cash_office', 'qr_code', 'nfc_pos', 'zelle', 'cash_app'] as $channel) {
+        // (NFC is not here: a tap is taken on a staff-run card reader, not
+        // reported to the office; see StripeTerminalInPersonTest.)
+        foreach (['bank_wire', 'cash_office', 'qr_code', 'zelle', 'cash_app'] as $channel) {
             $invoice = $this->invoiceFor($resident);
 
             $payment = $this->pay($resident, $invoice, ['channel' => $channel]);

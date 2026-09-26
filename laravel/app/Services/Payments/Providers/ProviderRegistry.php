@@ -4,8 +4,10 @@ namespace App\Services\Payments\Providers;
 
 use App\Services\Payments\Providers\Contracts\OffersWalletPayments;
 use App\Services\Payments\Providers\Contracts\PaymentProvider;
+use App\Services\Payments\Providers\Contracts\TakesInPersonPayments;
 use App\Services\Payments\Providers\Office\OfficeProvider;
 use App\Services\Payments\Providers\Stripe\StripeProvider;
+use App\Services\Payments\Providers\StripeTerminal\StripeTerminalProvider;
 use App\Services\Payments\Providers\Wallet\WalletProvider;
 use App\Services\Payments\Providers\WiPay\WiPayProvider;
 
@@ -23,8 +25,11 @@ use App\Services\Payments\Providers\WiPay\WiPayProvider;
  *             to support Apple Pay, and Google Pay needs merchant setup with
  *             the processor even where Google Pay itself is available — a
  *             wallet is never something the office can confirm.
+ *   nfc_pos   the in-person provider (config payments.in_person_provider),
+ *             on a registered, confirmed reader, started by staff — never a
+ *             channel residents pick online, and never the office's word.
  *   wallet    the Community Wallet.
- *   anything  else the community office (bank wire, cash, QR, NFC, Zelle,
+ *   anything  else the community office (bank wire, cash, QR, Zelle,
  *             Cash App).
  *
  * Nothing names a processor anywhere else; adding one is a new provider class
@@ -40,6 +45,7 @@ class ProviderRegistry
         protected WiPayProvider $wipay,
         protected OfficeProvider $office,
         protected WalletProvider $wallet,
+        protected StripeTerminalProvider $stripeTerminal,
     ) {}
 
     /** @return array<string, PaymentProvider> keyed by PaymentProvider::key() */
@@ -50,6 +56,7 @@ class ProviderRegistry
             $this->wipay->key() => $this->wipay,
             $this->office->key() => $this->office,
             $this->wallet->key() => $this->wallet,
+            $this->stripeTerminal->key() => $this->stripeTerminal,
         ];
     }
 
@@ -64,6 +71,7 @@ class ProviderRegistry
         return match ($channel) {
             'card', 'stripe_card' => $this->cardProvider(),
             'apple_pay', 'google_pay', 'samsung_wallet' => $this->walletProvider($channel),
+            'nfc_pos' => $this->inPersonProvider(),
             'wallet' => $this->wallet,
             default => $this->office,
         };
@@ -86,6 +94,17 @@ class ProviderRegistry
             && in_array($channel, (array) config('payments.wallets', []), true)
             ? $provider
             : null;
+    }
+
+    /**
+     * The provider whose readers take in-person payments, if one is chosen
+     * and set up. It still needs a registered, confirmed reader per payment.
+     */
+    public function inPersonProvider(): (PaymentProvider&TakesInPersonPayments)|null
+    {
+        $provider = $this->byKey((string) config('payments.in_person_provider'));
+
+        return $provider instanceof TakesInPersonPayments && $provider->isAvailable() ? $provider : null;
     }
 
     /** Whether a channel can be offered to payers right now. */

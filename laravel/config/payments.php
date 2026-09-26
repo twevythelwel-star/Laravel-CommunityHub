@@ -52,6 +52,21 @@ return [
     |
     */
 
+    /*
+    |---------------------------------------------------------------------------
+    | In-person (card-present / NFC) payments
+    |---------------------------------------------------------------------------
+    |
+    | The provider whose readers take taps and card inserts at the office:
+    | `stripe_terminal`, for estates whose Stripe account and reader locations
+    | are in a Stripe Terminal country (not Jamaica). Empty: in-person card
+    | payments are off. A reader must also be registered and confirmed with
+    | the provider before it can take a payment.
+    |
+    */
+
+    'in_person_provider' => env('PAYMENTS_IN_PERSON_PROVIDER'),
+
     'wallets' => array_values(array_filter(array_map('trim', explode(',', (string) env('PAYMENTS_WALLETS', ''))))),
 
     'providers' => [

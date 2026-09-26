@@ -10,6 +10,7 @@ use App\Models\Payment;
  *   redirect      go to the provider's hosted page at `url`
  *   instructions  send the money as `message` says; the office confirms it
  *   completed     nothing — the money was taken and applied already
+ *   terminal      tap or insert a card on the reader staff sent it to
  */
 final class PaymentInstruction
 {
@@ -28,6 +29,11 @@ final class PaymentInstruction
     public static function instructions(Payment $payment, string $message): self
     {
         return new self('instructions', $payment, message: $message);
+    }
+
+    public static function onTerminal(Payment $payment, string $message): self
+    {
+        return new self('terminal', $payment, message: $message);
     }
 
     public static function completed(Payment $payment, string $message): self

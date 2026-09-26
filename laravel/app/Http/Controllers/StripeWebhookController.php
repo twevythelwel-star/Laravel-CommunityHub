@@ -23,7 +23,8 @@ use UnexpectedValueException;
  *   charge.refunded                       charge.dispute.created
  *   charge.dispute.funds_withdrawn        charge.dispute.funds_reinstated
  *   charge.dispute.closed                 payout.paid
- *   payout.failed
+ *   payout.failed                         terminal.reader.action_succeeded
+ *   terminal.reader.action_failed
  *
  * Locally, `stripe listen --forward-to <app>/api/webhooks/stripe` delivers
  * them all and prints the signing secret to use.

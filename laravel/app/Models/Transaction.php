@@ -24,6 +24,8 @@ class Transaction extends Model
         'provider_reference',
         'provider_status',
         'device_identifier',
+        'terminal_id',
+        'location_id',
         'user_id',
         'payment_method_id',
         'invoice_id',
@@ -349,6 +351,8 @@ class Transaction extends Model
             'provider' => $this->provider,
             'provider_transaction_id' => $this->provider_reference,
             'device' => $this->device_identifier,
+            'terminal' => $this->terminal_id,
+            'location' => $this->location_id,
             'created' => $this->created_at?->format('Y-m-d'),
         ];
     }

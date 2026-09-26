@@ -34,6 +34,7 @@ import {
   type MasterTransaction,
   type OfficePayment,
 } from '@/components/dashboard/transactions-ledger';
+import { InPersonPayments, type InPersonProps } from '@/components/dashboard/in-person-payments';
 import {
   CreditCard,
   Receipt,
@@ -190,6 +191,8 @@ type Props = {
   transactions?: Paginated<MasterTransaction>;
   /** Office payments in flight: every one for an administrator, a resident's own otherwise. */
   pendingPayments?: OfficePayment[];
+  /** Administrators only: in-person card readers and what is on them. */
+  inPerson?: InPersonProps | null;
   payouts?: any[];
   reconciliations?: any[];
   paymentEvents?: {
@@ -266,6 +269,7 @@ export default function BillingPage({
   paymentLinks = [],
   transactions,
   pendingPayments = [],
+  inPerson = null,
   payouts = [],
   reconciliations = [],
   paymentEvents = [],
@@ -1006,6 +1010,15 @@ export default function BillingPage({
               <div className="py-12 text-center text-muted-foreground">
                 No ledger records available.
               </div>
+            )}
+
+            {isAdmin && inPerson && (
+              <InPersonPayments
+                inPerson={inPerson}
+                openInvoices={(invoices?.data ?? [])
+                  .filter((i) => i.status === 'Unpaid' || i.status === 'Overdue')
+                  .map((i) => ({ id: i.id, reference: i.reference, amount: i.amount, currency: i.currency, homeowner: i.homeowner }))}
+              />
             )}
           </TabsContent>
 

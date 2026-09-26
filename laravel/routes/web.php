@@ -400,6 +400,13 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
             // Office payments: one administrator logs receipt; verification is
             // part of storeReconciliation, by a different administrator.
             Route::post('/billing/payments/{payment}/receive', [BillingController::class, 'receivePayment'])->name('billing.payments.receive');
+            // In-person card readers: registered and confirmed with the
+            // provider, driven by staff; payments settle by its webhook.
+            Route::post('/billing/terminals', [BillingController::class, 'registerTerminal'])->name('billing.terminals.store');
+            Route::post('/billing/terminals/{terminal}/retire', [BillingController::class, 'retireTerminal'])->name('billing.terminals.retire');
+            Route::post('/billing/terminals/charge', [BillingController::class, 'chargeOnTerminal'])->name('billing.terminals.charge');
+            Route::post('/billing/terminals/payments/{payment}/retry', [BillingController::class, 'retryOnTerminal'])->name('billing.terminals.retry');
+            Route::post('/billing/terminals/payments/{payment}/cancel', [BillingController::class, 'cancelOnTerminal'])->name('billing.terminals.cancel');
             Route::post('/billing/payments/{payment}/reject', [BillingController::class, 'rejectPayment'])->name('billing.payments.reject');
         });
         Route::get('/billing/transactions/{transaction}/receipt', [BillingController::class, 'downloadReceipt'])->name('billing.transactions.receipt');

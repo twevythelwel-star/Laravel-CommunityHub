@@ -16,6 +16,7 @@ use App\Models\Payment;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
 use App\Models\PaymentPlan;
+use App\Models\PaymentTerminal;
 use App\Models\Payout;
 use App\Models\StripeEvent;
 use App\Models\Transaction;
@@ -23,6 +24,7 @@ use App\Models\User;
 use App\Models\Wallet;
 use App\Services\Ledger\LedgerService;
 use App\Services\Payments\PaymentOrchestratorService;
+use App\Services\Payments\Providers\Contracts\TakesInPersonPayments;
 use App\Services\Payments\Providers\PaymentRequest;
 use App\Services\Payments\Providers\ProviderRegistry;
 use App\Services\StripePaymentService;
@@ -501,6 +503,7 @@ class BillingController extends Controller
             'paymentLinks' => $paymentLinks,
             'transactions' => $transactions,
             'pendingPayments' => $pendingPayments,
+            'inPerson' => $isAdmin ? $this->inPersonProps() : null,
             'payouts' => $payouts,
             'reconciliations' => $reconciliations,
             'paymentEvents' => $isAdmin ? StripeEvent::latest()->take(25)->get()->map(fn ($e) => [
@@ -821,6 +824,177 @@ class BillingController extends Controller
      * Route gate: `manageBilling`. It is applied only once a different
      * administrator verifies it in a bank reconciliation.
      */
+    /**
+     * The in-person reader panel: whether card-present payments can be taken
+     * at all, on which confirmed readers, and what is on a reader right now.
+     *
+     * @return array<string, mixed>
+     */
+    private function inPersonProps(): array
+    {
+        $provider = app(ProviderRegistry::class)->inPersonProvider();
+
+        return [
+            'available' => $provider !== null,
+            'provider' => $provider?->label(),
+            'registerUrl' => route('dashboard.billing.terminals.store'),
+            'chargeUrl' => route('dashboard.billing.terminals.charge'),
+            'terminals' => PaymentTerminal::query()->where('status', 'active')->orderBy('label')->get()->map(fn (PaymentTerminal $t) => [
+                'id' => $t->id,
+                'label' => $t->label,
+                'terminalId' => $t->terminal_id,
+                'deviceId' => $t->device_id,
+                'deviceType' => $t->device_type,
+                'locationId' => $t->location_id,
+                'country' => $t->country,
+                'provider' => $t->provider,
+                'usable' => $t->isUsable() && $provider?->key() === $t->provider,
+                'retireUrl' => route('dashboard.billing.terminals.retire', $t->id),
+            ])->values(),
+            'onReaders' => Payment::with(['terminal:id,label', 'user:id,display_name', 'invoice:id,reference'])
+                ->where('channel', 'nfc_pos')
+                ->inState(PaymentState::Created, PaymentState::Processing, PaymentState::Failed)
+                ->whereNotNull('payment_terminal_id')
+                ->latest('updated_at')
+                ->take(20)
+                ->get()
+                ->map(fn (Payment $p) => [
+                    'id' => $p->id,
+                    'transactionId' => $p->transaction_id,
+                    'state' => $p->state->value,
+                    'stateLabel' => $p->state->label(),
+                    'amount' => (float) ($p->amount_minor / 100),
+                    'currency' => $p->currency,
+                    'homeowner' => $p->user?->display_name,
+                    'invoiceReference' => $p->invoice?->reference,
+                    'terminal' => $p->terminal?->label,
+                    'failureReason' => $p->failure_reason,
+                    'retryUrl' => $p->state === PaymentState::Failed ? route('dashboard.billing.terminals.retry', $p->id) : null,
+                    'cancelUrl' => route('dashboard.billing.terminals.cancel', $p->id),
+                ])->values(),
+        ];
+    }
+
+    /**
+     * Register a card reader with the in-person provider. It is recorded
+     * only once the provider confirms the reader and its location.
+     * Route gate: `manageBilling`.
+     */
+    public function registerTerminal(Request $request, ProviderRegistry $providers): RedirectResponse
+    {
+        $validated = $request->validate([
+            'registration_code' => ['required', 'string', 'max:64'],
+            'location_id' => ['required', 'string', 'max:64'],
+            'label' => ['required', 'string', 'max:80'],
+        ]);
+
+        $provider = $providers->inPersonProvider();
+
+        if (! $provider) {
+            return back()->withErrors(['registration_code' => 'In-person card payments are not set up for this estate.']);
+        }
+
+        try {
+            $terminal = $provider->registerTerminal($validated['registration_code'], $validated['location_id'], $validated['label'], $request->user());
+        } catch (\DomainException $e) {
+            return back()->withErrors(['registration_code' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Reader {$terminal->label} registered ({$terminal->country}).");
+    }
+
+    /** Take a reader out of use. Route gate: `manageBilling`. */
+    public function retireTerminal(Request $request, PaymentTerminal $terminal): RedirectResponse
+    {
+        $terminal->update(['status' => 'retired']);
+        $request->user()->recordActivity("Retired card reader {$terminal->label} ({$terminal->terminal_id})");
+
+        return back()->with('success', "Reader {$terminal->label} retired.");
+    }
+
+    /**
+     * Staff take a household's payment in person: the amount goes to the
+     * chosen reader, and the payer taps or inserts their card there. It is
+     * settled by the provider's webhook, never by this request.
+     * Route gate: `manageBilling`.
+     */
+    public function chargeOnTerminal(Request $request, ProviderRegistry $providers): RedirectResponse
+    {
+        $validated = $request->validate([
+            'invoice_id' => ['required', 'integer', 'exists:invoices,id'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'terminal_id' => ['required', 'integer', 'exists:payment_terminals,id'],
+        ]);
+
+        $provider = $providers->inPersonProvider();
+        $terminal = PaymentTerminal::findOrFail($validated['terminal_id']);
+        $invoice = Invoice::findOrFail($validated['invoice_id']);
+        $amountMinor = (int) round($validated['amount'] * 100);
+
+        if (! $provider || $provider->key() !== $terminal->provider || ! $terminal->isUsable()) {
+            return back()->withErrors(['terminal_id' => "Reader {$terminal->label} cannot take payments: it is not a confirmed reader of the estate's in-person provider."]);
+        }
+
+        if ($amountMinor > $invoice->balanceRemainingMinor()) {
+            return back()->withErrors(['amount' => 'That is more than the balance still owed on this statement.']);
+        }
+
+        $payment = $this->orchestrator->startPayment([
+            'user' => $invoice->user,
+            'channel' => 'nfc_pos',
+            'invoice' => $invoice,
+            'amount_minor' => $amountMinor,
+            'currency' => $invoice->currency,
+            'source' => 'staff',
+        ]);
+
+        try {
+            $instruction = $provider->startInPersonPayment($payment, $terminal);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['terminal_id' => $e->getMessage()]);
+        }
+
+        $request->user()->recordActivity("Sent payment {$payment->transaction_id} for {$invoice->reference} to reader {$terminal->label}");
+
+        return back()->with('success', "{$payment->transaction_id}: {$instruction->message}");
+    }
+
+    /** Send a payment whose card was declined to its reader again. Route gate: `manageBilling`. */
+    public function retryOnTerminal(Payment $payment, ProviderRegistry $providers): RedirectResponse
+    {
+        $provider = $providers->inPersonProvider();
+
+        if (! $provider || ! $payment->terminal || $payment->state !== PaymentState::Failed) {
+            return back()->withErrors(['terminal_id' => "Payment {$payment->transaction_id} cannot be sent to a reader again."]);
+        }
+
+        try {
+            $instruction = $provider->startInPersonPayment($payment, $payment->terminal);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['terminal_id' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "{$payment->transaction_id}: {$instruction->message}");
+    }
+
+    /** Clear a payment from its reader before a card is presented. Route gate: `manageBilling`. */
+    public function cancelOnTerminal(Request $request, Payment $payment, ProviderRegistry $providers): RedirectResponse
+    {
+        $provider = $providers->byKey($payment->provider);
+
+        if (! $provider instanceof TakesInPersonPayments) {
+            return back()->withErrors(['terminal_id' => "Payment {$payment->transaction_id} is not on a reader."]);
+        }
+
+        try {
+            $provider->cancelInPersonPayment($payment, $request->user());
+        } catch (\DomainException $e) {
+            return back()->withErrors(['terminal_id' => $e->getMessage()]);
+        }
+
+        return back()->with('success', "Payment {$payment->transaction_id} cleared from the reader.");
+    }
+
     public function receivePayment(Request $request, Payment $payment): RedirectResponse
     {
         $validated = $request->validate([

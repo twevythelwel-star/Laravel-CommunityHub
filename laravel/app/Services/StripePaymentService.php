@@ -437,6 +437,8 @@ class StripePaymentService
                 'payment_intent.succeeded' => $this->settlePaymentIntent($object),
                 'payment_intent.requires_action' => $this->handleIntentProgress($object, PaymentState::RequiresAction),
                 'payment_intent.processing' => $this->handleIntentProgress($object, PaymentState::Processing),
+                'terminal.reader.action_succeeded',
+                'terminal.reader.action_failed' => $this->handleReaderAction($object, $event->type),
                 'payment_intent.payment_failed',
                 'checkout.session.async_payment_failed',
                 'checkout.session.expired' => $this->handlePaymentFailure($object, $event->type),
@@ -732,6 +734,47 @@ class StripePaymentService
 
         return $payment->advanceTo($state, $this->source(), null, ['provider_payment_id' => $paymentIntent->id])
             ? $state->value
+            : 'stale';
+    }
+
+    /**
+     * A Terminal reader finished (or abandoned) processing a payment.
+     *
+     * Success needs nothing here: the money settles on payment_intent.succeeded,
+     * the same event every Stripe card payment settles on. A failure — card
+     * declined, payer cancelled on the reader, connection lost — marks the
+     * payment Failed with Stripe's reason; the same PaymentIntent can be sent
+     * to the reader again, as Stripe recommends, so a retry is never a second
+     * charge. A connection_error may still have been authorised, so its
+     * outcome is left to the PaymentIntent's own events.
+     */
+    public function handleReaderAction(StripeObject $reader, string $eventType): string
+    {
+        $action = $reader->action ?? null;
+        $paymentIntent = $this->idOf($action?->process_payment_intent?->payment_intent ?? null);
+        $payment = $paymentIntent ? $this->paymentFor($paymentIntent) : null;
+
+        if (! $payment) {
+            return 'ignored';
+        }
+
+        if ($eventType === 'terminal.reader.action_succeeded') {
+            return 'reader_succeeded';
+        }
+
+        if (($action->failure_code ?? null) === 'connection_error') {
+            Log::warning('Reader lost its connection mid-payment; waiting on the PaymentIntent', [
+                'transaction_id' => $payment->transaction_id,
+                'reader' => $reader->id,
+            ]);
+
+            return 'reader_connection_error';
+        }
+
+        $reason = (string) ($action->api_error->message ?? $action->failure_message ?? 'The reader could not take the payment.');
+
+        return $payment->advanceTo(PaymentState::Failed, $this->source(), $reason, ['failure_reason' => $reason])
+            ? 'reader_failed'
             : 'stale';
     }
 

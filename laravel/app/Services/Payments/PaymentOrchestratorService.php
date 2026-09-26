@@ -45,7 +45,7 @@ class PaymentOrchestratorService
      * any amount anyone typed. Those payments are recorded as pending and
      * count only once an administrator confirms the money arrived.
      */
-    private const SELF_VERIFYING_CHANNELS = ['wallet', 'card', 'apple_pay', 'google_pay', 'samsung_wallet'];
+    private const SELF_VERIFYING_CHANNELS = ['wallet', 'card', 'apple_pay', 'google_pay', 'samsung_wallet', 'nfc_pos'];
 
     /** @var array<string, PaymentDriverInterface> */
     protected array $drivers = [];
@@ -331,6 +331,8 @@ class PaymentOrchestratorService
     {
         $values = [
             'payment_id' => $payment->id,
+            'terminal_id' => $payment->terminal_id,
+            'location_id' => $payment->location_id,
             'transaction_id' => $payment->transaction_id,
             'user_id' => $payment->user_id,
             'invoice_id' => $payment->invoice_id,
@@ -422,7 +424,9 @@ class PaymentOrchestratorService
             // need a card processor that supports them (ProviderRegistry).
             $provider = app(ProviderRegistry::class)->forChannel($key);
 
-            if ($enabled && $provider) {
+            // In-person card payments are taken by staff on a reader, never
+            // chosen by a payer online.
+            if ($enabled && $provider && $key !== 'nfc_pos') {
                 $channels[] = [
                     'key' => $key,
                     'label' => $setting?->display_label ?? $driver->label(),

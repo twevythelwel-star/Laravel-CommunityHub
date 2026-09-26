@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   CreditCard,
   QrCode,
-  Smartphone,
   Landmark,
   Wallet as WalletIcon,
   Banknote,
@@ -609,19 +608,11 @@ export function PaymentCenterHero({
               </button>
             )}
 
-            {/* NFC Tap to Pay */}
-            {channelEnabled('nfc_pos') && (
-              <button
-                type="button"
-                onClick={() => handleTriggerPay('nfc_pos', 'NFC Tap to Pay')}
-                className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-card hover:bg-muted/70 text-foreground transition-all shadow hover:shadow-md"
-              >
-                <Smartphone className="w-5 h-5 text-purple-600 mb-1" />
-                <span className="text-xs font-bold">NFC Tap</span>
-                <span className="text-[10px] text-muted-foreground">Contactless POS</span>
-                <SurchargeNote channelKey="nfc_pos" />
-              </button>
-            )}
+            {/*
+              No NFC option here. A tap is taken in person, on a card reader the
+              processor has confirmed, and started by staff (Billing → In-person
+              card payments) — never chosen and reported by a payer online.
+            */}
           </div>
         </div>
 
@@ -873,16 +864,6 @@ export function PaymentCenterHero({
                 <div>Note: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
                 <p className="text-[11px] text-muted-foreground pt-1 border-t border-emerald-200 dark:border-emerald-800">
                   ℹ️ External consumer app: Send payment with your transaction ID in the note. Office will verify receipt before settling your statement.
-                </p>
-              </div>
-            )}
-
-            {activeModal === 'nfc_pos' && (
-              <div className="p-6 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-2xl text-center space-y-3">
-                <Smartphone className="w-10 h-10 text-purple-600 mx-auto animate-pulse" />
-                <div className="font-bold text-purple-900 dark:text-purple-300 text-base">Ready for Tap</div>
-                <p className="text-xs text-purple-800 dark:text-purple-400">
-                  Hold your contactless card, iPhone, or Apple Watch near the terminal reader.
                 </p>
               </div>
             )}

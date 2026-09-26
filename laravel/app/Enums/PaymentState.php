@@ -16,7 +16,10 @@ namespace App\Enums;
  *                    │   (a declined card may be retried on the same
  *                    └── checkout page, so Failed can still succeed)
  *              Created / RequiresAction / Failed ─► Expired   (terminal)
- *              Created / RequiresAction ─► Canceled              (payer withdrew; terminal)
+ *              Created / RequiresAction / Processing / Failed ─► Canceled
+ *                  (withdrawn — by the payer, or cleared from a card reader
+ *                  before a card is presented; the provider refuses once
+ *                  money is being authorised; terminal)
  *
  * Office-confirmed payments (bank wire, cash, QR, NFC, digital wallets,
  * Zelle, Cash App — channels the app cannot see). Received is logged by one
@@ -65,8 +68,11 @@ enum PaymentState: string
             // to the payer); an office channel then moves it to AwaitingTransfer.
             self::Created => [self::RequiresAction, self::Processing, self::Succeeded, self::Failed, self::Expired, self::AwaitingTransfer, self::Canceled],
             self::RequiresAction => [self::Processing, self::Succeeded, self::Failed, self::Expired, self::Canceled],
-            self::Processing => [self::Succeeded, self::Failed],
-            self::Failed => [self::RequiresAction, self::Processing, self::Succeeded, self::Expired],
+            // Canceled from Processing or Failed only after the provider has
+            // withdrawn it (e.g. a reader cleared before a card is presented);
+            // the provider refuses once money is being authorised.
+            self::Processing => [self::Succeeded, self::Failed, self::Canceled],
+            self::Failed => [self::RequiresAction, self::Processing, self::Succeeded, self::Expired, self::Canceled],
             self::Succeeded => [self::Paid, self::PartiallyRefunded, self::Refunded, self::Disputed],
 
             self::AwaitingTransfer => [self::Received, self::Rejected, self::Canceled],

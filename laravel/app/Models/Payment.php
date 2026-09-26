@@ -44,6 +44,9 @@ class Payment extends Model
         'provider_payment_id',
         'payer_reference',
         'device_identifier',
+        'payment_terminal_id',
+        'terminal_id',
+        'location_id',
         'invoice_item_ids',
         'metadata',
         'failure_reason',
@@ -195,6 +198,8 @@ class Payment extends Model
             'provider' => $this->provider,
             'provider_transaction_id' => $this->provider_payment_id,
             'device' => $this->device_identifier,
+            'terminal' => $this->terminal_id,
+            'location' => $this->location_id,
             'created' => $this->created_at?->format('Y-m-d'),
         ];
     }
@@ -243,6 +248,12 @@ class Payment extends Model
     public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(PaymentMethod::class);
+    }
+
+    /** The reader an in-person payment was taken on. */
+    public function terminal(): BelongsTo
+    {
+        return $this->belongsTo(PaymentTerminal::class, 'payment_terminal_id');
     }
 
     public function receiver(): BelongsTo

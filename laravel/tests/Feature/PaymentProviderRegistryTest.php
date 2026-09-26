@@ -96,9 +96,13 @@ class PaymentProviderRegistryTest extends TestCase
 
     public function test_every_other_channel_goes_to_its_provider(): void
     {
-        foreach (['bank_wire', 'cash_office', 'qr_code', 'nfc_pos', 'zelle', 'cash_app'] as $channel) {
+        foreach (['bank_wire', 'cash_office', 'qr_code', 'zelle', 'cash_app'] as $channel) {
             $this->assertSame('office', $this->registry()->forChannel($channel)->key(), $channel);
         }
+
+        // NFC is never the office's: it needs an in-person provider's reader.
+        config(['payments.in_person_provider' => null]);
+        $this->assertNull($this->registry()->forChannel('nfc_pos'));
 
         $this->assertSame('internal', $this->registry()->forChannel('wallet')->key());
     }
