@@ -19,6 +19,7 @@ class PaymentLink extends Model
         'currency',
         'category',
         'user_id',
+        'invoice_id',
         'expires_at',
         'max_uses',
         'uses_count',
@@ -44,6 +45,11 @@ class PaymentLink extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
     }
 
     public function creator(): BelongsTo

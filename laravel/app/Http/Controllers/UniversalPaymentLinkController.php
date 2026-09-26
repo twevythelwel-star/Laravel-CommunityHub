@@ -105,8 +105,10 @@ class UniversalPaymentLinkController extends Controller
         $payment = $this->orchestrator->startPayment([
             'channel' => $validated['channel'],
             'payment_link' => $paymentLink,
-            'applies_to' => 'payment_link',
-            'purpose' => Transaction::PURPOSE_COMMUNITY_PROJECT,
+            'invoice' => $paymentLink->invoice,
+            'user' => $paymentLink->user ?? $paymentLink->invoice?->user,
+            'applies_to' => $paymentLink->invoice_id ? 'invoice' : 'payment_link',
+            'purpose' => $paymentLink->invoice_id ? Transaction::PURPOSE_HOA_ASSESSMENT : Transaction::PURPOSE_COMMUNITY_PROJECT,
             'amount_minor' => $amountMinor,
             'currency' => $paymentLink->currency,
             'metadata' => ['payer_name' => $validated['payer_name'], 'lot' => $validated['lot']],

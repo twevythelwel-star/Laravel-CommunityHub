@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -19,6 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info, Landmark, AlertTriangle, FileDown, CreditCard } from 'lucide-react';
 import { router } from '@inertiajs/react';
 import { ClientFormattedDate } from '@/components/client-formatted-date';
+import { PaymentMethodSelectorModal } from './payment-method-selector-modal';
 
 /**
  * A resident's dues and invoice history.
@@ -64,6 +66,8 @@ type Props = {
     year: number;
   };
   invoices: Paginated<InvoiceRow>;
+  availableChannels?: any[];
+  walletBalance?: number;
 };
 
 export function money(amount: number, currency: string): string {
@@ -100,7 +104,16 @@ function ordinal(day: number): string {
   return `${day}${suffix}`;
 }
 
-export function BillingSummary({ settings, summary, invoices }: Props) {
+export function BillingSummary({
+  settings,
+  summary,
+  invoices,
+  availableChannels = [],
+  walletBalance = 0,
+}: Props) {
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedInvoiceForPayment, setSelectedInvoiceForPayment] = useState<InvoiceRow | null>(null);
+
   return (
     <>
       <div className="grid gap-4 md:grid-cols-3">
@@ -238,14 +251,17 @@ export function BillingSummary({ settings, summary, invoices }: Props) {
                           </a>
                         </Button>
                       )}
-                      {(invoice.status === 'Unpaid' || invoice.status === 'Overdue') && invoice.checkoutUrl && (
+                      {(invoice.status === 'Unpaid' || invoice.status === 'Overdue') && (
                         <Button
                           size="sm"
-                          className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => router.post(invoice.checkoutUrl!)}
+                          className="h-8 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1"
+                          onClick={() => {
+                            setSelectedInvoiceForPayment(invoice);
+                            setIsPaymentModalOpen(true);
+                          }}
                         >
-                          <CreditCard className="h-3.5 w-3.5 mr-1" />
-                          Pay Online
+                          <CreditCard className="h-3.5 w-3.5 mr-0.5" />
+                          Pay Invoice
                         </Button>
                       )}
                     </div>
@@ -275,6 +291,19 @@ export function BillingSummary({ settings, summary, invoices }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <PaymentMethodSelectorModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedInvoiceForPayment(null);
+        }}
+        invoice={selectedInvoiceForPayment}
+        amountDue={selectedInvoiceForPayment ? selectedInvoiceForPayment.amount : summary.outstanding}
+        currency={selectedInvoiceForPayment ? selectedInvoiceForPayment.currency : settings.currency}
+        availableChannels={availableChannels}
+        walletBalance={walletBalance}
+      />
     </>
   );
 }

@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { PaymentMethodSelectorModal } from './payment-method-selector-modal';
 
 export type TransactionSlipData = {
   transaction_id: string;
@@ -186,6 +187,7 @@ export function PaymentCenterHero({
   const [isInitiating, setIsInitiating] = useState(false);
   const [slipError, setSlipError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+  const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
 
   // Compute selected total
   const baseSelectedTotal = itemizedCharges.length > 0 && showItemized
@@ -352,7 +354,7 @@ export function PaymentCenterHero({
             <Button
               size="lg"
               className="bg-white text-slate-950 hover:bg-white/90 font-bold px-6 shadow-md transition-all group"
-              onClick={() => handleTriggerPay(primaryChannelKey, 'Full Payment')}
+              onClick={() => setIsSelectorModalOpen(true)}
             >
               <span>Pay Now ({curConfig.symbol}{Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
               <ArrowRight className="w-4 h-4 ml-1.5 group-hover:translate-x-1 transition-transform" />
@@ -902,6 +904,15 @@ export function PaymentCenterHero({
           </div>
         </DialogContent>
       </Dialog>
+
+      <PaymentMethodSelectorModal
+        isOpen={isSelectorModalOpen}
+        onClose={() => setIsSelectorModalOpen(false)}
+        amountDue={currentPayTotal}
+        currency={selectedCurrency}
+        availableChannels={availableChannels}
+        walletBalance={walletBalance}
+      />
     </div>
   );
 }

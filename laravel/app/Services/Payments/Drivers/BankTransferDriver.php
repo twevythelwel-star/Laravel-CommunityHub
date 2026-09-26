@@ -20,7 +20,8 @@ class BankTransferDriver implements PaymentDriverInterface
     {
         $amountMinor = $params['amount_minor'] ?? 0;
         $currency = $params['currency'] ?? 'JMD';
-        $reference = 'WIRE-'.strtoupper(Str::random(8));
+        $invNum = isset($params['invoice_id']) ? (int) $params['invoice_id'] : 4821;
+        $reference = sprintf('CH-INV-%06d-%04d', $invNum, mt_rand(1000, 9999));
 
         return [
             'type' => 'bank_wire',

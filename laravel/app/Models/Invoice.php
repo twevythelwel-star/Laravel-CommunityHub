@@ -48,6 +48,33 @@ class Invoice extends Model
         return $this->hasOne(PaymentPlan::class);
     }
 
+    public function paymentLinks(): HasMany
+    {
+        return $this->hasMany(PaymentLink::class);
+    }
+
+    /**
+     * Generate a secure, opaque-token payment link for this invoice.
+     * Contains NO sensitive balance, card, or PII information in the URL.
+     */
+    public function generatePaymentLink(?User $createdBy = null, ?\DateTimeInterface $expiresAt = null): PaymentLink
+    {
+        return PaymentLink::create([
+            'token' => 'CH-'.strtoupper(bin2hex(random_bytes(10))),
+            'title' => 'Invoice #'.$this->reference.' Payment',
+            'description' => 'Payment for maintenance and community dues on '.$this->reference,
+            'amount_minor' => $this->balanceRemainingMinor(),
+            'currency' => $this->currency ?? 'JMD',
+            'category' => 'hoa_dues',
+            'user_id' => $this->user_id,
+            'invoice_id' => $this->id,
+            'expires_at' => $expiresAt ?? $this->due_on?->endOfDay() ?? now()->addDays(14),
+            'max_uses' => 1,
+            'active' => true,
+            'created_by' => $createdBy?->id,
+        ]);
+    }
+
     public function amount(): float
     {
         return (float) ($this->amount_minor / 100);

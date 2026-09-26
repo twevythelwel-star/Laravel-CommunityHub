@@ -22,6 +22,8 @@ class Transaction extends Model
         'payment_method',
         'provider',
         'provider_reference',
+        'provider_event_id',
+        'idempotency_key',
         'provider_status',
         'device_identifier',
         'terminal_id',
@@ -297,6 +299,36 @@ class Transaction extends Model
     public function events(): HasMany
     {
         return $this->hasMany(TransactionEvent::class);
+    }
+
+    public function paymentEvents(): HasMany
+    {
+        return $this->hasMany(PaymentEvent::class);
+    }
+
+    public function attempts(): HasMany
+    {
+        return $this->hasMany(PaymentAttempt::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(PaymentRefund::class);
+    }
+
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(PaymentDispute::class);
+    }
+
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(PaymentReceipt::class);
+    }
+
+    public function notificationDeliveries(): HasMany
+    {
+        return $this->hasMany(NotificationDelivery::class);
     }
 
     public function ledgerEntries(): HasMany

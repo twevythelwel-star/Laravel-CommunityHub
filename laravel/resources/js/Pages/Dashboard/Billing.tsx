@@ -157,6 +157,7 @@ export type ChannelReport = {
   enabled: boolean;
   is_ready: boolean;
   status: 'ready' | 'needs_configuration';
+  integration_mode?: 'API' | 'HOSTED_CHECKOUT' | 'WEBHOOK' | 'BANK_RECONCILIATION' | 'MANUAL_VERIFICATION';
   checks: ChannelCheck[];
   account_identifier?: string;
   instructions?: string;
@@ -614,6 +615,8 @@ export default function BillingPage({
                 settings={settings}
                 summary={summary}
                 invoices={myInvoices}
+                availableChannels={paymentCenter?.availableChannels || []}
+                walletBalance={wallet?.totalUsable || wallet?.available || 0}
               />
             )}
           </TabsContent>
@@ -1505,9 +1508,24 @@ export default function BillingPage({
                                 </Badge>
                               )}
                             </h4>
-                            <span className="font-mono text-[10px] text-muted-foreground block">
-                              Driver: {channel.channel_key} &bull; Validated: {channel.validated_at}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <Badge variant="outline" className={`text-[9px] font-mono uppercase ${
+                                channel.integration_mode === 'API'
+                                  ? 'border-cyan-500/40 text-cyan-600 bg-cyan-500/10'
+                                  : channel.integration_mode === 'WEBHOOK'
+                                  ? 'border-purple-500/40 text-purple-600 bg-purple-500/10'
+                                  : channel.integration_mode === 'HOSTED_CHECKOUT'
+                                  ? 'border-indigo-500/40 text-indigo-600 bg-indigo-500/10'
+                                  : channel.integration_mode === 'BANK_RECONCILIATION'
+                                  ? 'border-emerald-500/40 text-emerald-600 bg-emerald-500/10'
+                                  : 'border-amber-500/40 text-amber-600 bg-amber-500/10'
+                              }`}>
+                                {channel.integration_mode || 'MANUAL_VERIFICATION'}
+                              </Badge>
+                              <span className="font-mono text-[10px] text-muted-foreground">
+                                &bull; Driver: {channel.channel_key}
+                              </span>
+                            </div>
                           </div>
                         </div>
 

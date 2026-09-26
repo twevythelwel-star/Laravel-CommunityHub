@@ -104,6 +104,16 @@ class User extends Authenticatable
         return $this->hasMany(Invoice::class);
     }
 
+    public function paymentCustomers(): HasMany
+    {
+        return $this->hasMany(PaymentCustomer::class);
+    }
+
+    public function properties(): HasMany
+    {
+        return $this->hasMany(Property::class, 'owner_user_id');
+    }
+
     public function donations(): HasMany
     {
         return $this->hasMany(Donation::class);

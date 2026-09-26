@@ -54,6 +54,7 @@ Route::get('/guest/pass/{token}/code', [GuestPassController::class, 'code'])
     ->name('guest-pass.code');
 Route::get('/guest/pass/{token}/pdf', [PdfController::class, 'downloadVisitorPass'])->name('pdf.visitor-pass');
 Route::get('/pay/{token}', [UniversalPaymentLinkController::class, 'show'])->name('pay.show');
+Route::get('/p/{token}', [UniversalPaymentLinkController::class, 'show'])->name('pay.short');
 Route::get('/pay/{token}/poster', [UniversalPaymentLinkController::class, 'poster'])->name('pay.poster');
 Route::post('/pay/{token}/process', [UniversalPaymentLinkController::class, 'process'])->name('pay.process');
 Route::get('/rsvp/{token}', [EventRsvpController::class, 'show'])->name('rsvp.show');

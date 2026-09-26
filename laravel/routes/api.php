@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\MapApiController;
 use App\Http\Controllers\Api\VisitorApiController;
 use App\Http\Controllers\ProviderWebhookController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\TwilioWebhookController;
+use App\Http\Controllers\UniversalPaymentWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -27,11 +29,24 @@ Route::post('/auth/login', [AuthApiController::class, 'login'])->middleware('thr
 // the Stripe-Signature header, verified against STRIPE_WEBHOOK_SECRET.
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('webhooks.stripe');
 
+// Universal Multi-Provider Webhook Processor:
+// POST /api/webhooks/payments/{provider}
+// Implements the 14-step verified processing pipeline (auth, signature, idempotency,
+// transaction search, amount/currency/merchant verification, ledger, invoice, receipt, notification)
+Route::post('/webhooks/payments/{provider}', UniversalPaymentWebhookController::class)
+    ->where('provider', '[a-z0-9_]+')
+    ->name('webhooks.payments.provider');
+
 // Any other provider that reports server-to-server (PaymentProvider with
 // HandlesWebhooks). Each verifies its own signature; see ProviderWebhookController.
 Route::post('/webhooks/{provider}', ProviderWebhookController::class)
     ->where('provider', '[a-z0-9_]+')
     ->name('webhooks.provider');
+
+// Twilio calls this for messaging status callbacks (queued -> sent -> delivered / failed).
+// Verified with X-Twilio-Signature via Twilio SDK RequestValidator.
+Route::post('/webhooks/twilio/status', [TwilioWebhookController::class, 'messagingStatus'])
+    ->name('webhooks.twilio.status');
 
 Route::middleware('auth:sanctum')->group(function () {
 

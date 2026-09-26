@@ -329,8 +329,13 @@ class PaymentOrchestratorService
      */
     public function recordLedgerPayment(Payment $payment, array $attributes = []): Transaction
     {
+        $idempotencyKey = $attributes['idempotency_key'] ?? $payment->idempotency_key ?? ('idem:'.$payment->transaction_id);
+        $providerEventId = $attributes['provider_event_id'] ?? null;
+
         $values = [
             'payment_id' => $payment->id,
+            'idempotency_key' => $idempotencyKey,
+            'provider_event_id' => $providerEventId,
             'terminal_id' => $payment->terminal_id,
             'location_id' => $payment->location_id,
             'transaction_id' => $payment->transaction_id,
@@ -355,6 +360,21 @@ class PaymentOrchestratorService
             'captured_at' => now(),
             ...$attributes,
         ];
+
+        // Idempotency check by provider_event_id or idempotency_key
+        if ($providerEventId) {
+            $existing = Transaction::query()->where('provider_event_id', $providerEventId)->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        if ($idempotencyKey) {
+            $existing = Transaction::query()->where('idempotency_key', $idempotencyKey)->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
 
         $placeholder = $payment->ledgerEntries()
             ->whereIn('status', ['pending', 'payment_started', 'requires_action', 'awaiting_bank_transfer', 'received', 'verified'])
@@ -398,9 +418,15 @@ class PaymentOrchestratorService
                     $message = "CommunityHub {$purpose} received: {$amountFormatted}. Receipt {$txId}.";
                 }
 
-                $sms->send($user->phone, $message);
+                $messageSid = $sms->send($user->phone, $message);
 
-                TransactionEvent::log($payment, 'notification_sent', $payment->status, null, "Dispatched SMS confirmation for {$txId}");
+                TransactionEvent::log(
+                    $payment,
+                    'notification_sent',
+                    $payment->status,
+                    $messageSid,
+                    "Dispatched SMS confirmation for {$txId} via Twilio (SID: {$messageSid})"
+                );
             }
         } catch (\Throwable $e) {
             // The payment is recorded either way; a failed text is not a failed payment.
@@ -621,6 +647,7 @@ class PaymentOrchestratorService
             'channel_key' => $channelKey,
             'label' => $setting?->display_label ?? ($this->drivers[$channelKey]->label() ?? ucfirst(str_replace('_', ' ', $channelKey))),
             'enabled' => $setting ? (bool) $setting->enabled : true,
+            'integration_mode' => $setting?->integration_mode ?? 'MANUAL_VERIFICATION',
             'is_ready' => $isReady && $allPassed,
             'status' => ($isReady && $allPassed) ? 'ready' : 'needs_configuration',
             'checks' => $checks,

@@ -27,6 +27,7 @@ class Payment extends Model
 
     protected $fillable = [
         'transaction_id',
+        'idempotency_key',
         'applies_to',
         'purpose',
         'channel',
@@ -218,6 +219,11 @@ class Payment extends Model
     public function ledgerEntries(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    public function paymentEvents(): HasMany
+    {
+        return $this->hasMany(PaymentEvent::class);
     }
 
     public function user(): BelongsTo

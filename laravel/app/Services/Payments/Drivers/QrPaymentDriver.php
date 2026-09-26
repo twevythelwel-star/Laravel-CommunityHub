@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments\Drivers;
 
+use App\Services\QrCodePng;
 use Illuminate\Support\Str;
 
 class QrPaymentDriver implements PaymentDriverInterface
@@ -20,25 +21,27 @@ class QrPaymentDriver implements PaymentDriverInterface
     {
         $amountMinor = $params['amount_minor'] ?? 0;
         $currency = $params['currency'] ?? 'JMD';
-        $qrToken = 'qr_'.Str::random(24);
+        $qrToken = 'CH-'.strtoupper(Str::random(12));
+        $paymentUrl = url('/p/'.$qrToken);
 
-        $payload = json_encode([
-            'token' => $qrToken,
-            'merchant' => 'Cypress Bay Community',
-            'amount' => $amountMinor / 100,
-            'currency' => $currency,
-            'expires_at' => now()->addMinutes(15)->toIso8601String(),
-        ]);
+        $qrPngBase64 = null;
+        try {
+            $qrRenderer = app(QrCodePng::class);
+            $pngBinary = $qrRenderer->render($paymentUrl, 260, 2);
+            $qrPngBase64 = 'data:image/png;base64,'.base64_encode($pngBinary);
+        } catch (\Throwable) {
+            $qrPngBase64 = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='.urlencode($paymentUrl);
+        }
 
         return [
             'type' => 'qr_code',
             'qr_token' => $qrToken,
-            'qr_payload' => $payload,
-            'qr_svg_url' => 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data='.urlencode(url('/pay/qr/'.$qrToken)),
+            'payment_url' => $paymentUrl,
+            'qr_svg_url' => $qrPngBase64,
             'amount_minor' => $amountMinor,
             'currency' => $currency,
             'expires_in_seconds' => 900,
-            'instructions' => 'Scan this dynamic QR code using your banking or digital wallet app.',
+            'instructions' => "Scan this dynamic payment QR with your camera or banking app to open the hosted checkout request ({$paymentUrl}).",
         ];
     }
 

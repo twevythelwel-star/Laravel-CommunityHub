@@ -14,6 +14,20 @@
             @endif
         </div>
 
+        @if($paymentLink->invoice && $paymentLink->invoice->status === 'Paid')
+            <div class="p-8 text-center space-y-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl m-6">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-600 text-white font-black text-2xl shadow-lg">✓</div>
+                <h2 class="text-2xl font-black text-emerald-900 dark:text-emerald-100">Invoice Settled</h2>
+                <p class="text-sm text-emerald-700 dark:text-emerald-300 max-w-sm mx-auto">
+                    This invoice (<span class="font-mono font-bold">{{ $paymentLink->invoice->reference }}</span>) has already been paid in full on {{ $paymentLink->invoice->paid_at?->format('M d, Y h:i A') ?? 'record' }}. No further payment is required.
+                </p>
+                <div class="pt-2">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200">
+                        Zero Balance Due
+                    </span>
+                </div>
+            </div>
+        @else
         <div class="p-6 sm:p-8 space-y-6">
             <!-- Amount Display -->
             <div class="bg-muted/50 border border-border rounded-xl p-5 text-center">
@@ -121,15 +135,13 @@
                 </a>
             </div>
         </div>
+        @endif
     </div>
 </main>
 
 <script>
 function simulateFastPay(method) {
-    if (confirm('Authorize ' + method + ' payment for {{ $paymentLink->formattedAmount() }}?')) {
-        alert(method + ' payment authorized successfully! An official community receipt has been generated.');
-        window.location.reload();
-    }
+    alert(method + ' requires an active Jamaican acquiring merchant gateway session. Your payment intent must be processed and verified server-side by the provider before the invoice can be settled.');
 }
 </script>
 @endsection
