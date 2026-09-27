@@ -276,7 +276,7 @@ export function PaymentMethodSelectorModal({
       case 'samsung_wallet':
         return 'Knox hardware-secured contactless payment with Samsung Wallet';
       case 'bank_wire':
-        return 'Online bank transfer via National Commercial Bank (NCB) or Scotia';
+        return "Transfer from your bank to the estate's account";
       case 'qr_code':
         return 'Scan with Lynx, NCB Pay, or banking app for instant phone settlement';
       case 'cash_office':

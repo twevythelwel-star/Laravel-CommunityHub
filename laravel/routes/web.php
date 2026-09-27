@@ -398,6 +398,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::middleware('can:manageBilling')->group(function () {
             Route::post('/billing/channels/{channel}/validate', [BillingController::class, 'validateChannel'])->name('billing.channels.validate');
             Route::post('/billing/channels/{channel}/toggle', [BillingController::class, 'toggleChannel'])->name('billing.channels.toggle');
+            Route::patch('/billing/channels/{channel}/account', [BillingController::class, 'updateChannelAccount'])->name('billing.channels.account');
             Route::post('/billing/payment-plans', [BillingController::class, 'storePaymentPlan'])->name('billing.payment-plans.store');
             Route::post('/billing/reconciliations', [BillingController::class, 'storeReconciliation'])->name('billing.reconciliations.store');
             // Office payments: one administrator logs receipt; verification is

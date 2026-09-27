@@ -130,6 +130,14 @@ export function PaymentCenterHero({
   const channelEnabled = (key: string): boolean =>
     configuredChannels.length === 0 || configuredChannels.some((c) => c.key === key);
 
+  // Bank, Zelle and Cash App send money to an account the estate entered. They
+  // show only when the server sent that account; there is no default to fall
+  // back on, even when no channel list was passed.
+  const channelAccount = (key: string): string | null =>
+    configuredChannels.find((c) => c.key === key)?.account_identifier?.trim() || null;
+  const channelInstructions = (key: string): string | null =>
+    configuredChannels.find((c) => c.key === key)?.instructions?.trim() || null;
+
   /**
    * The method the hero "Pay Now" button uses.
    *
@@ -604,7 +612,7 @@ export function PaymentCenterHero({
             )}
 
             {/* Direct Bank Wire */}
-            {channelEnabled('bank_wire') && (
+            {channelAccount('bank_wire') && (
               <button
                 type="button"
                 onClick={() => handleTriggerPay('bank_wire', 'Direct Bank Transfer')}
@@ -631,25 +639,25 @@ export function PaymentCenterHero({
             Alternative Rails & Credits
           </span>
           <div className="flex flex-wrap items-center gap-2">
-            {channelEnabled('cash_app') && (
+            {channelAccount('cash_app') && (
               <Button
                 variant="outline"
                 size="sm"
                 className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                 onClick={() => handleTriggerPay('cash_app', 'Cash App')}
               >
-                <Sparkles className="w-3.5 h-3.5 mr-1" /> Cash App ($CypressBayHOA)
+                <Sparkles className="w-3.5 h-3.5 mr-1" /> Cash App ({channelAccount('cash_app')})
               </Button>
             )}
 
-            {channelEnabled('zelle') && (
+            {channelAccount('zelle') && (
               <Button
                 variant="outline"
                 size="sm"
                 className="text-xs font-semibold text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-950/40"
                 onClick={() => handleTriggerPay('zelle', 'Zelle')}
               >
-                <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Zelle (payments@cypressbay.org)
+                <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Zelle ({channelAccount('zelle')})
               </Button>
             )}
 
@@ -840,14 +848,13 @@ export function PaymentCenterHero({
             {activeModal === 'bank_wire' && (
               <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-emerald-900 dark:text-emerald-300">National Commercial Bank (NCB)</span>
+                  <span className="font-bold text-emerald-900 dark:text-emerald-300">Direct Bank Transfer</span>
                   <Badge className="bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border-sky-300 text-[10px]">
                     AWAITING BANK TRANSFER
                   </Badge>
                 </div>
-                <div>Account Name: <strong>Cypress Bay Community HOA Ltd.</strong></div>
-                <div>Account Number: <strong>102938475</strong> (Checking)</div>
-                <div>Branch: <strong>Kingston 001</strong></div>
+                <div className="whitespace-pre-line">Send to: <strong>{channelAccount('bank_wire')}</strong></div>
+                {channelInstructions('bank_wire') && <div>{channelInstructions('bank_wire')}</div>}
                 <div>Wire Reference: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
                 <p className="text-[11px] text-muted-foreground pt-1 border-t border-emerald-200 dark:border-emerald-800">
                   ⚠️ Bank transfers require asynchronous reconciliation. CommunityHub matches the deposit from the bank feed and verifies with the ledger before marking your statement Paid.
@@ -858,7 +865,8 @@ export function PaymentCenterHero({
             {activeModal === 'zelle' && (
               <div className="p-4 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl space-y-2 text-xs">
                 <div className="font-bold text-purple-900 dark:text-purple-300">Zelle External Transfer</div>
-                <div>Recipient Email: <strong>payments@cypressbay.org</strong></div>
+                <div>Send to: <strong>{channelAccount('zelle')}</strong></div>
+                {channelInstructions('zelle') && <div>{channelInstructions('zelle')}</div>}
                 <div>Memo / Reference: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
                 <p className="text-[11px] text-muted-foreground pt-1 border-t border-purple-200 dark:border-purple-800">
                   ℹ️ External consumer app: After sending via your banking app, CommunityHub flags this transaction for office reconciliation before updating the ledger.
@@ -869,7 +877,8 @@ export function PaymentCenterHero({
             {activeModal === 'cash_app' && (
               <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-2 text-xs">
                 <div className="font-bold text-emerald-900 dark:text-emerald-300">Cash App External Transfer</div>
-                <div>Cashtag: <strong>$CypressBayHOA</strong></div>
+                <div>Cashtag: <strong>{channelAccount('cash_app')}</strong></div>
+                {channelInstructions('cash_app') && <div>{channelInstructions('cash_app')}</div>}
                 <div>Note: <strong className="font-mono bg-white dark:bg-black px-1 py-0.5 rounded text-primary">{pendingSlip?.transaction_id || 'shown once the payment starts'}</strong></div>
                 <p className="text-[11px] text-muted-foreground pt-1 border-t border-emerald-200 dark:border-emerald-800">
                   ℹ️ External consumer app: Send payment with your transaction ID in the note. Office will verify receipt before settling your statement.

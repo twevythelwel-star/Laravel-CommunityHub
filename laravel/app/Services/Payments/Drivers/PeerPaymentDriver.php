@@ -2,6 +2,7 @@
 
 namespace App\Services\Payments\Drivers;
 
+use App\Models\PaymentChannelSetting;
 use Illuminate\Support\Str;
 
 class PeerPaymentDriver implements PaymentDriverInterface
@@ -29,22 +30,24 @@ class PeerPaymentDriver implements PaymentDriverInterface
         $currency = $params['currency'] ?? 'JMD';
         $memo = 'LOT-'.($params['lot'] ?? 'CYPRESS').'-'.strtoupper(Str::random(4));
 
-        $deepLink = match ($this->rail) {
-            'cash_app' => 'https://cash.app/$CypressBayHOA/'.($amountMinor / 100),
-            default => 'mailto:payments@cypressbay.org?subject=Zelle%20Payment%20'.$memo,
-        };
+        // The recipient is whatever the estate entered for this rail; there is no
+        // built-in cashtag or Zelle address to fall back on.
+        $recipient = PaymentChannelSetting::accountFor($this->rail);
+
+        $deepLink = $recipient && $this->rail === 'cash_app'
+            ? 'https://cash.app/$'.rawurlencode(ltrim($recipient, '$')).'/'.($amountMinor / 100)
+            : null;
 
         return [
             'type' => $this->rail,
-            'recipient' => match ($this->rail) {
-                'cash_app' => '$CypressBayHOA',
-                default => 'payments@cypressbay.org',
-            },
+            'recipient' => $recipient,
             'memo' => $memo,
             'deep_link' => $deepLink,
             'amount_minor' => $amountMinor,
             'currency' => $currency,
-            'instructions' => 'Send payment to '.($this->rail === 'cash_app' ? '$CypressBayHOA' : 'payments@cypressbay.org').' with memo: '.$memo,
+            'instructions' => $recipient
+                ? "Send payment to {$recipient} with memo: {$memo}"
+                : $this->label().' is not set up for this estate yet.',
         ];
     }
 

@@ -187,4 +187,110 @@ class PaymentChannelsTest extends TestCase
             $this->assertContains($key, $known, "offered channel [{$key}] has no driver");
         }
     }
+
+    private function admin(): User
+    {
+        return User::factory()->role(UserRole::Admin)->create();
+    }
+
+    /** @return array<int, string> */
+    private function billingChannelKeys(User $user): array
+    {
+        $page = $this->actingAs($user)->get('/dashboard/billing')->viewData('page');
+
+        return $this->channelKeysFrom($page['props']['paymentCenter']['availableChannels'] ?? []);
+    }
+
+    public function test_default_channels_name_no_account_and_leave_account_channels_off(): void
+    {
+        foreach (PaymentChannelSetting::defaultChannels() as $channel) {
+            $this->assertEmpty($channel['account_identifier'] ?? null, "{$channel['channel_key']} ships with an account");
+
+            if (PaymentChannelSetting::requiresAccountDetails($channel['channel_key'])) {
+                $this->assertFalse($channel['enabled'], "{$channel['channel_key']} is enabled with no account");
+            }
+        }
+    }
+
+    public function test_an_account_channel_without_an_account_is_never_offered(): void
+    {
+        // Enabled but with no account, and with no settings row at all.
+        PaymentChannelSetting::updateOrCreate(['channel_key' => 'bank_wire'], ['enabled' => true, 'display_label' => 'Bank', 'account_identifier' => null]);
+
+        $keys = $this->billingChannelKeys($this->resident());
+
+        $this->assertNotContains('bank_wire', $keys);
+        $this->assertNotContains('zelle', $keys);
+        $this->assertNotContains('cash_app', $keys);
+    }
+
+    public function test_paying_through_an_account_channel_with_no_account_is_refused(): void
+    {
+        $this->actingAs($this->resident())
+            ->post('/dashboard/billing/pay', ['amount' => 100, 'payment_channel' => 'bank_wire', 'settlement_mode' => 'full'])
+            ->assertSessionHasErrors('channel');
+
+        $this->assertDatabaseCount('payments', 0);
+    }
+
+    public function test_an_administrator_sets_the_account_payers_are_sent_to(): void
+    {
+        $this->actingAs($this->admin())
+            ->patch(route('dashboard.billing.channels.account', 'zelle'), [
+                'account_identifier' => '  dues@estate.example  ',
+                'instructions' => 'Put your transaction ID in the memo.',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('dues@estate.example', PaymentChannelSetting::accountFor('zelle'));
+
+        $report = app(PaymentOrchestratorService::class)->validateChannelIntegration('zelle');
+        $this->assertTrue($report['is_ready']);
+        $this->assertStringContainsString('dues@estate.example', $report['checks'][0]['message']);
+
+        PaymentChannelSetting::where('channel_key', 'zelle')->update(['enabled' => true]);
+        $channel = collect($this->actingAs($this->resident())->get('/dashboard/billing')
+            ->viewData('page')['props']['paymentCenter']['availableChannels'])->firstWhere('key', 'zelle');
+
+        $this->assertSame('dues@estate.example', $channel['account_identifier']);
+    }
+
+    public function test_an_account_channel_cannot_be_enabled_until_it_has_an_account(): void
+    {
+        $admin = $this->admin();
+
+        $report = app(PaymentOrchestratorService::class)->validateChannelIntegration('bank_wire');
+        $this->assertFalse($report['is_ready']);
+        $this->assertFalse($report['checks'][0]['passed']);
+
+        $this->actingAs($admin)
+            ->post(route('dashboard.billing.channels.toggle', 'bank_wire'))
+            ->assertSessionHasErrors('channel');
+    }
+
+    public function test_clearing_the_account_disables_the_channel(): void
+    {
+        $this->configureAccountChannels();
+
+        $this->actingAs($this->admin())
+            ->patch(route('dashboard.billing.channels.account', 'cash_app'), ['account_identifier' => ''])
+            ->assertSessionHasNoErrors();
+
+        $setting = PaymentChannelSetting::where('channel_key', 'cash_app')->first();
+        $this->assertNull($setting->account_identifier);
+        $this->assertFalse($setting->enabled);
+    }
+
+    public function test_only_account_channels_take_an_account_and_only_administrators_set_one(): void
+    {
+        $this->actingAs($this->admin())
+            ->patch(route('dashboard.billing.channels.account', 'card'), ['account_identifier' => 'x'])
+            ->assertNotFound();
+
+        $this->actingAs($this->resident())
+            ->patch(route('dashboard.billing.channels.account', 'zelle'), ['account_identifier' => 'attacker@example.test'])
+            ->assertForbidden();
+
+        $this->assertNull(PaymentChannelSetting::accountFor('zelle'));
+    }
 }

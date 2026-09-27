@@ -159,6 +159,7 @@ class PaymentProviderRegistryTest extends TestCase
     public function test_unavailable_wallets_are_not_offered_to_payers(): void
     {
         config(['payments.card_provider' => null, 'services.stripe.secret' => null]);
+        $this->configureAccountChannels();
 
         $this->actingAs(User::factory()->create())
             ->get(route('dashboard.billing'))

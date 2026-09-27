@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BrandingSetting;
 use App\Models\Community;
+use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
 use App\Models\Transaction;
 use App\Models\User;
@@ -46,10 +47,19 @@ class UniversalPaymentLinkController extends Controller
         $community = Community::first();
         $branding = BrandingSetting::current();
 
+        // Only accounts the estate has entered and switched on; never a default.
+        $accountChannels = PaymentChannelSetting::query()
+            ->whereIn('channel_key', PaymentChannelSetting::ACCOUNT_CHANNELS)
+            ->where('enabled', true)
+            ->whereNotNull('account_identifier')
+            ->where('account_identifier', '!=', '')
+            ->get();
+
         return view('blade.public-pay', [
             'paymentLink' => $paymentLink,
             'community' => $community,
             'branding' => $branding,
+            'accountChannels' => $accountChannels,
         ]);
     }
 

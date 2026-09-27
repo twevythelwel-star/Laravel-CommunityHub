@@ -15,6 +15,7 @@ use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
+use App\Models\PaymentMethod;
 use App\Models\PaymentPlan;
 use App\Models\PaymentTerminal;
 use App\Models\Payout;
@@ -622,6 +623,15 @@ class BillingController extends Controller
             return back()->withErrors(['channel' => "{$method} payments are not available yet. Please choose another method or pay at the community office."]);
         }
 
+        // Bank, Zelle and Cash App send money to an account the estate entered;
+        // without one there is nowhere to tell the payer to send it.
+        if (PaymentChannelSetting::requiresAccountDetails($validated['channel'])
+            && PaymentChannelSetting::accountFor($validated['channel']) === null) {
+            $method = Transaction::formatPaymentMethod($validated['channel']);
+
+            return back()->withErrors(['channel' => "{$method} is not set up for this estate yet. Please choose another method or pay at the community office."]);
+        }
+
         if ($isCard) {
             if (! $invoice) {
                 return back()->withErrors(['invoice_id' => 'There is no open statement to pay by card.']);
@@ -865,7 +875,7 @@ class BillingController extends Controller
         $lastFour = $validated['last_four'] ?? '4242';
         $brand = ucfirst($validated['brand'] ?? 'Visa');
         $cardholderName = $validated['cardholder_name'] ?? $user->display_name;
-        $paymentIntent = $validated['payment_intent_id'] ?? ('pi_test_' . Str::random(24));
+        $paymentIntent = $validated['payment_intent_id'] ?? ('pi_test_'.Str::random(24));
 
         $payment = $this->orchestrator->startPayment([
             'user' => $user,
@@ -895,7 +905,7 @@ class BillingController extends Controller
         $payment->advanceTo(PaymentState::Succeeded, 'stripe:card_checkout', 'Card payment authorized via card processor');
 
         $ledger = [
-            'reference' => 'STRIPE-' . strtoupper(Str::random(12)),
+            'reference' => 'STRIPE-'.strtoupper(Str::random(12)),
             'provider_reference' => $paymentIntent,
             'provider_status' => 'succeeded',
             'amount_minor' => $amountMinor,
@@ -907,7 +917,7 @@ class BillingController extends Controller
         $this->orchestrator->applyPayment($payment, $ledger, null, 'stripe:card_checkout');
 
         if (! empty($validated['save_card'])) {
-            \App\Models\PaymentMethod::updateOrCreate(
+            PaymentMethod::updateOrCreate(
                 [
                     'user_id' => $user->id,
                     'last_four' => $lastFour,
@@ -919,7 +929,7 @@ class BillingController extends Controller
                     'display_name' => "{$brand} ending in {$lastFour}",
                     'status' => 'active',
                     'is_default' => true,
-                    'provider_payment_method_id' => 'pm_test_' . Str::random(20),
+                    'provider_payment_method_id' => 'pm_test_'.Str::random(20),
                 ]
             );
         }
@@ -927,11 +937,11 @@ class BillingController extends Controller
         $invoice->refresh();
         $slip = $payment->toSlip();
 
-        $user->recordActivity("Paid {$currency} " . number_format($amountMinor / 100, 2) . " via Card ({$brand} •••• {$lastFour})");
+        $user->recordActivity("Paid {$currency} ".number_format($amountMinor / 100, 2)." via Card ({$brand} •••• {$lastFour})");
 
         return response()->json([
             'success' => true,
-            'message' => "Payment of {$currency} " . number_format($amountMinor / 100, 2) . " successfully processed.",
+            'message' => "Payment of {$currency} ".number_format($amountMinor / 100, 2).' successfully processed.',
             'transaction' => $slip,
             'slip' => $slip,
             'transaction_id' => $payment->transaction_id,
@@ -1354,8 +1364,8 @@ class BillingController extends Controller
      */
     public function toggleChannel(Request $request, string $channel): RedirectResponse
     {
-        $setting = PaymentChannelSetting::where('channel_key', $channel)->first();
-        $targetEnabled = ! ($setting ? $setting->enabled : true);
+        $setting = PaymentChannelSetting::forChannel($channel);
+        $targetEnabled = ! $setting->enabled;
 
         if ($targetEnabled) {
             $validation = $this->orchestrator->validateChannelIntegration($channel);
@@ -1366,15 +1376,48 @@ class BillingController extends Controller
             }
         }
 
-        PaymentChannelSetting::updateOrCreate(
-            ['channel_key' => $channel],
-            ['enabled' => $targetEnabled]
-        );
+        $setting->fill(['enabled' => $targetEnabled])->save();
 
         $statusWord = $targetEnabled ? 'enabled for production' : 'disabled';
         $request->user()->recordActivity("Payment channel {$channel} {$statusWord}");
 
         return back()->with('success', "Payment channel {$channel} has been {$statusWord}.");
+    }
+
+    /**
+     * Set the account payers are sent to for a bank, Zelle or Cash App channel.
+     *
+     * Clearing the account also disables the channel, so it is never offered
+     * with nowhere to send the money.
+     */
+    public function updateChannelAccount(Request $request, string $channel): RedirectResponse
+    {
+        abort_unless(PaymentChannelSetting::requiresAccountDetails($channel), 404);
+
+        $validated = $request->validate([
+            'account_identifier' => ['nullable', 'string', 'max:255'],
+            'instructions' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $account = filled($validated['account_identifier'] ?? null) ? trim($validated['account_identifier']) : null;
+
+        $attributes = [
+            'account_identifier' => $account,
+            'instructions' => filled($validated['instructions'] ?? null) ? trim($validated['instructions']) : null,
+        ];
+        if ($account === null) {
+            $attributes['enabled'] = false;
+        }
+
+        PaymentChannelSetting::forChannel($channel)->fill($attributes)->save();
+
+        $request->user()->recordActivity($account === null
+            ? "Payment channel {$channel} account cleared and channel disabled"
+            : "Payment channel {$channel} account updated");
+
+        return back()->with('success', $account === null
+            ? "Account removed. {$channel} is disabled until an account is entered."
+            : "Payment details for {$channel} saved.");
     }
 
     /**

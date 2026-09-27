@@ -467,6 +467,11 @@ class PaymentOrchestratorService
             // need a card processor that supports them (ProviderRegistry).
             $provider = app(ProviderRegistry::class)->forChannel($key);
 
+            // Never point a payer at an account the estate has not entered.
+            if (PaymentChannelSetting::requiresAccountDetails($key) && blank($setting?->account_identifier)) {
+                continue;
+            }
+
             // In-person card payments are taken by staff on a reader, never
             // chosen by a payer online.
             if ($enabled && $provider && $key !== 'nfc_pos') {
@@ -606,13 +611,8 @@ class PaymentOrchestratorService
                 break;
 
             case 'bank_wire':
-                $account = $setting?->account_identifier ?? 'NCB #102938475';
-                $checks = [
-                    ['name' => 'Designated Deposit Account', 'passed' => ! empty($account), 'message' => "Account: {$account}"],
-                    ['name' => 'Routing / SWIFT Code', 'passed' => true, 'message' => 'National Commercial Bank (JNCBJMKN) verified'],
-                    ['name' => 'Automated Reconciliation Feeds', 'passed' => true, 'message' => 'Bank statement ledger matching ready'],
-                ];
-                $isReady = ! empty($account);
+                $checks = [$this->accountCheck('Designated Deposit Account', $setting)];
+                $isReady = filled($setting?->account_identifier);
                 break;
 
             case 'cash_office':
@@ -625,21 +625,13 @@ class PaymentOrchestratorService
                 break;
 
             case 'cash_app':
-                $cashtag = $setting?->account_identifier ?? '$CypressBayHOA';
-                $checks = [
-                    ['name' => 'Verified Business Cashtag', 'passed' => ! empty($cashtag), 'message' => "Cashtag: {$cashtag}"],
-                    ['name' => 'Square Payment Notification Webhook', 'passed' => true, 'message' => 'Real-time payment notification active'],
-                ];
-                $isReady = ! empty($cashtag);
+                $checks = [$this->accountCheck('Business Cashtag', $setting)];
+                $isReady = filled($setting?->account_identifier);
                 break;
 
             case 'zelle':
-                $zelleId = $setting?->account_identifier ?? 'payments@cypressbay.org';
-                $checks = [
-                    ['name' => 'Zelle Corporate Identifier', 'passed' => ! empty($zelleId), 'message' => "Identifier: {$zelleId}"],
-                    ['name' => 'Direct Bank Settlement Route', 'passed' => true, 'message' => 'Enrolled with participating financial institution'],
-                ];
-                $isReady = ! empty($zelleId);
+                $checks = [$this->accountCheck('Zelle Recipient (email or phone)', $setting)];
+                $isReady = filled($setting?->account_identifier);
                 break;
 
             case 'qr_code':
@@ -663,7 +655,7 @@ class PaymentOrchestratorService
         return [
             'channel_key' => $channelKey,
             'label' => $setting?->display_label ?? ($this->drivers[$channelKey]->label() ?? ucfirst(str_replace('_', ' ', $channelKey))),
-            'enabled' => $setting ? (bool) $setting->enabled : true,
+            'enabled' => (bool) ($setting?->enabled ?? PaymentChannelSetting::forChannel($channelKey)->enabled),
             'integration_mode' => $setting?->integration_mode ?? 'MANUAL_VERIFICATION',
             'is_ready' => $isReady && $allPassed,
             'status' => ($isReady && $allPassed) ? 'ready' : 'needs_configuration',
@@ -671,6 +663,21 @@ class PaymentOrchestratorService
             'account_identifier' => $setting?->account_identifier,
             'instructions' => $setting?->instructions,
             'validated_at' => now()->format('M d, Y h:i A'),
+        ];
+    }
+
+    /**
+     * Whether the estate has entered the account payers send money to. Only the
+     * saved setting counts: there is no default account to fall back on.
+     */
+    private function accountCheck(string $name, ?PaymentChannelSetting $setting): array
+    {
+        $account = $setting?->account_identifier;
+
+        return [
+            'name' => $name,
+            'passed' => filled($account),
+            'message' => filled($account) ? "Payers are sent to: {$account}" : 'Not set. Enter the account payers should send money to.',
         ];
     }
 

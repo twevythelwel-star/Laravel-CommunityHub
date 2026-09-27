@@ -108,24 +108,22 @@
                 </button>
             </form>
 
-            <!-- Other Options Accordion -->
+            <!-- Other Options: only accounts the estate has entered -->
+            @if ($accountChannels->isNotEmpty())
             <div class="border-t border-border pt-5 space-y-3">
                 <span class="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Direct Wire & Peer Rails
+                    Other Ways to Pay
                 </span>
-                <div class="grid grid-cols-2 gap-2.5 text-xs">
-                    <a href="https://cash.app/$CypressBayHOA" target="_blank" class="p-2.5 rounded-lg border border-border bg-card hover:bg-muted text-center font-semibold text-emerald-600 dark:text-emerald-400 block transition-colors">
-                        Cash App ($CypressBayHOA)
-                    </a>
-                    <a href="mailto:payments@cypressbay.org?subject=Zelle%20Payment" class="p-2.5 rounded-lg border border-border bg-card hover:bg-muted text-center font-semibold text-purple-600 dark:text-purple-400 block transition-colors">
-                        Zelle (payments@cypressbay.org)
-                    </a>
-                </div>
-
-                <div class="p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground space-y-1">
-                    <span class="font-bold text-foreground">Bank Wire:</span> National Commercial Bank (NCB) • Account #102938475 • Branch 001
-                </div>
+                @foreach ($accountChannels as $channel)
+                    <div class="p-3 bg-muted/40 rounded-lg text-xs text-muted-foreground space-y-1">
+                        <span class="font-bold text-foreground">{{ $channel->display_label }}:</span> {{ $channel->account_identifier }}
+                        @if ($channel->instructions)
+                            <p>{{ $channel->instructions }}</p>
+                        @endif
+                    </div>
+                @endforeach
             </div>
+            @endif
 
             <!-- PDF Poster Download Action -->
             <div class="border-t border-border pt-4 text-center">

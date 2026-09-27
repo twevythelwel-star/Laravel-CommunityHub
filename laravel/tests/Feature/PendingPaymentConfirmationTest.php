@@ -32,6 +32,12 @@ class PendingPaymentConfirmationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->configureAccountChannels();
+    }
+
     private function resident(): User
     {
         return User::factory()->role(UserRole::Homeowner)->create();

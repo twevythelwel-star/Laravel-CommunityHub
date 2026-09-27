@@ -159,9 +159,18 @@ export type ChannelReport = {
   status: 'ready' | 'needs_configuration';
   integration_mode?: 'API' | 'HOSTED_CHECKOUT' | 'WEBHOOK' | 'BANK_RECONCILIATION' | 'MANUAL_VERIFICATION';
   checks: ChannelCheck[];
-  account_identifier?: string;
-  instructions?: string;
+  account_identifier?: string | null;
+  instructions?: string | null;
   validated_at: string;
+};
+
+/** Channels where payers send money to an account the estate enters itself. */
+const ACCOUNT_CHANNELS = ['bank_wire', 'zelle', 'cash_app'];
+
+const ACCOUNT_FIELD_HINT: Record<string, string> = {
+  bank_wire: 'Bank, account name, account number and branch',
+  zelle: 'Email or phone registered with Zelle',
+  cash_app: 'Cashtag, e.g. $YourEstate',
 };
 
 type Props = {
@@ -297,6 +306,8 @@ export default function BillingPage({
   const [planInstallments, setPlanInstallments] = useState<number>(4);
   const [planFrequency, setPlanFrequency] = useState<string>('monthly');
   const [isValidatingChannel, setIsValidatingChannel] = useState<string | null>(null);
+  const [accountDrafts, setAccountDrafts] = useState<Record<string, { account_identifier: string; instructions: string }>>({});
+  const [savingAccountFor, setSavingAccountFor] = useState<string | null>(null);
 
   // Bank Reconciliation modal
   const [isReconModalOpen, setIsReconModalOpen] = useState(false);
@@ -363,6 +374,38 @@ export default function BillingPage({
         },
       }
     );
+  };
+
+  const accountDraftFor = (channel: ChannelReport) =>
+    accountDrafts[channel.channel_key] ?? {
+      account_identifier: channel.account_identifier ?? '',
+      instructions: channel.instructions ?? '',
+    };
+
+  const updateAccountDraft = (channel: ChannelReport, field: 'account_identifier' | 'instructions', value: string) => {
+    setAccountDrafts((drafts) => ({
+      ...drafts,
+      [channel.channel_key]: { ...accountDraftFor(channel), [field]: value },
+    }));
+  };
+
+  const handleSaveChannelAccount = (channel: ChannelReport) => {
+    setSavingAccountFor(channel.channel_key);
+    router.patch(route('dashboard.billing.channels.account', channel.channel_key), accountDraftFor(channel), {
+      preserveScroll: true,
+      onFinish: () => setSavingAccountFor(null),
+      onSuccess: () => {
+        setAccountDrafts(({ [channel.channel_key]: _saved, ...rest }) => rest);
+        toast({ title: 'Payment details saved', description: `Payers choosing ${channel.label} will see these details.` });
+      },
+      onError: (errors) => {
+        toast({
+          variant: 'destructive',
+          title: 'Could not save payment details',
+          description: (Object.values(errors)[0] as string) || 'Check the details and try again.',
+        });
+      },
+    });
   };
 
   const handleToggleChannel = (channelKey: string) => {
@@ -1558,6 +1601,51 @@ export default function BillingPage({
                           </div>
                         ))}
                       </div>
+
+                      {/* Where payers send money: entered by the estate, never a default */}
+                      {isAdmin && ACCOUNT_CHANNELS.includes(channel.channel_key) && (
+                        <div className="space-y-2 mb-3 p-2.5 rounded-lg border bg-background text-xs">
+                          <label className="block space-y-1">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
+                              Account payers send money to
+                            </span>
+                            <Input
+                              value={accountDraftFor(channel).account_identifier}
+                              onChange={(e) => updateAccountDraft(channel, 'account_identifier', e.target.value)}
+                              placeholder={ACCOUNT_FIELD_HINT[channel.channel_key]}
+                              maxLength={255}
+                              className="h-8 text-xs"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
+                              Instructions for payers (optional)
+                            </span>
+                            <Input
+                              value={accountDraftFor(channel).instructions}
+                              onChange={(e) => updateAccountDraft(channel, 'instructions', e.target.value)}
+                              placeholder="e.g. Use your transaction ID as the reference."
+                              maxLength={500}
+                              className="h-8 text-xs"
+                            />
+                          </label>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] text-muted-foreground">
+                              Leaving the account empty disables this channel.
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={savingAccountFor === channel.channel_key}
+                              onClick={() => handleSaveChannelAccount(channel)}
+                              className="h-7 text-xs font-semibold"
+                            >
+                              {savingAccountFor === channel.channel_key ? 'Saving...' : 'Save Details'}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Action buttons */}
                       {isAdmin && (

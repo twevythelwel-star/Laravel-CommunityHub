@@ -21,6 +21,7 @@ class RevenueEngineTest extends TestCase
     {
         parent::setUp();
         $this->seed();
+        $this->configureAccountChannels();
     }
 
     public function test_public_universal_payment_link_resolves_and_renders_checkout(): void
@@ -303,4 +304,3 @@ class RevenueEngineTest extends TestCase
         $this->assertSame('completed', strtolower($ledgerRow->status));
     }
 }
-
