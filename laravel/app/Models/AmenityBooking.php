@@ -29,7 +29,7 @@ class AmenityBooking extends Model
         'night' => ['starts' => '20:00', 'ends' => '22:00'],
     ];
 
-    protected $fillable = ['reference', 'amenity_id', 'user_id', 'booked_on', 'slot', 'guests', 'notes', 'status', 'slot_key', 'cancelled_at'];
+    protected $fillable = ['reference', 'amenity_id', 'user_id', 'booked_on', 'slot', 'guests', 'notes', 'status', 'slot_key', 'cancelled_at', 'cancelled_by', 'cancellation_reason'];
 
     protected function casts(): array
     {
@@ -62,14 +62,33 @@ class AmenityBooking extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
     public function scopeConfirmed(Builder $query): Builder
     {
         return $query->where('status', self::STATUS_CONFIRMED);
     }
 
     /** Frees the slot for someone else while keeping the booking on record. */
-    public function cancel(): void
+    public function cancel(?User $by = null, ?string $reason = null): void
     {
-        $this->update(['status' => self::STATUS_CANCELLED, 'slot_key' => null, 'cancelled_at' => now()]);
+        $this->update([
+            'status' => self::STATUS_CANCELLED,
+            'slot_key' => null,
+            'cancelled_at' => now(),
+            'cancelled_by' => $by?->id,
+            'cancellation_reason' => filled($reason) ? trim($reason) : null,
+        ]);
+    }
+
+    /** Cancelled by the office or an administrator, not by the resident who booked it. */
+    public function wasCancelledByOthers(): bool
+    {
+        return $this->status === self::STATUS_CANCELLED
+            && $this->cancelled_by !== null
+            && $this->cancelled_by !== $this->user_id;
     }
 }

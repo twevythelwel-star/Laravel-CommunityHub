@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,12 +93,27 @@ export default function AmenitiesPage({ amenities, landmarks }: Props) {
         toast({ variant: 'destructive', title: 'Not deleted', description: message ?? 'The server refused the request.' })
     );
 
+  const [cancelReason, setCancelReason] = useState('');
+
+  // The server's message says whether the resident was actually notified, so
+  // show that rather than a generic "cancelled". FlashToaster only handles full
+  // page loads, so read it from this visit's response.
   const handleCancelBooking = (booking: UpcomingBooking) =>
-    submit('delete', `/dashboard/amenity-bookings/${booking.id}`).then(
-      () => toast({ title: 'Booking cancelled', description: `${booking.reference} for ${booking.residentName}` }),
-      (message?: string) =>
-        toast({ variant: 'destructive', title: 'Not cancelled', description: message ?? 'The server refused the request.' })
-    );
+    router.delete(`/dashboard/amenity-bookings/${booking.id}`, {
+      data: { reason: cancelReason },
+      preserveScroll: true,
+      onSuccess: (page) => {
+        setCancelReason('');
+        const message = (page.props as { flash?: { success?: string | null } }).flash?.success;
+        toast({ title: 'Booking cancelled', description: message ?? `${booking.reference} for ${booking.residentName}` });
+      },
+      onError: (errors) =>
+        toast({
+          variant: 'destructive',
+          title: 'Not cancelled',
+          description: (Object.values(errors)[0] as string) || 'The server refused the request.',
+        }),
+    });
 
   return (
     <DashboardLayout>
@@ -198,7 +215,7 @@ export default function AmenitiesPage({ amenities, landmarks }: Props) {
                             </div>
                             {booking.notes && <div className="text-muted-foreground italic break-words">“{booking.notes}”</div>}
                           </div>
-                          <AlertDialog>
+                          <AlertDialog onOpenChange={(isOpen) => isOpen && setCancelReason('')}>
                             <AlertDialogTrigger asChild>
                               <Button size="sm" variant="ghost" className="h-7 shrink-0 text-rose-600">
                                 Cancel
@@ -209,9 +226,22 @@ export default function AmenitiesPage({ amenities, landmarks }: Props) {
                                 <AlertDialogTitle>Cancel {booking.residentName}’s booking?</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   {amenity.name}, {booking.date}, {SLOT_LABELS[booking.slot] ?? booking.slot}. The slot becomes free for
-                                  others. The resident is not notified automatically.
+                                  others. The resident is told by email or SMS, per their notification settings, and sees it in their
+                                  bookings.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
+                              <div className="space-y-1.5">
+                                <Label htmlFor={`cancel-reason-${booking.id}`} className="text-xs">
+                                  Reason for the resident (optional)
+                                </Label>
+                                <Input
+                                  id={`cancel-reason-${booking.id}`}
+                                  value={cancelReason}
+                                  onChange={(e) => setCancelReason(e.target.value)}
+                                  placeholder="e.g. Pool closed for maintenance"
+                                  maxLength={255}
+                                />
+                              </div>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Keep booking</AlertDialogCancel>
                                 <AlertDialogAction onClick={() => handleCancelBooking(booking)}>Cancel booking</AlertDialogAction>

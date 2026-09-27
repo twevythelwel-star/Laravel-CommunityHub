@@ -2,6 +2,7 @@
 
 namespace App\Services\NotificationEngine;
 
+use App\Models\AmenityBooking;
 use App\Models\Visitor;
 use App\Services\NotificationEngine\Channels\EmailChannel;
 use App\Services\NotificationEngine\Channels\InAppChannel;
@@ -122,6 +123,48 @@ class NotificationEngine
 
             $results[$key] = $result;
             $this->auditLog($key, $result->status, $payload->recipient, $payload, $result->reason);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Tell a resident their amenity booking was cancelled by someone else.
+     *
+     * Email and SMS only, by the resident's own preferences (email on and SMS
+     * off unless they changed them). Never the in-app channel: that posts a
+     * community notice, which would show one resident's booking to everyone.
+     * Each channel gets its own payload so SMS goes to the phone and email to
+     * the address.
+     *
+     * @return array<string, ChannelDispatchResult> keyed by channel; empty when
+     *                                              the resident wants neither
+     */
+    public function notifyBookingCancelled(AmenityBooking $booking): array
+    {
+        $resident = $booking->user;
+        $preferences = $resident->preferences;
+        $slot = AmenityBooking::SLOTS[$booking->slot] ?? null;
+        $when = $booking->booked_on->format('D j M Y').($slot ? ", {$slot['starts']}-{$slot['ends']}" : '');
+
+        $body = "Your booking {$booking->reference} for {$booking->amenity->name} on {$when} has been cancelled by the community office."
+            .($booking->cancellation_reason ? " Reason: {$booking->cancellation_reason}." : '')
+            .' Please contact the office if you have any questions.';
+
+        $recipients = array_filter([
+            'email' => ($preferences?->notify_email ?? true) ? $resident->email : null,
+            'sms' => ($preferences?->notify_sms ?? false) ? $resident->phone : null,
+        ], fn (?string $to) => filled($to));
+
+        $results = [];
+        foreach ($recipients as $channel => $to) {
+            $results += $this->send([$channel], new NotificationPayload(
+                title: 'Amenity booking cancelled',
+                body: $body,
+                recipient: $to,
+                user: $resident,
+                metadata: ['amenity_booking_id' => $booking->id, 'notice_type' => 'amenity_booking_cancelled'],
+            ));
         }
 
         return $results;

@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Amenities\StoreAmenityBookingRequest;
 use App\Models\Amenity;
 use App\Models\AmenityBooking;
+use App\Services\NotificationEngine\ChannelDispatchResult;
+use App\Services\NotificationEngine\NotificationEngine;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,19 +47,55 @@ class AmenityBookingController extends Controller
             ->with('booking', ['reference' => $booking->reference]);
     }
 
-    /** A resident cancels their own upcoming booking; an administrator any. */
-    public function destroy(Request $request, AmenityBooking $booking): RedirectResponse
+    /**
+     * A resident cancels their own upcoming booking; an administrator any.
+     *
+     * When the canceller is not the resident who booked, the resident is told
+     * by email/SMS per their preferences, and the canceller is told whether
+     * that actually went out.
+     */
+    public function destroy(Request $request, AmenityBooking $booking, NotificationEngine $notifications): RedirectResponse
     {
         $user = $request->user();
         abort_unless($booking->user_id === $user->id || $user->role->isAdministrative(), 403);
+
+        $validated = $request->validate(['reason' => ['nullable', 'string', 'max:255']]);
 
         if ($booking->status !== AmenityBooking::STATUS_CONFIRMED || $booking->booked_on->isBefore(today())) {
             return back()->withErrors(['booking' => 'Only upcoming, confirmed bookings can be cancelled.']);
         }
 
-        $booking->cancel();
+        $booking->cancel($user, $validated['reason'] ?? null);
         $user->recordActivity("Cancelled amenity booking {$booking->reference}");
 
-        return back()->with('success', "Booking {$booking->reference} cancelled.");
+        if (! $booking->wasCancelledByOthers()) {
+            return back()->with('success', "Booking {$booking->reference} cancelled.");
+        }
+
+        $results = $notifications->notifyBookingCancelled($booking->load('user.preferences', 'amenity'));
+
+        return back()->with('success', "Booking {$booking->reference} cancelled. ".$this->notificationOutcome($results));
+    }
+
+    /**
+     * What actually happened to the resident's notice, in words for the admin.
+     *
+     * @param  array<string, ChannelDispatchResult>  $results
+     */
+    private function notificationOutcome(array $results): string
+    {
+        if ($results === []) {
+            return 'The resident has no email or SMS notifications turned on, so they were not told. They will see it in their bookings.';
+        }
+
+        $sent = array_keys(array_filter($results, fn (ChannelDispatchResult $r) => $r->isSent()));
+        $notSent = array_keys(array_filter($results, fn (ChannelDispatchResult $r) => ! $r->isSent()));
+        $names = fn (array $channels) => implode(' and ', array_map(fn ($c) => $c === 'sms' ? 'SMS' : $c, $channels));
+
+        return match (true) {
+            $notSent === [] => 'The resident was notified by '.$names($sent).'.',
+            $sent === [] => 'The resident could not be notified by '.$names($notSent).' (not configured or failed). They will see it in their bookings.',
+            default => 'The resident was notified by '.$names($sent).'; '.$names($notSent).' could not be sent.',
+        };
     }
 }

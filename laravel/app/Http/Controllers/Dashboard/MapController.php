@@ -88,7 +88,13 @@ class MapController extends Controller
                     'slot' => $b->slot,
                 ]),
 
-            'myBookings' => $user->amenityBookings()->confirmed()
+            // Upcoming bookings, plus any the office cancelled, so a resident
+            // sees why a booking went rather than finding it gone.
+            'myBookings' => $user->amenityBookings()
+                ->where(fn ($q) => $q->where('status', AmenityBooking::STATUS_CONFIRMED)
+                    ->orWhere(fn ($q) => $q->where('status', AmenityBooking::STATUS_CANCELLED)
+                        ->whereNotNull('cancelled_by')
+                        ->whereColumn('cancelled_by', '!=', 'user_id')))
                 ->whereDate('booked_on', '>=', today())
                 ->with('amenity:id,name')
                 ->orderBy('booked_on')
@@ -100,6 +106,8 @@ class MapController extends Controller
                     'date' => $b->booked_on->toDateString(),
                     'slot' => $b->slot,
                     'guests' => $b->guests,
+                    'cancelledByOffice' => $b->wasCancelledByOthers(),
+                    'cancellationReason' => $b->cancellation_reason,
                 ]),
 
             'can' => [

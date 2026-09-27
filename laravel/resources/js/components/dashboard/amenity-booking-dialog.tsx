@@ -54,6 +54,9 @@ export interface MyBooking {
   date: string;
   slot: string;
   guests: number;
+  /** Cancelled by the office, not by the resident: shown with the reason, not cancellable. */
+  cancelledByOffice: boolean;
+  cancellationReason: string | null;
 }
 
 /** Must match AmenityBooking::SLOTS on the server, which is what decides. */
@@ -200,13 +203,20 @@ export function AmenityBookingDialog({
             <div className="space-y-4 pt-1">
               {myBookings.length > 0 && (
                 <div className="rounded-xl border border-border/80 bg-muted/20 p-3 text-xs space-y-2">
-                  <span className="text-[10px] font-semibold text-muted-foreground uppercase block">Your upcoming bookings</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase block">Your bookings</span>
                   {myBookings.map((booking) => (
                     <div key={booking.id} className="flex items-center justify-between gap-2">
-                      <span>
-                        <strong className="text-foreground">{booking.amenityName}</strong> · {booking.date} · {slotName(booking.slot)}
+                      <span className={booking.cancelledByOffice ? 'text-muted-foreground' : ''}>
+                        <strong className={booking.cancelledByOffice ? 'line-through' : 'text-foreground'}>{booking.amenityName}</strong> ·{' '}
+                        {booking.date} · {slotName(booking.slot)}
                         <span className="font-mono text-muted-foreground"> ({booking.reference})</span>
+                        {booking.cancelledByOffice && (
+                          <span className="block text-[11px] text-rose-600 dark:text-rose-400">
+                            Cancelled by the office{booking.cancellationReason ? `: ${booking.cancellationReason}` : '.'}
+                          </span>
+                        )}
                       </span>
+                      {!booking.cancelledByOffice && (
                       <Button
                         type="button"
                         size="sm"
@@ -217,6 +227,7 @@ export function AmenityBookingDialog({
                       >
                         {cancellingId === booking.id ? 'Cancelling...' : 'Cancel'}
                       </Button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -353,7 +364,7 @@ export function AmenityBookingDialog({
                 </div>
                 <div className="flex justify-between items-center text-muted-foreground">
                   <span>Assigned Property</span>
-                  <span className="font-mono text-foreground">{user?.lot ? `Lot ${user.lot}` : 'Main Residence'}</span>
+                  <span className="font-mono text-foreground">{user?.lot || 'Main Residence'}</span>
                 </div>
               </div>
 
@@ -426,7 +437,7 @@ export function AmenityBookingDialog({
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Host Lot</span>
-                <span className="font-mono text-foreground">{user?.lot ? `Lot ${user.lot}` : 'Main Residence'}</span>
+                <span className="font-mono text-foreground">{user?.lot || 'Main Residence'}</span>
               </div>
             </div>
 
