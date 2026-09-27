@@ -90,6 +90,11 @@ class AmenityCancellationNoticeTest extends TestCase
         $this->assertStringContainsString('12:00-16:00', $body);
         $this->assertStringContainsString('Reason: Pool closed for maintenance.', $body);
 
+        $message = $resident->inboxMessages()->sole();
+        $this->assertSame('amenity_booking_cancelled', $message->kind);
+        $this->assertStringContainsString('Reason: Pool closed for maintenance.', $message->body);
+        $this->assertSame('/dashboard/map', $message->action_url);
+
         $booking->refresh();
         $this->assertSame($admin->id, $booking->cancelled_by);
         $this->assertSame('Pool closed for maintenance', $booking->cancellation_reason);
@@ -103,6 +108,7 @@ class AmenityCancellationNoticeTest extends TestCase
             ->assertSessionHas('success', fn (string $m) => ! str_contains($m, 'notified'));
 
         $this->assertSame([], $this->sentEmails());
+        $this->assertSame(0, $resident->inboxMessages()->count());
     }
 
     public function test_a_resident_who_chose_sms_gets_a_text_at_their_phone_and_no_email(): void
@@ -127,7 +133,7 @@ class AmenityCancellationNoticeTest extends TestCase
         $resident = $this->resident(['notify_email' => false, 'notify_sms' => true]);
 
         $this->cancel(User::factory()->role(UserRole::Admin)->create(), $this->bookingFor($resident))
-            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'could not be notified by SMS'));
+            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'SMS could not be sent') && str_contains($m, 'in their inbox'));
 
         Http::assertNothingSent();
     }
@@ -137,9 +143,11 @@ class AmenityCancellationNoticeTest extends TestCase
         $resident = $this->resident(['notify_email' => false, 'notify_sms' => false]);
 
         $this->cancel(User::factory()->role(UserRole::Admin)->create(), $this->bookingFor($resident))
-            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'no email or SMS notifications turned on'));
+            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'email and SMS notifications turned off'));
 
         $this->assertSame([], $this->sentEmails());
+        // With email and SMS off, the inbox is how they find out.
+        $this->assertSame(1, $resident->inboxMessages()->count());
     }
 
     public function test_the_cancellation_is_never_posted_to_the_community_notice_board(): void

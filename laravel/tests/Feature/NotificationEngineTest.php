@@ -255,12 +255,14 @@ class NotificationEngineTest extends TestCase
 
     // ── 4. Channel Health & Readiness Inspection ──
 
-    public function test_channels_status_report_returns_all_five_channels(): void
+    public function test_channels_status_report_returns_all_six_channels(): void
     {
         $engine = app(NotificationEngine::class);
         $status = $engine->getChannelsStatus();
 
-        $this->assertCount(5, $status);
+        $this->assertCount(6, $status);
+        $this->assertArrayHasKey('inbox', $status);
+        $this->assertSame('Personal Inbox', $status['inbox']['label']);
         $this->assertArrayHasKey('email', $status);
         $this->assertArrayHasKey('sms', $status);
         $this->assertArrayHasKey('whatsapp', $status);

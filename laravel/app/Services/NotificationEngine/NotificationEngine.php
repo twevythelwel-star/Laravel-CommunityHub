@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Visitor;
 use App\Services\NotificationEngine\Channels\CommunityNoticeChannel;
 use App\Services\NotificationEngine\Channels\EmailChannel;
+use App\Services\NotificationEngine\Channels\PersonalInboxChannel;
 use App\Services\NotificationEngine\Channels\PushChannel;
 use App\Services\NotificationEngine\Channels\SmsChannel;
 use App\Services\NotificationEngine\Channels\WhatsAppChannel;
@@ -36,6 +37,7 @@ class NotificationEngine
         WhatsAppChannel $whatsApp,
         PushChannel $push,
         CommunityNoticeChannel $communityNotice,
+        PersonalInboxChannel $inbox,
     ) {
         $this->channels = [
             'email' => $email,
@@ -43,6 +45,7 @@ class NotificationEngine
             'whatsapp' => $whatsApp,
             'push' => $push,
             'community_notice' => $communityNotice,
+            'inbox' => $inbox,
         ];
     }
 
@@ -155,31 +158,38 @@ class NotificationEngine
         return $this->notifyResident($resident, 'Amenity booking cancelled', $body, [
             'amenity_booking_id' => $booking->id,
             'notice_type' => 'amenity_booking_cancelled',
-        ]);
+        ], route('dashboard.map', absolute: false));
     }
 
     /**
-     * Send a personal message to one resident by email and/or SMS, as their
-     * own notification settings say (email on and SMS off unless changed).
+     * Send a personal message to one resident: always to their in-app inbox,
+     * and by email and/or SMS as their own settings say (email on and SMS off
+     * unless changed).
      *
-     * Never the in-app channel: it posts a community notice, which everyone
-     * sees. Each channel gets its own payload, so SMS goes to the phone and
-     * email to the address.
+     * Never the community notice board, which everyone sees. Each channel
+     * gets its own payload, so SMS goes to the phone and email to the address.
      *
      * @param  array<string, mixed>  $metadata
-     * @return array<string, ChannelDispatchResult> keyed by channel; empty when
-     *                                              the resident wants neither
+     * @return array<string, ChannelDispatchResult> keyed by channel; always
+     *                                              includes 'inbox'
      */
-    private function notifyResident(User $resident, string $title, string $body, array $metadata = []): array
+    private function notifyResident(User $resident, string $title, string $body, array $metadata = [], ?string $actionUrl = null): array
     {
         $preferences = $resident->preferences;
+
+        $results = $this->send(['inbox'], new NotificationPayload(
+            title: $title,
+            body: $body,
+            user: $resident,
+            actionUrl: $actionUrl,
+            metadata: $metadata,
+        ));
 
         $recipients = array_filter([
             'email' => ($preferences?->notify_email ?? true) ? $resident->email : null,
             'sms' => ($preferences?->notify_sms ?? false) ? $resident->phone : null,
         ], fn (?string $to) => filled($to));
 
-        $results = [];
         foreach ($recipients as $channel => $to) {
             $results += $this->send([$channel], new NotificationPayload(
                 title: $title,
@@ -256,6 +266,7 @@ class NotificationEngine
             "Visitor Arrived: {$visitor->name}",
             "{$visitor->name} has arrived and checked in at {$gate}{$vehicleInfo}.",
             ['visitor_id' => $visitor->id, 'gate' => $gate, 'event' => 'visitor_checked_in'],
+            route('dashboard.visitors', absolute: false),
         );
     }
 

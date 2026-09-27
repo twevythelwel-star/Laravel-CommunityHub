@@ -27,6 +27,7 @@ import {
   Gift,
   History,
   Home,
+  Inbox as InboxIcon,
   KeyRound,
   Map,
   MessageSquarePlus,
@@ -75,6 +76,7 @@ import { Plus } from "lucide-react";
 
 const allMenuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
+  { href: '/dashboard/inbox', label: 'Inbox', icon: InboxIcon, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
   { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/map?tab=boundary', label: 'Boundary Manager', icon: ShieldCheck, roles: ['System Admin', 'Admin'] },
   { href: '/dashboard/amenities', label: 'Amenities', icon: CalendarCheck, roles: ['System Admin', 'Admin'] },
@@ -118,7 +120,8 @@ export default function DashboardLayout({
 }) {
   // Inertia exposes the current URL on the page object; `usePathname` was a
   // next/navigation hook and has no Inertia equivalent.
-  const { url } = usePage();
+  const { url, props: sharedProps } = usePage();
+  const inboxUnread = Number((sharedProps as { inboxUnread?: number }).inboxUnread ?? 0);
   const pathname = url.split('?')[0];
 
   const { user, loading, logout, justSignedIn } = useAuth();
@@ -212,6 +215,14 @@ export default function DashboardLayout({
                   >
                     <Icon />
                     <span>{label}</span>
+                    {href === '/dashboard/inbox' && inboxUnread > 0 && (
+                      <span
+                        className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground"
+                        aria-label={`${inboxUnread} unread`}
+                      >
+                        {inboxUnread > 99 ? '99+' : inboxUnread}
+                      </span>
+                    )}
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>

@@ -17,6 +17,7 @@ use App\Http\Controllers\Dashboard\FundraisingController;
 use App\Http\Controllers\Dashboard\GatePass\ScanGatePassController;
 use App\Http\Controllers\Dashboard\GatePassController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
+use App\Http\Controllers\Dashboard\InboxController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OverviewController;
@@ -97,6 +98,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/payments/{payment}/return', PaymentReturnController::class)->name('payments.return');
 
     // ── Profile & personal settings ──
+    // Personal inbox: every signed-in user, their own messages only.
+    Route::get('/inbox', [InboxController::class, 'index'])->name('inbox');
+    Route::post('/inbox/read-all', [InboxController::class, 'markAllRead'])->name('inbox.read-all');
+    Route::post('/inbox/{message}/read', [InboxController::class, 'markRead'])->whereNumber('message')->name('inbox.read');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar');

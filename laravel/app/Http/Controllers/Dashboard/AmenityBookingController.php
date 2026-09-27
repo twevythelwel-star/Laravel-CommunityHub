@@ -84,18 +84,23 @@ class AmenityBookingController extends Controller
      */
     private function notificationOutcome(array $results): string
     {
-        if ($results === []) {
-            return 'The resident has no email or SMS notifications turned on, so they were not told. They will see it in their bookings.';
+        $inbox = ($results['inbox'] ?? null)?->isSent()
+            ? 'The resident has a message in their inbox'
+            : 'The message could not be added to the resident\'s inbox';
+
+        $external = array_diff_key($results, ['inbox' => true]);
+        if ($external === []) {
+            return "{$inbox}; they have email and SMS notifications turned off.";
         }
 
-        $sent = array_keys(array_filter($results, fn (ChannelDispatchResult $r) => $r->isSent()));
-        $notSent = array_keys(array_filter($results, fn (ChannelDispatchResult $r) => ! $r->isSent()));
+        $sent = array_keys(array_filter($external, fn (ChannelDispatchResult $r) => $r->isSent()));
+        $notSent = array_keys(array_filter($external, fn (ChannelDispatchResult $r) => ! $r->isSent()));
         $names = fn (array $channels) => implode(' and ', array_map(fn ($c) => $c === 'sms' ? 'SMS' : $c, $channels));
 
-        return match (true) {
-            $notSent === [] => 'The resident was notified by '.$names($sent).'.',
-            $sent === [] => 'The resident could not be notified by '.$names($notSent).' (not configured or failed). They will see it in their bookings.',
-            default => 'The resident was notified by '.$names($sent).'; '.$names($notSent).' could not be sent.',
+        return $inbox.match (true) {
+            $notSent === [] => ' and was notified by '.$names($sent).'.',
+            $sent === [] => '; '.$names($notSent).' could not be sent (not configured or failed).',
+            default => ' and was notified by '.$names($sent).'; '.$names($notSent).' could not be sent.',
         };
     }
 }

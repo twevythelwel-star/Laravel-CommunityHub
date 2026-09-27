@@ -94,6 +94,9 @@ class HandleInertiaRequests extends Middleware
 
             'activeAlert' => fn () => $user ? $this->activeAlert() : null,
 
+            // The nav badge on Inbox. One indexed count query per page.
+            'inboxUnread' => fn () => $user ? $user->inboxMessages()->unread()->count() : 0,
+
             /*
              | Which pass-delivery channels have a provider behind them. The
              | visitor forms disable SMS and WhatsApp when these are false; they

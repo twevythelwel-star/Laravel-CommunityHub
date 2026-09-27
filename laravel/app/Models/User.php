@@ -109,6 +109,12 @@ class User extends Authenticatable
         return $this->hasMany(AmenityBooking::class);
     }
 
+    /** This user's personal in-app inbox. */
+    public function inboxMessages(): HasMany
+    {
+        return $this->hasMany(ResidentMessage::class);
+    }
+
     public function paymentCustomers(): HasMany
     {
         return $this->hasMany(PaymentCustomer::class);

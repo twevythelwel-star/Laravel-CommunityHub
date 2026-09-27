@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Events\VisitorCheckedInEvent;
 use App\Models\Notification;
+use App\Models\ResidentMessage;
 use App\Models\User;
 use App\Models\UserPreference;
 use App\Models\Visitor;
@@ -82,7 +83,13 @@ class VisitorArrivalNoticeTest extends TestCase
 
     public function test_the_host_is_emailed_by_default_and_no_one_else(): void
     {
-        $this->arrive($this->visitorOf($this->host()));
+        $host = $this->host();
+        $this->arrive($this->visitorOf($host));
+
+        $message = $host->inboxMessages()->sole();
+        $this->assertSame('visitor_checked_in', $message->kind);
+        $this->assertStringContainsString('Blue Toyota 1234AB', $message->body);
+        $this->assertSame(1, ResidentMessage::count(), 'only the host gets it');
 
         $emails = $this->sentEmails();
         $this->assertCount(1, $emails);
