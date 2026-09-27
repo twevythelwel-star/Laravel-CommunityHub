@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Models\Invoice;
 use App\Models\PaymentMethod;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -57,6 +58,64 @@ class ProfilePaymentsAndWalletsTest extends TestCase
                         ->has('paymentPreferences');
                 });
         });
+    }
+
+    public function test_a_paid_up_homeowner_is_not_shown_a_balance_statement_or_card_they_do_not_have(): void
+    {
+        $homeowner = $this->homeowner();
+
+        Invoice::create([
+            'user_id' => $homeowner->id,
+            'reference' => 'INV-PAID-0001',
+            'amount_minor' => 7500000,
+            'currency' => 'JMD',
+            'status' => 'Paid',
+            'period_start' => now()->startOfMonth(),
+            'period_end' => now()->endOfMonth(),
+            'due_on' => now()->subDays(3),
+            'paid_at' => now()->subDays(5),
+        ]);
+
+        $this->actingAs($homeowner)->get(route('dashboard.profile'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('billing.outstandingBalance', fn ($val) => (float) $val === 0.0)
+                ->where('billing.latestInvoice', null)
+                ->where('billing.savedPaymentMethods', []));
+    }
+
+    public function test_a_part_paid_statement_counts_only_what_is_still_owed(): void
+    {
+        $homeowner = $this->homeowner();
+
+        $invoice = Invoice::create([
+            'user_id' => $homeowner->id,
+            'reference' => 'INV-PART-0001',
+            'amount_minor' => 7500000,
+            'currency' => 'JMD',
+            'status' => 'Partially Paid',
+            'period_start' => now()->startOfMonth(),
+            'period_end' => now()->endOfMonth(),
+            'due_on' => now()->addDays(14),
+        ]);
+
+        Transaction::create([
+            'user_id' => $homeowner->id,
+            'invoice_id' => $invoice->id,
+            'reference' => 'TX-PART-0001',
+            'receipt_number' => 'REC-PART-0001',
+            'payment_channel' => 'card',
+            'status' => 'completed',
+            'amount_minor' => 2500000,
+            'currency' => 'JMD',
+        ]);
+
+        $this->actingAs($homeowner)->get(route('dashboard.profile'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('billing.outstandingBalance', fn ($val) => (float) $val === 50000.0)
+                ->where('billing.latestInvoice.id', $invoice->id)
+                ->where('billing.latestInvoice.balanceRemainingMinor', 5000000));
     }
 
     /**
@@ -175,7 +234,7 @@ class ProfilePaymentsAndWalletsTest extends TestCase
         $this->assertEquals('Google Pay', $prefs->extra['payment_preferences']['default_payment_method']);
         $this->assertTrue($prefs->extra['payment_preferences']['notifications']['payment_confirmation']);
         $this->assertFalse($prefs->extra['payment_preferences']['notifications']['failed_payment']);
-        
+
         // Strictly verify that no raw credentials exist in database
         $this->assertArrayNotHasKey('card_number', $prefs->extra['payment_preferences']);
         $this->assertArrayNotHasKey('cvv', $prefs->extra['payment_preferences']);

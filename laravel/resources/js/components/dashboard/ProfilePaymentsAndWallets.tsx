@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   CreditCard, 
   Smartphone, 
@@ -7,7 +7,6 @@ import {
   Radio, 
   CheckCircle2, 
   AlertCircle, 
-  ExternalLink, 
   ShieldCheck, 
   Sparkles,
   Info,
@@ -67,8 +66,8 @@ interface BillingData {
     invoiceNumber: string;
     amountMinor: number;
     balanceRemainingMinor: number;
-    dueDate?: string;
-  };
+    dueDate?: string | null;
+  } | null;
   savedPaymentMethods: SavedMethod[];
   config: {
     isConfigured: boolean;
@@ -96,14 +95,6 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
   const [preselectedRail, setPreselectedRail] = useState<string>('card');
   const [infoModalOpen, setInfoModalOpen] = useState(false);
   const [selectedWalletInfo, setSelectedWalletInfo] = useState<WalletCapability | null>(null);
-  const [isProcessingTest, setIsProcessingTest] = useState(false);
-  const [testTransactionResult, setTestTransactionResult] = useState<{
-    id: string;
-    amount: string;
-    status: string;
-    date: string;
-    dashboardUrl: string;
-  } | null>(null);
 
   const initialPrefs = billing?.paymentPreferences;
   const [preferredPayment, setPreferredPayment] = useState<string>(
@@ -215,7 +206,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
   const { capabilities } = profile;
 
   const [cardModalOpen, setCardModalOpen] = useState(false);
-  const [currentBalance, setCurrentBalance] = useState<number>(billing?.outstandingBalance ?? 75000.00);
+  const [currentBalance, setCurrentBalance] = useState<number>(billing?.outstandingBalance ?? 0);
 
   useEffect(() => {
     if (billing?.outstandingBalance !== undefined) {
@@ -228,19 +219,8 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
   const currencySymbol = billing?.currencySymbol ?? 'JMD $';
   const isTestMode = billing?.config?.isTestMode ?? true; // defaults to test mode if unconfigured
 
-  const savedMethods: SavedMethod[] = billing?.savedPaymentMethods?.length
-    ? billing.savedPaymentMethods
-    : [
-        {
-          id: 1,
-          methodType: 'card',
-          walletType: null,
-          brand: 'Visa',
-          lastFour: '4242',
-          displayName: 'Primary Debit Card',
-          isDefault: true,
-        },
-      ];
+  const savedMethods: SavedMethod[] = billing?.savedPaymentMethods ?? [];
+  const hasBalanceDue = balance > 0;
 
   const handleQuickPay = (cap: WalletCapability) => {
     if (!cap.isSupported && cap.state === 'UNAVAILABLE') {
@@ -257,34 +237,6 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
   const handleOpenSelectorWithMethod = (channel: string) => {
     setPreselectedRail(channel);
     setSelectorOpen(true);
-  };
-
-  const runStripeTestTransaction = async () => {
-    setIsProcessingTest(true);
-    try {
-      // Simulate real Stripe test-mode transaction generation with client feedback
-      await new Promise((r) => setTimeout(r, 1200));
-      const testId = `ch_test_${Math.random().toString(36).substring(2, 10)}${Date.now().toString(36)}`;
-      setTestTransactionResult({
-        id: testId,
-        amount: `${currencySymbol}${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-        status: 'succeeded (Test Mode)',
-        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        dashboardUrl: `https://dashboard.stripe.com/test/payments/${testId}`,
-      });
-      toast({
-        title: '🧪 Stripe Test-Mode Transaction Verified',
-        description: `Generated test charge ${testId}. Authoritative payment recorded in test pipeline without moving real money.`,
-      });
-    } catch {
-      toast({
-        variant: 'destructive',
-        title: 'Test Failed',
-        description: 'Could not connect to Stripe test endpoint.',
-      });
-    } finally {
-      setIsProcessingTest(false);
-    }
   };
 
   const renderBadge = (cap: WalletCapability) => {
@@ -350,8 +302,8 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
       </div>
 
       {/* ── STRIPE TEST MODE BANNER ───────────────────────────────────── */}
-      <div className="rounded-xl border border-sky-500/20 bg-gradient-to-r from-sky-500/10 via-primary/5 to-transparent p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
-        <div className="flex items-start gap-3">
+      {isTestMode && (
+        <div className="rounded-xl border border-sky-500/20 bg-gradient-to-r from-sky-500/10 via-primary/5 to-transparent p-4 flex items-start gap-3 text-xs shadow-sm">
           <div className="p-2 rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 shrink-0">
             <Sparkles className="w-4 h-4" />
           </div>
@@ -363,49 +315,9 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
               </Badge>
             </div>
             <p className="text-muted-foreground text-[11px] mt-0.5 leading-relaxed">
-              Test transactions verify the complete payment workflow (hosted checkout, device wallets, webhooks, and double-entry ledger) and appear in the Stripe Dashboard without moving real funds.
+              Payments made here run through Stripe's test environment and do not move real funds.
             </p>
           </div>
-        </div>
-        <Button
-          onClick={runStripeTestTransaction}
-          disabled={isProcessingTest}
-          size="sm"
-          variant="outline"
-          className="shrink-0 text-xs gap-1.5 border-sky-500/30 hover:bg-sky-500/10 font-medium"
-        >
-          {isProcessingTest ? (
-            <>
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying...
-            </>
-          ) : (
-            <>
-              <ExternalLink className="w-3.5 h-3.5" /> Run Test Transaction
-            </>
-          )}
-        </Button>
-      </div>
-
-      {testTransactionResult && (
-        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs flex items-center justify-between animate-in fade-in slide-in-from-top-2">
-          <div className="space-y-0.5">
-            <span className="font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Verified Stripe Test Charge: {testTransactionResult.id}
-            </span>
-            <p className="text-muted-foreground text-[11px]">
-              Amount: <strong className="text-foreground">{testTransactionResult.amount}</strong> • Status: {testTransactionResult.status} • Recorded at {testTransactionResult.date}
-            </p>
-          </div>
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700"
-          >
-            <a href={testTransactionResult.dashboardUrl} target="_blank" rel="noreferrer">
-              Stripe Dashboard <ExternalLink className="w-3 h-3 ml-1" />
-            </a>
-          </Button>
         </div>
       )}
 
@@ -454,15 +366,18 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
                 onClick={() => {
                   setCardModalOpen(true);
                 }}
+                disabled={!hasBalanceDue}
                 size="lg"
                 className="w-full sm:flex-1 h-12 text-sm sm:text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-primary/25 transition-all uppercase tracking-wider"
               >
-                PAY {currencySymbol}
-                {balance.toLocaleString('en-US', { minimumFractionDigits: 0 })}
+                {hasBalanceDue
+                  ? `PAY ${currencySymbol}${balance.toLocaleString('en-US', { minimumFractionDigits: 0 })}`
+                  : 'Nothing Due'}
               </Button>
 
               <Button
                 onClick={handlePayWithWallet}
+                disabled={!hasBalanceDue}
                 size="lg"
                 variant="outline"
                 className="w-full sm:flex-1 h-12 text-sm sm:text-base font-bold border-2 border-primary/35 hover:border-primary hover:bg-primary/10 transition-all flex items-center justify-center gap-2 shadow-sm text-foreground"
@@ -639,6 +554,11 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
             </div>
 
             <div className="space-y-2">
+              {savedMethods.length === 0 && (
+                <p className="rounded-lg border border-dashed border-border/60 p-3.5 text-xs text-muted-foreground">
+                  No saved payment methods yet. A card you choose to save at checkout will appear here.
+                </p>
+              )}
               {savedMethods.map((method) => (
                 <div
                   key={method.id}
@@ -651,7 +571,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm font-bold text-foreground tracking-wider">
-                          •••• {method.lastFour || '4242'}
+                          {method.lastFour ? `•••• ${method.lastFour}` : 'Card'}
                         </span>
                         {method.isDefault && (
                           <Badge variant="outline" className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
@@ -660,7 +580,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
                         )}
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        {method.displayName || 'Homeowner Primary Card'} • Expires 12/28
+                        {method.displayName || 'Saved card'}
                       </p>
                     </div>
                   </div>
@@ -668,6 +588,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
                     onClick={() => {
                       setCardModalOpen(true);
                     }}
+                    disabled={!hasBalanceDue}
                     variant="outline"
                     size="sm"
                     className="text-xs font-medium"
@@ -1143,7 +1064,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
             ? {
                 id: billing.latestInvoice.id,
                 reference: billing.latestInvoice.invoiceNumber,
-                amount: (billing.latestInvoice.amountMinor || 0) / 100,
+                amount: (billing.latestInvoice.balanceRemainingMinor ?? billing.latestInvoice.amountMinor ?? 0) / 100,
                 currency: currency,
                 status: 'Unpaid',
                 periodStart: '',
@@ -1151,17 +1072,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
                 dueOn: billing.latestInvoice.dueDate || '',
                 paidAt: null,
               }
-            : {
-                id: 1,
-                reference: 'INV-2026-0042',
-                amount: balance,
-                currency: currency,
-                status: 'Unpaid',
-                periodStart: '',
-                periodEnd: '',
-                dueOn: 'Oct 15, 2026',
-                paidAt: null,
-              }
+            : null
         }
         amountDue={balance}
         currency={currency}
@@ -1187,7 +1098,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
         walletType={activeWalletType}
         amount={balance}
         currency={currency}
-        invoiceReference={billing?.latestInvoice?.invoiceNumber ?? 'INV-2026-75000'}
+        invoiceReference={billing?.latestInvoice?.invoiceNumber}
         invoiceId={billing?.latestInvoice?.id}
         onSuccess={(txnId) => {
           toast({
@@ -1204,7 +1115,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
         amount={balance}
         currency={currency}
         invoiceId={billing?.latestInvoice?.id}
-        invoiceReference={billing?.latestInvoice?.invoiceNumber ?? 'INV-2026-75000'}
+        invoiceReference={billing?.latestInvoice?.invoiceNumber}
         savedCards={savedMethods.filter((m) => m.methodType === 'card')}
         onSuccess={(slip) => {
           setCurrentBalance(0);

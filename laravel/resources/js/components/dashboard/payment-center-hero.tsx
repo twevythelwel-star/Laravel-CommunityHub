@@ -941,7 +941,7 @@ export function PaymentCenterHero({
             title: 'Card Payment Succeeded',
             description: `Payment #${slip?.transaction_id || ''} confirmed and posted to community ledger.`,
           });
-          router.reload({ preserveScroll: true });
+          router.reload();
         }}
       />
     </div>

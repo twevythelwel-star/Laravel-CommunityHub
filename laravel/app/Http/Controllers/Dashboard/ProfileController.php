@@ -23,35 +23,22 @@ class ProfileController extends Controller
         $pass = $engine->issuePassFor($user);
         $category = $pass->category;
 
-        $outstandingInvoices = $user->invoices()->where('status', '!=', 'Paid')->get();
-        $outstandingMinor = $outstandingInvoices->sum('amount_minor');
-        $outstandingBalance = $outstandingMinor > 0 ? (float) ($outstandingMinor / 100) : 75000.00;
-        $latestInvoice = $outstandingInvoices->first() ?? $user->invoices()->latest('id')->first();
+        // What is actually still owed: open statements only, net of anything already
+        // received against them, so a part-paid statement is not counted twice.
+        $outstandingInvoices = $user->invoices()->outstanding()->oldest('due_on')->get();
+        $outstandingMinor = $outstandingInvoices->sum(fn ($invoice) => $invoice->balanceRemainingMinor());
+        $outstandingBalance = (float) ($outstandingMinor / 100);
+        $latestInvoice = $outstandingInvoices->first();
 
-        $savedMethods = $user->paymentMethods()->where('status', 'active')->get();
-        $savedPaymentMethods = $savedMethods->map(fn ($m) => [
+        $savedPaymentMethods = $user->paymentMethods()->where('status', 'active')->get()->map(fn ($m) => [
             'id' => $m->id,
             'methodType' => $m->method_type,
             'walletType' => $m->wallet_type,
-            'brand' => $m->brand ?? 'Visa',
-            'lastFour' => $m->last_four ?? '4242',
-            'displayName' => $m->display_name ?? 'Primary Debit Card',
+            'brand' => $m->brand,
+            'lastFour' => $m->last_four,
+            'displayName' => $m->display_name,
             'isDefault' => (bool) $m->is_default,
         ])->values()->all();
-
-        if (empty($savedPaymentMethods)) {
-            $savedPaymentMethods = [
-                [
-                    'id' => 1,
-                    'methodType' => 'card',
-                    'walletType' => null,
-                    'brand' => 'Visa',
-                    'lastFour' => '4242',
-                    'displayName' => 'Primary Debit Card',
-                    'isDefault' => true,
-                ],
-            ];
-        }
 
         $stripeSecret = (string) config('services.stripe.secret');
         $isStripeConfigured = filled($stripeSecret) && str_starts_with($stripeSecret, 'sk_');
@@ -109,17 +96,11 @@ class ProfileController extends Controller
                 'currencySymbol' => 'JMD $',
                 'latestInvoice' => $latestInvoice ? [
                     'id' => $latestInvoice->id,
-                    'invoiceNumber' => $latestInvoice->reference ?? ('INV-2026-'.str_pad((string) $latestInvoice->id, 4, '0', STR_PAD_LEFT)),
+                    'invoiceNumber' => $latestInvoice->reference,
                     'amountMinor' => $latestInvoice->amount_minor,
-                    'balanceRemainingMinor' => method_exists($latestInvoice, 'balanceRemainingMinor') ? $latestInvoice->balanceRemainingMinor() : $latestInvoice->amount_minor,
-                    'dueDate' => $latestInvoice->due_on?->format('M d, Y') ?? 'Oct 15, 2026',
-                ] : [
-                    'id' => 1,
-                    'invoiceNumber' => 'INV-2026-0042',
-                    'amountMinor' => (int) round($outstandingBalance * 100),
-                    'balanceRemainingMinor' => (int) round($outstandingBalance * 100),
-                    'dueDate' => 'Oct 15, 2026',
-                ],
+                    'balanceRemainingMinor' => $latestInvoice->balanceRemainingMinor(),
+                    'dueDate' => $latestInvoice->due_on?->format('M d, Y'),
+                ] : null,
                 'savedPaymentMethods' => $savedPaymentMethods,
                 'config' => $paymentConfig,
                 'paymentPreferences' => $paymentPreferences,
