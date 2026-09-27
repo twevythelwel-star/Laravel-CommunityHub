@@ -3,7 +3,6 @@
 namespace App\Events;
 
 use App\Models\Visitor;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -33,7 +32,9 @@ class VisitorCheckedInEvent implements ShouldBroadcast
     {
         return [
             new PrivateChannel("user.{$this->visitor->homeowner_id}"),
-            new Channel('gatehouse-stream'),
+            // Private: a public channel would give every arrival (visitor,
+            // vehicle, host) to anyone holding the app's websocket key.
+            new PrivateChannel('gatehouse-stream'),
         ];
     }
 

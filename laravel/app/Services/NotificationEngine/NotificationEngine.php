@@ -3,6 +3,7 @@
 namespace App\Services\NotificationEngine;
 
 use App\Models\AmenityBooking;
+use App\Models\User;
 use App\Models\Visitor;
 use App\Services\NotificationEngine\Channels\EmailChannel;
 use App\Services\NotificationEngine\Channels\InAppChannel;
@@ -143,13 +144,34 @@ class NotificationEngine
     public function notifyBookingCancelled(AmenityBooking $booking): array
     {
         $resident = $booking->user;
-        $preferences = $resident->preferences;
         $slot = AmenityBooking::SLOTS[$booking->slot] ?? null;
         $when = $booking->booked_on->format('D j M Y').($slot ? ", {$slot['starts']}-{$slot['ends']}" : '');
 
         $body = "Your booking {$booking->reference} for {$booking->amenity->name} on {$when} has been cancelled by the community office."
             .($booking->cancellation_reason ? " Reason: {$booking->cancellation_reason}." : '')
             .' Please contact the office if you have any questions.';
+
+        return $this->notifyResident($resident, 'Amenity booking cancelled', $body, [
+            'amenity_booking_id' => $booking->id,
+            'notice_type' => 'amenity_booking_cancelled',
+        ]);
+    }
+
+    /**
+     * Send a personal message to one resident by email and/or SMS, as their
+     * own notification settings say (email on and SMS off unless changed).
+     *
+     * Never the in-app channel: it posts a community notice, which everyone
+     * sees. Each channel gets its own payload, so SMS goes to the phone and
+     * email to the address.
+     *
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, ChannelDispatchResult> keyed by channel; empty when
+     *                                              the resident wants neither
+     */
+    private function notifyResident(User $resident, string $title, string $body, array $metadata = []): array
+    {
+        $preferences = $resident->preferences;
 
         $recipients = array_filter([
             'email' => ($preferences?->notify_email ?? true) ? $resident->email : null,
@@ -159,11 +181,11 @@ class NotificationEngine
         $results = [];
         foreach ($recipients as $channel => $to) {
             $results += $this->send([$channel], new NotificationPayload(
-                title: 'Amenity booking cancelled',
+                title: $title,
                 body: $body,
                 recipient: $to,
                 user: $resident,
-                metadata: ['amenity_booking_id' => $booking->id, 'notice_type' => 'amenity_booking_cancelled'],
+                metadata: $metadata,
             ));
         }
 
@@ -208,45 +230,32 @@ class NotificationEngine
     }
 
     /**
-     * Dispatch an arrival alert to the resident when a visitor is checked in.
+     * Tell the host that their visitor has arrived.
+     *
+     * Only the host, by the host's own email/SMS settings. This used to post
+     * through the in-app channel, which writes a community notice with no
+     * audience, so every arrival (visitor, gate, vehicle) was shown to the
+     * whole estate. The visitor's notify_* flags are about sending the visitor
+     * their pass and no longer decide how the host is told. The host still
+     * sees the check-in on their Visitors page.
+     *
+     * @return array<string, ChannelDispatchResult>
      */
     public function dispatchArrivalNotice(Visitor $visitor, string $gate = 'Main Gate'): array
     {
-        $homeowner = $visitor->homeowner;
-        $title = "Visitor Arrived: {$visitor->name}";
+        $host = $visitor->homeowner;
+        if (! $host) {
+            return [];
+        }
+
         $vehicleInfo = $visitor->vehicle ? " (Vehicle: {$visitor->vehicle})" : '';
-        $body = "{$visitor->name} has arrived and checked in at {$gate}{$vehicleInfo}.";
 
-        $channels = ['in_app'];
-        $recipient = null;
-
-        if ($visitor->notify_sms && $homeowner?->phone) {
-            $channels[] = 'sms';
-            $recipient = $homeowner->phone;
-        }
-
-        if ($visitor->notify_whatsapp && $homeowner?->phone) {
-            $channels[] = 'whatsapp';
-            $recipient = $homeowner->phone;
-        }
-
-        if ($visitor->notify_email && $homeowner?->email) {
-            $channels[] = 'email';
-            $recipient = $homeowner->email;
-        }
-
-        $payload = new NotificationPayload(
-            title: $title,
-            body: $body,
-            recipient: $recipient,
-            metadata: [
-                'visitor_id' => $visitor->id,
-                'gate' => $gate,
-                'event' => 'visitor_checked_in',
-            ]
+        return $this->notifyResident(
+            $host,
+            "Visitor Arrived: {$visitor->name}",
+            "{$visitor->name} has arrived and checked in at {$gate}{$vehicleInfo}.",
+            ['visitor_id' => $visitor->id, 'gate' => $gate, 'event' => 'visitor_checked_in'],
         );
-
-        return $this->send($channels, $payload);
     }
 
     /**
