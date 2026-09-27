@@ -14,7 +14,6 @@ use App\Models\GatePassNonce;
 use App\Models\User;
 use App\Models\Visitor;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -650,23 +649,29 @@ class GatePassEngine
      */
     private function claimNonce(string $nonce, string $passId, int $expiresAtTs): ?CarbonImmutable
     {
-        try {
-            GatePassNonce::create([
-                'nonce' => $nonce,
-                'pass_id' => $passId,
-                'first_seen_at' => now(),
-                // Keep the row a little past the window so late duplicates are caught.
-                'expires_at' => CarbonImmutable::createFromTimestamp($expiresAtTs)->addMinutes(5),
-            ]);
+        // ON CONFLICT DO NOTHING rather than catching the duplicate-key error:
+        // on Postgres a failed statement aborts the surrounding transaction, so
+        // the lookup below would throw instead of reporting the replay.
+        $now = now();
+        $claimed = GatePassNonce::query()->insertOrIgnore([
+            'nonce' => $nonce,
+            'pass_id' => $passId,
+            'first_seen_at' => $now,
+            // Keep the row a little past the window so late duplicates are caught.
+            'expires_at' => CarbonImmutable::createFromTimestamp($expiresAtTs)->addMinutes(5),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
 
+        if ($claimed === 1) {
             return null;
-        } catch (UniqueConstraintViolationException) {
-            $existing = GatePassNonce::where('nonce', $nonce)->first();
-
-            return $existing
-                ? CarbonImmutable::parse($existing->first_seen_at)
-                : CarbonImmutable::now();
         }
+
+        $existing = GatePassNonce::where('nonce', $nonce)->first();
+
+        return $existing
+            ? CarbonImmutable::parse($existing->first_seen_at)
+            : CarbonImmutable::now();
     }
 
     /** Drops nonce rows whose window has closed. Called by the scheduler. */

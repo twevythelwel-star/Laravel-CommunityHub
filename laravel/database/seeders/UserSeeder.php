@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\GatePassEngine;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Reproduces mockUserDatabase and mockRoleMapping from
@@ -102,8 +103,9 @@ class UserSeeder extends Seeder
                 ['email' => $account['email']],
                 [
                     ...$account,
-                    // Keeps the original uid shape so anything keyed on it still matches.
-                    'uid' => 'mock-uid-'.$key,
+                    // Stable per account across re-seeds, and a real UUID so it fits
+                    // the uuid column on Postgres as well as SQLite/MySQL.
+                    'uid' => Uuid::uuid5(Uuid::NAMESPACE_URL, 'community-hub:'.$key)->toString(),
                     'status' => 'Active',
                     'password' => $password,
                 ],
