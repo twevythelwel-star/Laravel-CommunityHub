@@ -12,6 +12,7 @@ use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
 use App\Models\PaymentMethod;
 use App\Models\PaymentReceipt;
+use App\Models\PaymentTerminal;
 use App\Models\Transaction;
 use App\Models\TransactionEvent;
 use App\Models\User;
@@ -558,112 +559,129 @@ class PaymentOrchestratorService
     public function validateChannelIntegration(string $channelKey): array
     {
         $setting = PaymentChannelSetting::where('channel_key', $channelKey)->first();
-        $isStripeConfigured = ! empty(config('services.stripe.secret')) && config('services.stripe.secret') !== 'sk_test_placeholder';
+        $providers = app(ProviderRegistry::class);
 
         $checks = [];
-        $isReady = true;
 
         switch ($channelKey) {
+            // Every check reads real configuration or data. Nothing is reported as
+            // passed unless the code has confirmed it.
             case 'card':
-                $hasSecret = ! empty(config('services.stripe.secret'));
-                $hasWebhook = ! empty(config('services.stripe.webhook_secret'));
-                $checks = [
-                    ['name' => 'Stripe Secret API Key', 'passed' => $hasSecret, 'message' => $hasSecret ? 'API credential authenticated' : 'Missing STRIPE_SECRET in environment'],
-                    ['name' => 'Webhook Signature Secret', 'passed' => $hasWebhook, 'message' => $hasWebhook ? 'Webhook listener authenticated' : 'Missing STRIPE_WEBHOOK_SECRET in environment'],
-                    ['name' => 'Non-Custodial Card Vaulting & TLS 1.3', 'passed' => true, 'message' => 'Non-custodial card vaulting active'],
-                ];
-                $isReady = $hasSecret;
+                $cardProvider = $providers->cardProvider();
+                $checks = [[
+                    'name' => 'Card Processor',
+                    'passed' => $cardProvider !== null,
+                    'message' => $cardProvider ? "{$cardProvider->label()} is configured" : 'No card processor is configured. Set STRIPE_SECRET, or PAYMENT_CARD_PROVIDER with its credentials.',
+                ]];
+                if ($cardProvider?->key() === 'stripe') {
+                    $acceptsWebhooks = app(StripePaymentService::class)->acceptsWebhooks();
+                    $checks[] = [
+                        'name' => 'Stripe Webhook Secret',
+                        'passed' => $acceptsWebhooks,
+                        'message' => $acceptsWebhooks ? 'STRIPE_WEBHOOK_SECRET is set' : 'STRIPE_WEBHOOK_SECRET is missing or not a whsec_ secret, so card payments cannot be confirmed.',
+                    ];
+                }
                 break;
 
             case 'apple_pay':
-                $checks = [
-                    ['name' => 'Apple Developer Merchant ID', 'passed' => true, 'message' => 'merchant.org.cypressbay.community active'],
-                    ['name' => 'Domain Verification File', 'passed' => true, 'message' => 'Host file hosted at /.well-known/apple-developer-merchantid-domain-association'],
-                    ['name' => 'Card Processor Handshake', 'passed' => $isStripeConfigured, 'message' => $isStripeConfigured ? 'Stripe Apple Pay tokenization active' : 'Requires active card processor'],
-                ];
-                $isReady = $isStripeConfigured;
-                break;
-
             case 'google_pay':
-                $checks = [
-                    ['name' => 'Google Pay Business Console ID', 'passed' => true, 'message' => 'BCR2DN4TX76YQ verified in production'],
-                    ['name' => '3D Secure Cryptogram Exchange', 'passed' => true, 'message' => 'CRYPTOGRAM_3DS protocol enabled'],
-                    ['name' => 'Processor Tokenization Bridge', 'passed' => $isStripeConfigured, 'message' => $isStripeConfigured ? 'Google Pay card tokenization active' : 'Requires active card processor'],
-                ];
-                $isReady = $isStripeConfigured;
-                break;
-
             case 'samsung_wallet':
-                $checks = [
-                    ['name' => 'Samsung Pay Partner Service API', 'passed' => true, 'message' => 'Service ID SPM-99482 connected'],
-                    ['name' => 'JWE Encrypted Token Decryption', 'passed' => true, 'message' => 'Hardware cryptographic handshake verified'],
-                ];
-                $isReady = true;
+                $checks = [$this->walletCheck($channelKey, $providers)];
                 break;
 
             case 'nfc_pos':
+                $inPerson = $providers->inPersonProvider();
+                $readers = PaymentTerminal::query()->usable()->count();
                 $checks = [
-                    ['name' => 'Gatehouse Terminal POS Bridge', 'passed' => true, 'message' => 'NFC Contactless Terminal #GH-01 online'],
-                    ['name' => 'Clubhouse Terminal POS Bridge', 'passed' => true, 'message' => 'NFC Contactless Terminal #CH-01 online'],
-                    ['name' => 'EMV Contactless Kernels', 'passed' => true, 'message' => 'Visa/Mastercard payWave & PayPass verified'],
+                    [
+                        'name' => 'In-Person Card Provider',
+                        'passed' => $inPerson !== null,
+                        'message' => $inPerson ? "{$inPerson->label()} is configured" : 'No in-person provider is configured. Set PAYMENT_IN_PERSON_PROVIDER with a live processor.',
+                    ],
+                    [
+                        'name' => 'Registered Card Readers',
+                        'passed' => $readers > 0,
+                        'message' => $readers > 0 ? "{$readers} verified, active reader(s) registered" : 'No verified, active card reader is registered.',
+                    ],
                 ];
-                $isReady = true;
                 break;
 
             case 'bank_wire':
                 $checks = [$this->accountCheck('Designated Deposit Account', $setting)];
-                $isReady = filled($setting?->account_identifier);
                 break;
 
             case 'cash_office':
-                $checks = [
-                    ['name' => 'Administration Cash Drawer', 'passed' => true, 'message' => 'Dual-signoff cash register verified'],
-                    ['name' => 'Receipt Printing Engine', 'passed' => true, 'message' => 'Physical thermal receipt printer online'],
-                    ['name' => 'Daily Cash Ceiling Policy', 'passed' => true, 'message' => 'Maximum J$150,000 in-drawer limit enforced'],
-                ];
-                $isReady = true;
+                // Nothing technical to set up: the check that matters is that cash
+                // counts only once the office has confirmed it.
+                $checks = [[
+                    'name' => 'Office Confirmation',
+                    'passed' => $this->requiresOfficeConfirmation('cash_office'),
+                    'message' => 'Cash counts only after an administrator logs receipt and a second administrator verifies it.',
+                ]];
                 break;
 
             case 'cash_app':
                 $checks = [$this->accountCheck('Business Cashtag', $setting)];
-                $isReady = filled($setting?->account_identifier);
                 break;
 
             case 'zelle':
                 $checks = [$this->accountCheck('Zelle Recipient (email or phone)', $setting)];
-                $isReady = filled($setting?->account_identifier);
                 break;
 
             case 'qr_code':
-                $checks = [
-                    ['name' => 'Dynamic SVG QR Code Engine', 'passed' => true, 'message' => 'High-density vector QR generation active'],
-                    ['name' => 'Universal Checkout URL Deep Links', 'passed' => true, 'message' => 'Direct invoice link resolver operational'],
-                ];
-                $isReady = true;
+                // Payment QR codes open /p/{token}, which is off unless public links are.
+                $linksEnabled = (bool) config('payments.public_links_enabled');
+                $checks = [[
+                    'name' => 'Public Payment Links',
+                    'passed' => $linksEnabled,
+                    'message' => $linksEnabled ? 'PAYMENT_PUBLIC_LINKS_ENABLED is on, so payment QR codes open' : 'PAYMENT_PUBLIC_LINKS_ENABLED is off, so payment QR codes lead nowhere.',
+                ]];
                 break;
 
             default:
-                $checks = [
-                    ['name' => 'General Driver Handshake', 'passed' => isset($this->drivers[$channelKey]), 'message' => 'Driver registered in orchestrator'],
-                ];
-                $isReady = isset($this->drivers[$channelKey]);
+                $registered = isset($this->drivers[$channelKey]);
+                $checks = [[
+                    'name' => 'Payment Driver',
+                    'passed' => $registered,
+                    'message' => $registered ? 'A driver is registered for this channel' : 'No driver is registered for this channel.',
+                ]];
                 break;
         }
 
-        $allPassed = ! in_array(false, array_column($checks, 'passed'), true);
+        // Ready only when every check passed; there is no separate override.
+        $isReady = $checks !== [] && ! in_array(false, array_column($checks, 'passed'), true);
 
         return [
             'channel_key' => $channelKey,
-            'label' => $setting?->display_label ?? ($this->drivers[$channelKey]->label() ?? ucfirst(str_replace('_', ' ', $channelKey))),
+            'label' => $setting?->display_label ?? ($this->drivers[$channelKey] ?? null)?->label() ?? ucfirst(str_replace('_', ' ', $channelKey)),
             'enabled' => (bool) ($setting?->enabled ?? PaymentChannelSetting::forChannel($channelKey)->enabled),
             'integration_mode' => $setting?->integration_mode ?? 'MANUAL_VERIFICATION',
-            'is_ready' => $isReady && $allPassed,
-            'status' => ($isReady && $allPassed) ? 'ready' : 'needs_configuration',
+            'is_ready' => $isReady,
+            'status' => $isReady ? 'ready' : 'needs_configuration',
             'checks' => $checks,
             'account_identifier' => $setting?->account_identifier,
             'instructions' => $setting?->instructions,
             'validated_at' => now()->format('M d, Y h:i A'),
         ];
+    }
+
+    /**
+     * Whether a card processor that offers this wallet is configured, and the
+     * estate has listed the wallet in PAYMENT_WALLETS.
+     */
+    private function walletCheck(string $channelKey, ProviderRegistry $providers): array
+    {
+        $cardProvider = $providers->cardProvider();
+        $walletProvider = $providers->walletProvider($channelKey);
+
+        $message = match (true) {
+            $walletProvider !== null => "Offered through {$walletProvider->label()}",
+            $cardProvider === null => 'No card processor is configured.',
+            ! in_array($channelKey, (array) config('payments.wallets', []), true) => 'Not listed in PAYMENT_WALLETS.',
+            default => "{$cardProvider->label()} does not offer this wallet.",
+        };
+
+        return ['name' => 'Wallet Through Card Processor', 'passed' => $walletProvider !== null, 'message' => $message];
     }
 
     /**

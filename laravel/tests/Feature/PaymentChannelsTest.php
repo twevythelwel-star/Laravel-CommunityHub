@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\UserRole;
 use App\Models\Fundraiser;
 use App\Models\PaymentChannelSetting;
+use App\Models\PaymentTerminal;
 use App\Models\User;
 use App\Services\Payments\PaymentOrchestratorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -292,5 +293,140 @@ class PaymentChannelsTest extends TestCase
             ->assertForbidden();
 
         $this->assertNull(PaymentChannelSetting::accountFor('zelle'));
+    }
+
+    /** @return array<string, mixed> */
+    private function readiness(string $channel): array
+    {
+        return app(PaymentOrchestratorService::class)->validateChannelIntegration($channel);
+    }
+
+    private function withoutAnyProcessor(): void
+    {
+        config([
+            'services.stripe.secret' => null,
+            'services.stripe.webhook_secret' => null,
+            'payments.card_provider' => null,
+            'payments.in_person_provider' => null,
+            'payments.public_links_enabled' => false,
+        ]);
+    }
+
+    public function test_nothing_is_ready_when_nothing_is_configured(): void
+    {
+        $this->withoutAnyProcessor();
+
+        foreach (['card', 'apple_pay', 'google_pay', 'samsung_wallet', 'nfc_pos', 'qr_code', 'bank_wire', 'zelle', 'cash_app'] as $channel) {
+            $report = $this->readiness($channel);
+
+            $this->assertFalse($report['is_ready'], "{$channel} reports ready with nothing configured");
+            $this->assertContains(false, array_column($report['checks'], 'passed'), "{$channel} shows no failing check");
+        }
+    }
+
+    public function test_no_check_reports_details_the_application_never_verified(): void
+    {
+        $fabricated = ['SPM-99482', 'BCR2DN4TX76YQ', 'merchant.org.cypressbay', '#GH-01', '#CH-01', 'J$150,000', 'thermal receipt', 'JNCBJMKN', 'TLS 1.3'];
+
+        foreach (app(PaymentOrchestratorService::class)->getChannelReadinessReport() as $report) {
+            $channel = $report['channel_key'];
+            $text = json_encode($report);
+
+            foreach ($fabricated as $claim) {
+                $this->assertStringNotContainsString($claim, $text, "{$channel} still claims {$claim}");
+            }
+        }
+    }
+
+    public function test_an_unconfigured_channel_cannot_be_enabled(): void
+    {
+        $this->withoutAnyProcessor();
+        $admin = $this->admin();
+
+        foreach (['card', 'apple_pay', 'samsung_wallet', 'nfc_pos', 'qr_code'] as $channel) {
+            PaymentChannelSetting::forChannel($channel)->fill(['enabled' => false])->save();
+
+            $this->actingAs($admin)
+                ->post(route('dashboard.billing.channels.toggle', $channel))
+                ->assertSessionHasErrors('channel');
+
+            $this->assertFalse(PaymentChannelSetting::forChannel($channel)->enabled, "{$channel} was enabled");
+        }
+    }
+
+    public function test_card_and_the_wallets_stripe_offers_are_ready_once_stripe_is_configured(): void
+    {
+        $this->withoutAnyProcessor();
+        config([
+            'services.stripe.secret' => 'sk_test_ready',
+            'services.stripe.webhook_secret' => 'whsec_ready',
+            'payments.wallets' => ['apple_pay', 'google_pay', 'samsung_wallet'],
+        ]);
+
+        $this->assertTrue($this->readiness('card')['is_ready']);
+        $this->assertTrue($this->readiness('apple_pay')['is_ready']);
+        $this->assertTrue($this->readiness('google_pay')['is_ready']);
+
+        // Stripe does not take Samsung Wallet, whatever PAYMENT_WALLETS lists.
+        $samsung = $this->readiness('samsung_wallet');
+        $this->assertFalse($samsung['is_ready']);
+        $this->assertStringContainsString('does not offer', $samsung['checks'][0]['message']);
+    }
+
+    public function test_card_is_not_ready_without_a_usable_stripe_webhook_secret(): void
+    {
+        $this->withoutAnyProcessor();
+        config(['services.stripe.secret' => 'sk_test_ready', 'services.stripe.webhook_secret' => 'not-a-whsec']);
+
+        $this->assertFalse($this->readiness('card')['is_ready']);
+    }
+
+    public function test_a_wallet_not_listed_by_the_estate_is_not_ready(): void
+    {
+        $this->withoutAnyProcessor();
+        config(['services.stripe.secret' => 'sk_test_ready', 'services.stripe.webhook_secret' => 'whsec_ready', 'payments.wallets' => ['google_pay']]);
+
+        $report = $this->readiness('apple_pay');
+        $this->assertFalse($report['is_ready']);
+        $this->assertStringContainsString('PAYMENT_WALLETS', $report['checks'][0]['message']);
+    }
+
+    public function test_in_person_payments_need_a_provider_and_a_verified_reader(): void
+    {
+        $this->withoutAnyProcessor();
+        config(['services.stripe.secret' => 'sk_test_ready', 'payments.in_person_provider' => 'stripe_terminal']);
+
+        $this->assertFalse($this->readiness('nfc_pos')['is_ready'], 'ready with no reader');
+
+        PaymentTerminal::factory()->unverified()->create();
+        $this->assertFalse($this->readiness('nfc_pos')['is_ready'], 'ready with only an unverified reader');
+
+        PaymentTerminal::factory()->create();
+        $this->assertTrue($this->readiness('nfc_pos')['is_ready']);
+    }
+
+    public function test_qr_payments_are_ready_only_when_public_links_are_on(): void
+    {
+        $this->withoutAnyProcessor();
+        $this->assertFalse($this->readiness('qr_code')['is_ready']);
+
+        config(['payments.public_links_enabled' => true]);
+        $this->assertTrue($this->readiness('qr_code')['is_ready']);
+    }
+
+    public function test_validating_an_unknown_channel_reports_it_rather_than_failing(): void
+    {
+        $this->actingAs($this->admin())
+            ->postJson(route('dashboard.billing.channels.validate', 'no_such_channel'))
+            ->assertOk()
+            ->assertJsonPath('is_ready', false);
+    }
+
+    public function test_cash_at_the_office_is_ready_because_the_office_confirms_it(): void
+    {
+        $report = $this->readiness('cash_office');
+
+        $this->assertTrue($report['is_ready']);
+        $this->assertSame('Office Confirmation', $report['checks'][0]['name']);
     }
 }

@@ -367,9 +367,10 @@ export default function BillingPage({
         preserveScroll: true,
         onFinish: () => setIsValidatingChannel(null),
         onSuccess: () => {
+          // The card below shows which checks passed; this only confirms they ran.
           toast({
-            title: 'Technical Integration Verified',
-            description: `Channel [${channelKey}] has been audited against security and provider readiness standards.`,
+            title: 'Checks re-run',
+            description: `Results for [${channelKey}] are shown on its card.`,
           });
         },
       }
