@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             DirectorySeeder::class,
             CommunicationsSeeder::class,
             CommerceSeeder::class,
+            AmenitySeeder::class,
             RevenueEngineSeeder::class,
         ]);
     }

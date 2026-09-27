@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Dashboard\AccessLogController;
+use App\Http\Controllers\Dashboard\AmenityBookingController;
 use App\Http\Controllers\Dashboard\BillingController;
 use App\Http\Controllers\Dashboard\BlocklistController;
 use App\Http\Controllers\Dashboard\BoundaryController;
@@ -245,6 +246,8 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/map/landmarks', [MapController::class, 'storeLandmark'])->name('map.landmarks.store');
         Route::delete('/map/landmarks/{landmark}', [MapController::class, 'destroyLandmark'])->name('map.landmarks.destroy');
         Route::post('/map/locate', [MapController::class, 'locate'])->name('map.locate');
+        Route::post('/amenity-bookings', [AmenityBookingController::class, 'store'])->name('amenity-bookings.store');
+        Route::delete('/amenity-bookings/{booking}', [AmenityBookingController::class, 'destroy'])->name('amenity-bookings.destroy');
     });
 
     Route::get('/map/boundary', [BoundaryController::class, 'edit'])

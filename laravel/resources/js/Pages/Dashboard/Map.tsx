@@ -44,7 +44,12 @@ import {
   Calendar,
   Sparkles
 } from 'lucide-react';
-import { AmenityBookingDialog } from '@/components/dashboard/amenity-booking-dialog';
+import {
+  AmenityBookingDialog,
+  type AmenityItem,
+  type BookedSlot,
+  type MyBooking,
+} from '@/components/dashboard/amenity-booking-dialog';
 import type { MapType } from '@/components/dashboard/LeafletMapFixed';
 import { 
   CommunityLandmark,
@@ -78,10 +83,13 @@ type MapPageProps = {
   landmarks: CommunityLandmark[];
   community: CommunityInfo;
   boundaryConfig: BoundaryConfig;
-  can: { manageBoundary: boolean };
+  amenities: AmenityItem[];
+  bookedSlots: BookedSlot[];
+  myBookings: MyBooking[];
+  can: { manageBoundary: boolean; bookAmenities: boolean };
 };
 
-function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPageProps) {
+function MapPageContent({ landmarks, community, boundaryConfig, amenities, bookedSlots, myBookings, can }: MapPageProps) {
   const isClient = useIsClient();
   const { coordinates } = useMap();
   const { toast } = useToast();
@@ -97,7 +105,9 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
   // had a private set of pins.
   const [isAddPinOpen, setIsAddPinOpen] = useState<boolean>(false);
   const [isBookingOpen, setIsBookingOpen] = useState<boolean>(false);
-  const [bookingAmenityName, setBookingAmenityName] = useState<string | undefined>(undefined);
+  const [bookingAmenityId, setBookingAmenityId] = useState<number | undefined>(undefined);
+  // A landmark is bookable only when an amenity is linked to it.
+  const amenityForLandmark = (landmarkId: unknown) => amenities.find((a) => a.landmarkId != null && a.landmarkId === landmarkId);
   const [isClickToPlacePinActive, setIsClickToPlacePinActive] = useState<boolean>(false);
   const [pinFilterCategory, setPinFilterCategory] = useState<'all' | LandmarkCategory>('all');
   const [addPinCoords, setAddPinCoords] = useState<[number, number] | null>(null);
@@ -1131,11 +1141,12 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
             </Button>
 
             <div className="ml-auto flex items-center gap-1.5 pl-2">
+              {can.bookAmenities && amenities.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  setBookingAmenityName(undefined);
+                  setBookingAmenityId(undefined);
                   setIsBookingOpen(true);
                 }}
                 className="h-7 text-xs border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 px-2.5 rounded-lg"
@@ -1143,6 +1154,7 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
                 <Calendar className="h-3.5 w-3.5 text-emerald-600" />
                 <span>Reserve Facility</span>
               </Button>
+              )}
               <Button
                 size="sm"
                 onClick={() => {
@@ -1207,10 +1219,10 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
                     </span>
 
                     <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      {!isSecurity && (
+                      {can.bookAmenities && amenityForLandmark(lm.id) && (
                         <button
                           onClick={() => {
-                            setBookingAmenityName(lm.name);
+                            setBookingAmenityId(amenityForLandmark(lm.id)?.id);
                             setIsBookingOpen(true);
                           }}
                           className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 hover:underline text-xs"
@@ -1380,10 +1392,10 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
       <AmenityBookingDialog
         open={isBookingOpen}
         onOpenChange={setIsBookingOpen}
-        initialAmenityName={bookingAmenityName}
-        availableAmenities={landmarks
-          .filter((l) => l.category !== 'Security Gate')
-          .map((l) => ({ id: l.id, name: l.name, category: l.category }))}
+        initialAmenityId={bookingAmenityId}
+        amenities={amenities}
+        bookedSlots={bookedSlots}
+        myBookings={myBookings}
       />
     </div>
   );

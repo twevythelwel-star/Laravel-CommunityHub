@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\Amenity;
+use App\Models\AmenityBooking;
 use App\Models\BoundaryAuditLog;
 use App\Models\BoundaryConfig;
 use App\Models\Community;
@@ -67,8 +69,42 @@ class MapController extends Controller
             // localStorage['community-boundary-config-v2'].
             'boundaryConfig' => $this->boundaryConfigPayload($editable, $community->name),
 
+            'amenities' => Amenity::query()->active()->orderBy('name')->get()->map(fn (Amenity $a) => [
+                'id' => $a->id,
+                'name' => $a->name,
+                'category' => $a->category,
+                'maxGuests' => $a->max_guests,
+                'openHours' => $a->openHoursLabel(),
+                'landmarkId' => $a->landmark_id,
+            ]),
+
+            // Which slots are gone, without saying who holds them.
+            'bookedSlots' => AmenityBooking::query()->confirmed()
+                ->whereDate('booked_on', '>=', today())
+                ->get(['amenity_id', 'booked_on', 'slot'])
+                ->map(fn (AmenityBooking $b) => [
+                    'amenityId' => $b->amenity_id,
+                    'date' => $b->booked_on->toDateString(),
+                    'slot' => $b->slot,
+                ]),
+
+            'myBookings' => $user->amenityBookings()->confirmed()
+                ->whereDate('booked_on', '>=', today())
+                ->with('amenity:id,name')
+                ->orderBy('booked_on')
+                ->get()
+                ->map(fn (AmenityBooking $b) => [
+                    'id' => $b->id,
+                    'reference' => $b->reference,
+                    'amenityName' => $b->amenity->name,
+                    'date' => $b->booked_on->toDateString(),
+                    'slot' => $b->slot,
+                    'guests' => $b->guests,
+                ]),
+
             'can' => [
                 'manageBoundary' => $user->can('manageBoundary'),
+                'bookAmenities' => $user->can('accessCommunityLife'),
             ],
         ]);
     }

@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/auth-context';
 import { format } from 'date-fns';
+import { router } from '@inertiajs/react';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -31,80 +32,147 @@ import {
 import { cn } from '@/lib/utils';
 
 export interface AmenityItem {
-  id: string | number;
+  id: number;
   name: string;
-  category?: string;
-  maxGuests?: number;
-  openHours?: string;
+  category?: string | null;
+  maxGuests: number;
+  /** "HH:MM - HH:MM", from the server. */
+  openHours: string;
+  landmarkId?: number | null;
 }
 
-const DEFAULT_AMENITIES: AmenityItem[] = [
-  { id: 'clubhouse', name: 'Community Center & Ballroom', category: 'Community Center', maxGuests: 60, openHours: '08:00 - 22:00' },
-  { id: 'tennis', name: 'West Tennis & Pickleball Courts', category: 'Park', maxGuests: 8, openHours: '06:00 - 21:00' },
-  { id: 'pool', name: 'Central Pool Pavilion & Deck', category: 'Community Center', maxGuests: 30, openHours: '07:00 - 20:00' },
-  { id: 'bbq', name: 'Evergreen BBQ Grills & Picnic Gazebo', category: 'Park', maxGuests: 25, openHours: '10:00 - 21:00' },
-  { id: 'hall', name: 'Executive Meeting Room & Lounge', category: 'Community Center', maxGuests: 16, openHours: '08:00 - 20:00' },
+export interface BookedSlot {
+  amenityId: number;
+  date: string;
+  slot: string;
+}
+
+export interface MyBooking {
+  id: number;
+  reference: string;
+  amenityName: string;
+  date: string;
+  slot: string;
+  guests: number;
+}
+
+/** Must match AmenityBooking::SLOTS on the server, which is what decides. */
+const TIME_SLOTS = [
+  { id: 'morning', name: 'Morning Slot', starts: '08:00', ends: '12:00', label: '08:00 AM – 12:00 PM' },
+  { id: 'afternoon', name: 'Afternoon Slot', starts: '12:00', ends: '16:00', label: '12:00 PM – 04:00 PM' },
+  { id: 'evening', name: 'Evening Prime Slot', starts: '16:00', ends: '20:00', label: '04:00 PM – 08:00 PM' },
+  { id: 'night', name: 'Twilight Session', starts: '20:00', ends: '22:00', label: '08:00 PM – 10:00 PM' },
 ];
 
-const TIME_SLOTS = [
-  { id: 'morning', label: 'Morning Slot (08:00 AM – 12:00 PM)', duration: '4 hrs' },
-  { id: 'afternoon', label: 'Afternoon Slot (12:00 PM – 04:00 PM)', duration: '4 hrs' },
-  { id: 'evening', label: 'Evening Prime Slot (04:00 PM – 08:00 PM)', duration: '4 hrs' },
-  { id: 'night', label: 'Twilight Session (08:00 PM – 10:00 PM)', duration: '2 hrs' },
-];
+const slotName = (id: string) => TIME_SLOTS.find((s) => s.id === id)?.name ?? id;
 
 interface AmenityBookingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialAmenityName?: string;
-  availableAmenities?: AmenityItem[];
+  amenities: AmenityItem[];
+  bookedSlots?: BookedSlot[];
+  myBookings?: MyBooking[];
+  initialAmenityId?: number;
 }
 
 export function AmenityBookingDialog({
   open,
   onOpenChange,
-  initialAmenityName,
-  availableAmenities = DEFAULT_AMENITIES,
+  amenities,
+  bookedSlots = [],
+  myBookings = [],
+  initialAmenityId,
 }: AmenityBookingDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [selectedAmenity, setSelectedAmenity] = useState<string>(
-    initialAmenityName || availableAmenities[0]?.name || 'Community Center & Ballroom'
-  );
+  const [selectedAmenityId, setSelectedAmenityId] = useState<number | undefined>(initialAmenityId ?? amenities[0]?.id);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<string>(TIME_SLOTS[1].id);
   const [guestCount, setGuestCount] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isConfirmed, setIsConfirmed] = useState<boolean>(false);
   const [confirmationRef, setConfirmationRef] = useState<string>('');
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
 
-  // Update selectedAmenity if initialAmenityName changes when opened
   React.useEffect(() => {
-    if (initialAmenityName) {
-      setSelectedAmenity(initialAmenityName);
+    if (open) {
+      setSelectedAmenityId(initialAmenityId ?? amenities[0]?.id);
     }
-  }, [initialAmenityName]);
+  }, [open, initialAmenityId, amenities]);
 
-  const activeAmenityData = availableAmenities.find(
-    (a) => a.name.toLowerCase() === selectedAmenity.toLowerCase()
-  ) || {
-    name: selectedAmenity,
-    category: 'Estate Facility',
-    maxGuests: 40,
-    openHours: '08:00 - 22:00',
+  const activeAmenity = amenities.find((a) => a.id === selectedAmenityId);
+  const dateKey = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+  const [opensAt, closesAt] = (activeAmenity?.openHours ?? '').split(' - ');
+
+  /** Why a slot cannot be booked, or null when it can. The server re-checks all of this. */
+  const slotUnavailableReason = (slot: (typeof TIME_SLOTS)[number]): string | null => {
+    if (!activeAmenity || !selectedDate) return 'Choose an amenity and date';
+    if (slot.starts < opensAt || slot.ends > closesAt) return 'Outside opening hours';
+    if (bookedSlots.some((b) => b.amenityId === activeAmenity.id && b.date === dateKey && b.slot === slot.id)) {
+      return 'Already booked';
+    }
+    if (dateKey === format(new Date(), 'yyyy-MM-dd') && slot.starts <= format(new Date(), 'HH:mm')) {
+      return 'Already started';
+    }
+    return null;
   };
+
+  const selectedSlotData = TIME_SLOTS.find((s) => s.id === selectedSlot)!;
+  const canSubmit =
+    !!activeAmenity &&
+    !!selectedDate &&
+    slotUnavailableReason(selectedSlotData) === null &&
+    guestCount >= 1 &&
+    guestCount <= (activeAmenity?.maxGuests ?? 0) &&
+    !isSubmitting;
 
   const handleBook = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canSubmit || !activeAmenity) return;
 
-    const ref = `BK-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-    setConfirmationRef(ref);
-    setIsConfirmed(true);
+    setIsSubmitting(true);
+    router.post(
+      route('dashboard.amenity-bookings.store'),
+      {
+        amenity_id: activeAmenity.id,
+        booked_on: dateKey,
+        slot: selectedSlot,
+        guests: guestCount,
+        notes: notes || null,
+      },
+      {
+        preserveScroll: true,
+        onFinish: () => setIsSubmitting(false),
+        onSuccess: (page) => {
+          const booking = (page.props as { flash?: { booking?: { reference?: string } | null } }).flash?.booking;
+          setConfirmationRef(booking?.reference ?? '');
+          setIsConfirmed(true);
+        },
+        onError: (errors) => {
+          toast({
+            variant: 'destructive',
+            title: 'Reservation not made',
+            description: (Object.values(errors)[0] as string) || 'Please check the details and try again.',
+          });
+        },
+      }
+    );
+  };
 
-    toast({
-      title: 'Amenity Reserved Successfully',
-      description: `${selectedAmenity} reserved for ${selectedDate ? format(selectedDate, 'PPP') : 'selected date'}. Booking ref: ${ref}`,
+  const handleCancelBooking = (booking: MyBooking) => {
+    setCancellingId(booking.id);
+    router.delete(route('dashboard.amenity-bookings.destroy', booking.id), {
+      preserveScroll: true,
+      onFinish: () => setCancellingId(null),
+      onSuccess: () => toast({ title: 'Booking cancelled', description: `${booking.reference} has been cancelled.` }),
+      onError: (errors) =>
+        toast({
+          variant: 'destructive',
+          title: 'Could not cancel',
+          description: (Object.values(errors)[0] as string) || 'Please try again.',
+        }),
     });
   };
 
@@ -130,18 +198,51 @@ export function AmenityBookingDialog({
             </DialogHeader>
 
             <div className="space-y-4 pt-1">
+              {myBookings.length > 0 && (
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-3 text-xs space-y-2">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase block">Your upcoming bookings</span>
+                  {myBookings.map((booking) => (
+                    <div key={booking.id} className="flex items-center justify-between gap-2">
+                      <span>
+                        <strong className="text-foreground">{booking.amenityName}</strong> · {booking.date} · {slotName(booking.slot)}
+                        <span className="font-mono text-muted-foreground"> ({booking.reference})</span>
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={cancellingId === booking.id}
+                        onClick={() => handleCancelBooking(booking)}
+                        className="h-6 px-2 text-[11px] text-rose-600 hover:text-rose-700"
+                      >
+                        {cancellingId === booking.id ? 'Cancelling...' : 'Cancel'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {amenities.length === 0 && (
+                <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                  No amenities are open for booking yet.
+                </p>
+              )}
+
               {/* Facility Selection */}
               <div className="space-y-1.5">
                 <Label htmlFor="amenity-select" className="text-xs font-semibold">
                   Select Facility / Amenity
                 </Label>
-                <Select value={selectedAmenity} onValueChange={setSelectedAmenity}>
+                <Select
+                  value={selectedAmenityId !== undefined ? String(selectedAmenityId) : undefined}
+                  onValueChange={(value) => setSelectedAmenityId(Number(value))}
+                >
                   <SelectTrigger id="amenity-select" className="h-10">
                     <SelectValue placeholder="Choose an amenity" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableAmenities.map((amenity) => (
-                      <SelectItem key={amenity.id} value={amenity.name}>
+                    {amenities.map((amenity) => (
+                      <SelectItem key={amenity.id} value={String(amenity.id)}>
                         <div className="flex items-center justify-between w-full gap-2">
                           <span>{amenity.name}</span>
                           {amenity.category && (
@@ -160,11 +261,11 @@ export function AmenityBookingDialog({
               <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <Clock className="w-3.5 h-3.5 text-emerald-600" />
-                  Hours: <strong className="text-foreground">{activeAmenityData.openHours}</strong>
+                  Hours: <strong className="text-foreground">{activeAmenity?.openHours ?? '—'}</strong>
                 </span>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <Users className="w-3.5 h-3.5 text-blue-600" />
-                  Capacity: <strong className="text-foreground">Up to {activeAmenityData.maxGuests || 30} guests</strong>
+                  Capacity: <strong className="text-foreground">Up to {activeAmenity?.maxGuests ?? 0} guests</strong>
                 </span>
               </div>
 
@@ -208,7 +309,7 @@ export function AmenityBookingDialog({
                     id="guest-count"
                     type="number"
                     min={1}
-                    max={activeAmenityData.maxGuests || 50}
+                    max={activeAmenity?.maxGuests}
                     value={guestCount}
                     onChange={(e) => setGuestCount(parseInt(e.target.value) || 1)}
                     className="h-10"
@@ -222,24 +323,22 @@ export function AmenityBookingDialog({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {TIME_SLOTS.map((slot) => {
                     const isSelected = selectedSlot === slot.id;
+                    const unavailable = slotUnavailableReason(slot);
                     return (
                       <button
                         key={slot.id}
                         type="button"
+                        disabled={unavailable !== null}
                         onClick={() => setSelectedSlot(slot.id)}
                         className={cn(
-                          'p-2.5 text-left rounded-xl border text-xs font-medium transition-all flex flex-col justify-between gap-1',
-                          isSelected
+                          'p-2.5 text-left rounded-xl border text-xs font-medium transition-all flex flex-col justify-between gap-1 disabled:cursor-not-allowed disabled:opacity-50',
+                          isSelected && !unavailable
                             ? 'border-emerald-500 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200 ring-1 ring-emerald-500'
                             : 'border-border/80 bg-card hover:bg-muted/40 text-muted-foreground hover:text-foreground'
                         )}
                       >
-                        <span className="font-semibold text-foreground text-[11px] leading-tight">
-                          {slot.label.split(' (')[0]}
-                        </span>
-                        <span className="text-[10px] opacity-80">
-                          {slot.label.includes('(') ? `(${slot.label.split('(')[1]}` : slot.duration}
-                        </span>
+                        <span className="font-semibold text-foreground text-[11px] leading-tight">{slot.name}</span>
+                        <span className="text-[10px] opacity-80">{unavailable ?? `(${slot.label})`}</span>
                       </button>
                     );
                   })}
@@ -279,10 +378,11 @@ export function AmenityBookingDialog({
               </Button>
               <Button
                 type="submit"
+                disabled={!canSubmit}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5 shadow-sm"
               >
                 <Sparkles className="w-4 h-4" />
-                Confirm Reservation
+                {isSubmitting ? 'Reserving...' : 'Confirm Reservation'}
               </Button>
             </DialogFooter>
           </form>
@@ -299,14 +399,14 @@ export function AmenityBookingDialog({
               </Badge>
               <h3 className="text-xl font-bold text-foreground mt-2">Reservation Confirmed</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Your reservation is registered with estate operations and security.
+                Saved. It appears under your upcoming bookings, where you can cancel it.
               </p>
             </div>
 
             <div className="rounded-xl border border-border bg-card p-4 text-left space-y-2.5 text-xs shadow-sm">
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-muted-foreground">Amenity</span>
-                <strong className="text-foreground">{selectedAmenity}</strong>
+                <strong className="text-foreground">{activeAmenity?.name}</strong>
               </div>
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-muted-foreground">Date</span>
@@ -317,7 +417,7 @@ export function AmenityBookingDialog({
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-muted-foreground">Time Slot</span>
                 <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                  {TIME_SLOTS.find((s) => s.id === selectedSlot)?.label}
+                  {selectedSlotData.name} ({selectedSlotData.label})
                 </span>
               </div>
               <div className="flex justify-between items-center border-b pb-2">
@@ -337,7 +437,7 @@ export function AmenityBookingDialog({
                 className="w-full gap-1.5"
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    `Amenity Booking: ${selectedAmenity} on ${selectedDate ? format(selectedDate, 'PPP') : ''} (${confirmationRef})`
+                    `Amenity Booking: ${activeAmenity?.name} on ${selectedDate ? format(selectedDate, 'PPP') : ''} (${confirmationRef})`
                   );
                   toast({ title: 'Reservation Details Copied' });
                 }}
