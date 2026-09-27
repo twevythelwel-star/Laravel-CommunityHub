@@ -9,6 +9,7 @@ use App\Http\Controllers\ProviderWebhookController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TwilioWebhookController;
 use App\Http\Controllers\UniversalPaymentWebhookController;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -47,6 +48,10 @@ Route::post('/webhooks/{provider}', ProviderWebhookController::class)
 // Verified with X-Twilio-Signature via Twilio SDK RequestValidator.
 Route::post('/webhooks/twilio/status', [TwilioWebhookController::class, 'messagingStatus'])
     ->name('webhooks.twilio.status');
+
+// Websocket channel authorisation for token clients (the Capacitor shell and
+// handheld scanners): POST /api/broadcasting/auth. Rules in routes/channels.php.
+Broadcast::routes(['middleware' => ['auth:sanctum']]);
 
 Route::middleware('auth:sanctum')->group(function () {
 

@@ -3,8 +3,8 @@
 namespace App\Events;
 
 use App\Models\Warning;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
@@ -29,7 +29,9 @@ class SecurityAlertBroadcastEvent implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new Channel('community-alerts'),
+            // Private: on a public channel anyone with the app's websocket key,
+            // resident or not, would receive the estate's security alerts.
+            new PrivateChannel('community-alerts'),
         ];
     }
 
