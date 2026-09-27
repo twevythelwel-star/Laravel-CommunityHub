@@ -7,7 +7,7 @@ use App\Services\NotificationEngine\NotificationPayload;
 
 interface NotificationChannelInterface
 {
-    /** Unique lowercase channel key: email, sms, whatsapp, push, in_app */
+    /** Unique lowercase channel key: email, sms, whatsapp, push, community_notice */
     public function name(): string;
 
     /** Display name of the channel */

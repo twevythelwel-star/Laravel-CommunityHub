@@ -5,8 +5,8 @@ namespace App\Services\NotificationEngine;
 use App\Models\AmenityBooking;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Services\NotificationEngine\Channels\CommunityNoticeChannel;
 use App\Services\NotificationEngine\Channels\EmailChannel;
-use App\Services\NotificationEngine\Channels\InAppChannel;
 use App\Services\NotificationEngine\Channels\PushChannel;
 use App\Services\NotificationEngine\Channels\SmsChannel;
 use App\Services\NotificationEngine\Channels\WhatsAppChannel;
@@ -22,7 +22,8 @@ use InvalidArgumentException;
  *  1. Any unconfigured provider returns 'unavailable' or 'failed', never a false 'sent'.
  *  2. Logs strictly mask contact info (+1******1234, j***e@domain.com) and NEVER
  *     log raw phone numbers or sensitive message text.
- *  3. Centralized status reports across Email, SMS, WhatsApp, Push, and In-App.
+ *  3. Centralized status reports across Email, SMS, WhatsApp, Push and the
+ *     Community Notice Board (public, by role: never for personal messages).
  */
 class NotificationEngine
 {
@@ -34,14 +35,14 @@ class NotificationEngine
         SmsChannel $sms,
         WhatsAppChannel $whatsApp,
         PushChannel $push,
-        InAppChannel $inApp,
+        CommunityNoticeChannel $communityNotice,
     ) {
         $this->channels = [
             'email' => $email,
             'sms' => $sms,
             'whatsapp' => $whatsApp,
             'push' => $push,
-            'in_app' => $inApp,
+            'community_notice' => $communityNotice,
         ];
     }
 
@@ -259,22 +260,37 @@ class NotificationEngine
     }
 
     /**
-     * Broadcast an in-app or multi-channel notice to residents.
+     * Post a notice to the community notice board for the given roles.
      *
-     * @param  array<string>|null  $targetRoles
-     * @param  array<string>  $channels
+     * @param  non-empty-array<string>  $targetRoles
      * @return array<string, ChannelDispatchResult>
      */
-    public function broadcast(string $title, string $message, ?array $targetRoles = null, array $channels = ['in_app']): array
+    public function broadcast(string $title, string $message, array $targetRoles, ?User $author = null): array
     {
-        $payload = new NotificationPayload(
+        return $this->send(['community_notice'], new NotificationPayload(
             title: $title,
             body: $message,
             targetRoles: $targetRoles,
-            metadata: ['broadcast' => true]
-        );
+            metadata: ['broadcast' => true],
+            author: $author,
+        ));
+    }
 
-        return $this->send($channels, $payload);
+    /**
+     * Post a notice every resident sees. Separate from broadcast() so that
+     * reaching everyone is always a deliberate choice, never a default.
+     *
+     * @return array<string, ChannelDispatchResult>
+     */
+    public function broadcastToEveryone(string $title, string $message, ?User $author = null): array
+    {
+        return $this->send(['community_notice'], new NotificationPayload(
+            title: $title,
+            body: $message,
+            metadata: ['broadcast' => true],
+            toEveryone: true,
+            author: $author,
+        ));
     }
 
     /**

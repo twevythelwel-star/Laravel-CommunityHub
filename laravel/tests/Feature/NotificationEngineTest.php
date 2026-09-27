@@ -183,7 +183,7 @@ class NotificationEngineTest extends TestCase
             && $request['From'] === 'whatsapp:+14155238886');
     }
 
-    public function test_in_app_notification_creates_database_record_and_returns_sent(): void
+    public function test_community_notice_creates_database_record_and_returns_sent(): void
     {
         $admin = User::factory()->create(['role' => 'System Admin']);
         $engine = app(NotificationEngine::class);
@@ -191,14 +191,14 @@ class NotificationEngineTest extends TestCase
         $payload = new NotificationPayload(
             title: 'Annual General Meeting',
             body: 'Meeting scheduled for November 15 at 7 PM.',
-            user: $admin,
-            targetRoles: ['Homeowner', 'Renter']
+            targetRoles: ['Homeowner', 'Renter'],
+            author: $admin,
         );
 
-        $results = $engine->send(['in_app'], $payload);
+        $results = $engine->send(['community_notice'], $payload);
 
-        $this->assertArrayHasKey('in_app', $results);
-        $result = $results['in_app'];
+        $this->assertArrayHasKey('community_notice', $results);
+        $result = $results['community_notice'];
 
         $this->assertSame('sent', $result->status);
         $this->assertTrue($result->isSent());
@@ -265,11 +265,11 @@ class NotificationEngineTest extends TestCase
         $this->assertArrayHasKey('sms', $status);
         $this->assertArrayHasKey('whatsapp', $status);
         $this->assertArrayHasKey('push', $status);
-        $this->assertArrayHasKey('in_app', $status);
+        $this->assertArrayHasKey('community_notice', $status);
 
-        $this->assertSame('In-App Notification Feed', $status['in_app']['label']);
-        $this->assertTrue($status['in_app']['configured']);
-        $this->assertSame('available', $status['in_app']['status']);
+        $this->assertSame('Community Notice Board', $status['community_notice']['label']);
+        $this->assertTrue($status['community_notice']['configured']);
+        $this->assertSame('available', $status['community_notice']['status']);
 
         // SMS & Push unconfigured in this test environment
         $this->assertFalse($status['sms']['configured']);
@@ -278,7 +278,7 @@ class NotificationEngineTest extends TestCase
         $this->assertSame('unavailable', $status['push']['status']);
     }
 
-    public function test_broadcast_dispatches_to_in_app(): void
+    public function test_broadcast_posts_a_community_notice(): void
     {
         $engine = app(NotificationEngine::class);
 
@@ -288,8 +288,8 @@ class NotificationEngineTest extends TestCase
             ['Homeowner', 'Renter', 'Security']
         );
 
-        $this->assertArrayHasKey('in_app', $results);
-        $this->assertTrue($results['in_app']->isSent());
+        $this->assertArrayHasKey('community_notice', $results);
+        $this->assertTrue($results['community_notice']->isSent());
 
         $this->assertDatabaseHas('notifications', [
             'title' => 'Tropical Storm Advisory',
