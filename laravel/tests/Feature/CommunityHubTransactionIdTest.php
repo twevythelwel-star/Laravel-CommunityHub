@@ -133,7 +133,7 @@ class CommunityHubTransactionIdTest extends TestCase
 
         $slip = $payment->toSlip();
         $this->assertSame('SECURITY-TABLET-04', $slip['device']);
-        $this->assertSame('NFC Tap', $slip['payment_method']);
+        $this->assertSame('Tap to Pay / Contactless', $slip['payment_method']);
     }
 
     public function test_payment_method_registry_stores_non_custodial_provider_tokens(): void

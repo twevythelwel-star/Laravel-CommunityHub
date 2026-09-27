@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PaymentMethodSelectorModal } from './payment-method-selector-modal';
+import { CardPaymentModal } from './CardPaymentModal';
 
 export type TransactionSlipData = {
   transaction_id: string;
@@ -188,6 +189,7 @@ export function PaymentCenterHero({
   const [slipError, setSlipError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState(false);
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
 
   // Compute selected total
   const baseSelectedTotal = itemizedCharges.length > 0 && showItemized
@@ -207,6 +209,11 @@ export function PaymentCenterHero({
   };
 
   const handleTriggerPay = async (channelKey: string, methodLabel: string) => {
+    if (channelKey === 'card') {
+      setIsCardModalOpen(true);
+      return;
+    }
+
     setModalMethod(methodLabel);
     setActiveModal(channelKey);
     setIsInitiating(true);
@@ -892,11 +899,20 @@ export function PaymentCenterHero({
 
             <Button
               className="w-full font-bold py-3 mt-4"
-              disabled={isProcessing || (isProcessorChannel(activeModal || 'card') && !cardCheckout)}
-              onClick={() => handleConfirmPayment(activeModal || 'card')}
+              disabled={isProcessing}
+              onClick={() => {
+                if (activeModal === 'card') {
+                  setActiveModal(null);
+                  setIsCardModalOpen(true);
+                  return;
+                }
+                handleConfirmPayment(activeModal || 'card');
+              }}
             >
               {isProcessing
                 ? 'Processing Settlement...'
+                : activeModal === 'card'
+                ? `Enter Card Details (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`
                 : isProcessorChannel(activeModal || 'card')
                 ? `Continue to secure checkout (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`
                 : `Confirm & Authorize Payment (${curConfig.symbol}${Number(currentPayTotal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${selectedCurrency})`}
@@ -912,6 +928,21 @@ export function PaymentCenterHero({
         currency={selectedCurrency}
         availableChannels={availableChannels}
         walletBalance={walletBalance}
+      />
+
+      <CardPaymentModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        amount={Number(currentPayTotal)}
+        currency={selectedCurrency}
+        onSuccess={(slip) => {
+          setIsCardModalOpen(false);
+          toast({
+            title: 'Card Payment Succeeded',
+            description: `Payment #${slip?.transaction_id || ''} confirmed and posted to community ledger.`,
+          });
+          router.reload({ preserveScroll: true });
+        }}
       />
     </div>
   );

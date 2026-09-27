@@ -257,4 +257,50 @@ class RevenueEngineTest extends TestCase
         $this->assertStringContainsString('TX-CURR-TEST-001', $csvContent);
         $this->assertStringContainsString('USD', $csvContent);
     }
+
+    public function test_resident_can_pay_invoice_via_card_payment_endpoint(): void
+    {
+        $homeowner = User::where('role', UserRole::Homeowner)->first() ?? User::factory()->create(['role' => UserRole::Homeowner]);
+
+        $invoice = Invoice::create([
+            'user_id' => $homeowner->id,
+            'reference' => 'INV-CARD-TEST-75000',
+            'amount_minor' => 7500000,
+            'currency' => 'JMD',
+            'status' => 'Unpaid',
+            'period_start' => now()->startOfMonth(),
+            'period_end' => now()->endOfMonth(),
+            'due_on' => now()->addDays(14),
+        ]);
+
+        $response = $this->actingAs($homeowner)->postJson('/dashboard/billing/card-pay', [
+            'invoice_id' => $invoice->id,
+            'amount' => 75000.00,
+            'currency' => 'JMD',
+            'cardholder_name' => 'Alexander Wright',
+            'last_four' => '4242',
+            'brand' => 'Visa',
+            'save_card' => true,
+        ]);
+
+        $response->assertOk();
+        $response->assertJson([
+            'success' => true,
+            'invoice' => [
+                'status' => 'Paid',
+                'balance_remaining' => 0.0,
+            ],
+        ]);
+
+        // Verify database invariants: invoice is Paid, balanced ledger entry exists, receipt issued
+        $this->assertSame('Paid', $invoice->fresh()->status);
+        $this->assertSame(0, $invoice->fresh()->balanceRemainingMinor());
+        $this->assertNotNull($invoice->fresh()->paid_at);
+
+        $ledgerRow = Transaction::where('user_id', $homeowner->id)->whereIn('payment_channel', ['card', 'stripe_card'])->latest()->first();
+        $this->assertNotNull($ledgerRow);
+        $this->assertSame(7500000, $ledgerRow->amount_minor);
+        $this->assertSame('completed', strtolower($ledgerRow->status));
+    }
 }
+

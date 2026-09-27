@@ -30,8 +30,10 @@ import {
   Trash2,
   Save,
   Clock,
-  Activity
+  Activity,
+  Wallet
 } from 'lucide-react';
+import { ProfilePaymentsAndWallets } from '@/components/dashboard/ProfilePaymentsAndWallets';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import {
@@ -72,9 +74,10 @@ interface ProfileProps {
         action: string;
         timestamp: string;
     }>;
+    billing?: any;
 }
 
-export default function ProfilePage({ profile, passVisual, activity = [] }: ProfileProps) {
+export default function ProfilePage({ profile, passVisual, activity = [], billing }: ProfileProps) {
     const { user, updateUser } = useAuth();
     const { toast } = useToast();
     const [isPassOpen, setPassOpen] = useState(false);
@@ -438,8 +441,12 @@ export default function ProfilePage({ profile, passVisual, activity = [] }: Prof
                 </div>
 
                 <Tabs defaultValue="details" className="w-full space-y-6">
-                    <TabsList className="grid w-full sm:w-[460px] grid-cols-3">
+                    <TabsList className="grid w-full sm:w-[620px] grid-cols-4">
                         <TabsTrigger value="details">Profile Details</TabsTrigger>
+                        <TabsTrigger value="payments" className="flex items-center gap-1.5">
+                            <Wallet className="w-3.5 h-3.5" />
+                            Payments & Wallets
+                        </TabsTrigger>
                         <TabsTrigger value="credentials">Credentials & Access</TabsTrigger>
                         <TabsTrigger value="activity">Activity Log</TabsTrigger>
                     </TabsList>
@@ -615,6 +622,10 @@ export default function ProfilePage({ profile, passVisual, activity = [] }: Prof
                                 </CardContent>
                             </Card>
                         </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="payments" className="space-y-6 m-0">
+                        <ProfilePaymentsAndWallets billing={billing} userRole={user.role} />
                     </TabsContent>
 
                     <TabsContent value="credentials" className="space-y-6 m-0">

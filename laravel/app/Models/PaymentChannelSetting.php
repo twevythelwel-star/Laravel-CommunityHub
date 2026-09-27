@@ -45,7 +45,7 @@ class PaymentChannelSetting extends Model
             ['channel_key' => 'zelle', 'display_label' => 'Zelle', 'enabled' => true, 'integration_mode' => self::MODE_BANK_RECONCILIATION, 'instructions' => 'Send to payments@cypressbay.org with Lot # in memo.', 'account_identifier' => 'payments@cypressbay.org'],
             ['channel_key' => 'cash_app', 'display_label' => 'Cash App', 'enabled' => true, 'integration_mode' => self::MODE_BANK_RECONCILIATION, 'instructions' => 'Pay to $CypressBayHOA with your Lot number.', 'account_identifier' => '$CypressBayHOA'],
             ['channel_key' => 'qr_code', 'display_label' => 'QR Code Scan', 'enabled' => true, 'integration_mode' => self::MODE_HOSTED_CHECKOUT, 'instructions' => 'Scan with mobile camera to pay instantly.'],
-            ['channel_key' => 'nfc_pos', 'display_label' => 'NFC Tap to Pay', 'enabled' => true, 'integration_mode' => self::MODE_API, 'instructions' => 'Tap card or device on gatehouse/clubhouse terminal.'],
+            ['channel_key' => 'nfc_pos', 'display_label' => 'Tap to Pay / Contactless', 'enabled' => true, 'integration_mode' => self::MODE_API, 'instructions' => 'Tap physical card on supported card-present POS terminal.'],
             ['channel_key' => 'cash_office', 'display_label' => 'Cash at Office', 'enabled' => true, 'integration_mode' => self::MODE_MANUAL_VERIFICATION, 'instructions' => 'Pay in-person at the administration desk. Receipt provided.'],
             ['channel_key' => 'wallet', 'display_label' => 'Community Wallet', 'enabled' => true, 'integration_mode' => self::MODE_API, 'instructions' => 'Instant deduction from your community credit balance.'],
         ];

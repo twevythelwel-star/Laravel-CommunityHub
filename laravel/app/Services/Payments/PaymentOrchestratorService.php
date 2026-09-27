@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
 use App\Models\PaymentMethod;
+use App\Models\PaymentReceipt;
 use App\Models\Transaction;
 use App\Models\TransactionEvent;
 use App\Models\User;
@@ -311,6 +312,22 @@ class PaymentOrchestratorService
             $payment->transitionTo(PaymentState::Paid, $actor, $source, null, ['paid_at' => now()]);
 
             app(LedgerService::class)->postTransaction($row);
+
+            $prefix = $payment->channel === 'cash_office' ? 'CR-' : 'REC-';
+            $receiptNumber = $prefix.now()->format('Y').'-'.str_pad((string) $row->id, 5, '0', STR_PAD_LEFT);
+            PaymentReceipt::query()->firstOrCreate(
+                ['transaction_id' => $row->id],
+                [
+                    'receipt_number' => $receiptNumber,
+                    'receipt_type' => $payment->channel === 'cash_office' ? 'cash_desk' : ($payment->channel === 'bank_wire' ? 'bank_transfer' : 'digital'),
+                    'amount_minor' => $payment->amount_minor,
+                    'currency' => $payment->currency,
+                    'payer_name' => $payment->user?->name ?? 'Community Resident',
+                    'payer_lot' => $payment->user?->lot ?? null,
+                    'issued_by_name' => 'CommunityHub Automated Payment System',
+                    'issued_at' => now(),
+                ]
+            );
 
             DB::afterCommit(fn () => $this->sendPaymentConfirmationNotification($row->fresh()));
 

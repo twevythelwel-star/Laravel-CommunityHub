@@ -31,15 +31,18 @@ import {
   Receipt,
   Loader2,
 } from 'lucide-react';
+import { CardPaymentModal } from './CardPaymentModal';
 import { channelSurcharge, type PaymentChannel } from '@/lib/payment-channels';
 import type { InvoiceRow } from './billing-summary';
 
 export type PaymentMethodSelectorModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  invoice?: InvoiceRow | null;
-  amountDue: number;
-  currency: string;
+  isOpen?: boolean;
+  open?: boolean;
+  onClose?: () => void;
+  onOpenChange?: (open: boolean) => void;
+  invoice?: any;
+  amountDue?: number;
+  currency?: string;
   availableChannels?: any[];
   walletBalance?: number;
   onSuccess?: () => void;
@@ -67,9 +70,11 @@ type SlipData = {
 
 export function PaymentMethodSelectorModal({
   isOpen,
+  open,
   onClose,
+  onOpenChange,
   invoice,
-  amountDue,
+  amountDue = 0,
   currency = 'JMD',
   availableChannels = [],
   walletBalance = 0,
@@ -80,10 +85,19 @@ export function PaymentMethodSelectorModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedSlip, setConfirmedSlip] = useState<SlipData | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
+  const [cardModalOpen, setCardModalOpen] = useState(false);
 
-  const targetAmount = invoice ? invoice.amount : amountDue;
-  const targetCurrency = invoice ? invoice.currency : currency;
-  const targetReference = invoice ? invoice.reference : 'Monthly Assessment';
+  const modalOpen = Boolean(isOpen ?? open);
+  const handleClose = () => {
+    if (onClose) onClose();
+    if (onOpenChange) onOpenChange(false);
+  };
+
+  const targetAmount = Number(
+    invoice?.amount ?? (invoice?.amountMinor ? invoice.amountMinor / 100 : amountDue)
+  ) || 0;
+  const targetCurrency = invoice?.currency || currency || 'JMD';
+  const targetReference = invoice?.reference || invoice?.invoiceNumber || 'Monthly Assessment';
 
   // Standard channels fallback if none provided
   const configuredChannels = useMemo(() => {
@@ -141,9 +155,15 @@ export function PaymentMethodSelectorModal({
     setIsSubmitting(true);
 
     try {
-      // 1. If Card or Apple Pay / Google Wallet / Samsung Wallet -> Use the standard checkout / pay endpoint
+      // 1. If Card -> Open dedicated interactive card payment modal
+      if (selectedChannelKey === 'card') {
+        setIsSubmitting(false);
+        setCardModalOpen(true);
+        return;
+      }
+
+      // 2. If Apple Pay / Google Wallet / Samsung Wallet -> Use the standard checkout / pay endpoint
       if (
-        selectedChannelKey === 'card' ||
         selectedChannelKey === 'apple_pay' ||
         selectedChannelKey === 'google_pay' ||
         selectedChannelKey === 'samsung_wallet'
@@ -273,7 +293,8 @@ export function PaymentMethodSelectorModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <>
+      <Dialog open={modalOpen && !cardModalOpen} onOpenChange={(v) => !v && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 sm:p-7">
         {!confirmedSlip ? (
           <>
@@ -598,5 +619,24 @@ export function PaymentMethodSelectorModal({
         )}
       </DialogContent>
     </Dialog>
+
+    <CardPaymentModal
+      isOpen={cardModalOpen}
+      onClose={() => {
+        setCardModalOpen(false);
+      }}
+      amount={finalTotal}
+      currency={targetCurrency}
+      invoiceId={invoice?.id}
+      invoiceReference={targetReference}
+      onSuccess={(slip) => {
+        setCardModalOpen(false);
+        handleClose();
+        if (onSuccess) {
+          onSuccess();
+        }
+      }}
+    />
+    </>
   );
 }

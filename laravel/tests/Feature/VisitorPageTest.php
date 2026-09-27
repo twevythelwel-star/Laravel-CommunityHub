@@ -243,6 +243,9 @@ class VisitorPageTest extends TestCase
 
     public function test_security_sees_the_whole_gate_queue_for_today(): void
     {
+        // Pin the clock to mid-day: after 23:00 "an hour from now" is tomorrow.
+        $this->travelTo(now()->setTime(12, 0));
+
         $resident = User::factory()->role(UserRole::Homeowner)->create();
 
         Visitor::create([

@@ -19,7 +19,7 @@ class NfcTerminalDriver implements PaymentDriverInterface
 
     public function label(): string
     {
-        return 'NFC Tap to Pay (POS Terminal)';
+        return 'Tap to Pay / Contactless';
     }
 
     public function initiate(array $params): array
@@ -35,7 +35,7 @@ class NfcTerminalDriver implements PaymentDriverInterface
             'currency' => $currency,
             'terminal_id' => 'POS-GATEHOUSE-01',
             'nonce' => bin2hex(random_bytes(16)),
-            'instructions' => 'Hold your contactless card or mobile wallet near the payment reader terminal.',
+            'instructions' => 'Hold your physical card near the contactless card-present payment reader terminal.',
         ];
     }
 

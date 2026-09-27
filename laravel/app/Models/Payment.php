@@ -281,4 +281,20 @@ class Payment extends Model
     {
         return $this->belongsTo(self::class, 'retry_of_payment_id');
     }
+
+    /**
+     * Build standard processor metadata array from this Payment model.
+     *
+     * @return array<string, string>
+     */
+    public function toProcessorMetadata(array $extra = []): array
+    {
+        return Transaction::buildProcessorMetadata(
+            payment: $this,
+            user: $this->user,
+            invoice: $this->invoice,
+            paymentType: $this->invoice_id ? 'HOA_ASSESSMENT' : ($this->donation_id ? 'DONATION' : 'PAYMENT'),
+            extra: $extra
+        );
+    }
 }

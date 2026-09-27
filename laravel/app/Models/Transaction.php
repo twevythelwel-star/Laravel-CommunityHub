@@ -212,6 +212,49 @@ class Transaction extends Model
         return 'COMM-001';
     }
 
+    /**
+     * Build standard, non-custodial metadata payload for payment processors (e.g. Stripe).
+     *
+     * Provides bidirectional linkage between processor events and CommunityHub entities
+     * without transmitting or storing sensitive cardholder or bank credentials:
+     *   Stripe transaction ↔ CommunityHub transaction ↔ homeowner ↔ property ↔ invoice
+     *
+     * @return array<string, string>
+     */
+    public static function buildProcessorMetadata(
+        string|Payment $payment,
+        ?User $user = null,
+        ?Invoice $invoice = null,
+        ?string $paymentType = null,
+        array $extra = []
+    ): array {
+        $paymentRecord = $payment instanceof Payment ? $payment : null;
+        $transactionId = $paymentRecord ? $paymentRecord->transaction_id : (string) $payment;
+        $user ??= $paymentRecord?->user ?? $invoice?->user;
+        $invoice ??= $paymentRecord?->invoice;
+
+        $paymentType ??= $invoice ? 'HOA_ASSESSMENT' : ($paymentRecord?->donation_id ? 'DONATION' : 'PAYMENT');
+
+        $metadata = [
+            'communityhub_transaction_id' => $transactionId,
+            'user_id' => static::formatUserCode($user) ?? 'USR-000000',
+            'property_id' => static::formatPropertyCode($user, $invoice) ?? 'PROP-00000',
+            'community_id' => static::defaultCommunityCode(),
+            'invoice_id' => $invoice?->reference ?? ($paymentRecord?->invoice_id ? (string) $paymentRecord->invoice_id : 'N/A'),
+            'payment_type' => $paymentType,
+        ];
+
+        if ($paymentRecord) {
+            $metadata['payment_id'] = (string) $paymentRecord->id;
+        }
+
+        if ($invoice) {
+            $metadata['internal_invoice_id'] = (string) $invoice->id;
+        }
+
+        return array_merge($metadata, $extra);
+    }
+
     public static function formatPaymentMethod(string $channel): string
     {
         $map = [
@@ -224,7 +267,7 @@ class Transaction extends Model
             'zelle' => 'Zelle',
             'cash_app' => 'Cash App',
             'qr_code' => 'QR Code',
-            'nfc_pos' => 'NFC Tap',
+            'nfc_pos' => 'Tap to Pay / Contactless',
             'cash_office' => 'Cash at Office',
             'wallet' => 'Community Wallet',
         ];

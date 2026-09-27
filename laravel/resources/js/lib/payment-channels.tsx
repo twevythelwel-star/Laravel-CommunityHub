@@ -50,7 +50,7 @@ export const CHANNEL_PRESENTATION: Record<string, ChannelPresentation> = {
   zelle: { icon: Smartphone, fallbackLabel: 'Zelle' },
   cash_app: { icon: Smartphone, fallbackLabel: 'Cash App' },
   qr_code: { icon: QrCode, fallbackLabel: 'QR Code' },
-  nfc_pos: { icon: Nfc, fallbackLabel: 'Tap to Pay' },
+  nfc_pos: { icon: Nfc, fallbackLabel: 'Tap to Pay / Contactless', hint: 'Card-present terminal reader required' },
   cash_office: { icon: Banknote, fallbackLabel: 'Cash at the Office', hint: 'Pay in person' },
   wallet: { icon: Wallet, fallbackLabel: 'Community Wallet' },
 };

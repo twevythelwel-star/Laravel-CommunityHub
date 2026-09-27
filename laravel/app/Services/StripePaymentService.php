@@ -145,6 +145,16 @@ class StripePaymentService
             }
         }
 
+        $metadata = Transaction::buildProcessorMetadata(
+            payment: $payment,
+            user: $invoice->user,
+            invoice: $invoice,
+            paymentType: 'HOA_ASSESSMENT',
+            extra: [
+                'purpose' => 'invoice',
+            ],
+        );
+
         $session = Session::create([
             'payment_method_types' => ['card'],
             'line_items' => [[
@@ -161,17 +171,8 @@ class StripePaymentService
             'mode' => 'payment',
             'customer_email' => $invoice->user->email,
             'client_reference_id' => (string) $invoice->id,
-            'metadata' => [
-                'purpose' => 'invoice',
-                'invoice_id' => (string) $invoice->id,
-                'payment_id' => (string) $payment->id,
-                'communityhub_transaction_id' => $payment->transaction_id,
-            ],
-            'payment_intent_data' => ['metadata' => [
-                'invoice_id' => (string) $invoice->id,
-                'payment_id' => (string) $payment->id,
-                'communityhub_transaction_id' => $payment->transaction_id,
-            ]],
+            'metadata' => $metadata,
+            'payment_intent_data' => ['metadata' => $metadata],
             'success_url' => $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $cancelUrl,
         ], [
@@ -239,6 +240,21 @@ class StripePaymentService
 
         Stripe::setApiKey($this->secretKey);
 
+        $metadata = Transaction::buildProcessorMetadata(
+            payment: $payment,
+            user: $donor,
+            invoice: null,
+            paymentType: 'DONATION',
+            extra: [
+                'purpose' => 'donation',
+                'fundraiser_id' => (string) $fundraiser->id,
+                'donor_name' => Str::limit($details['donor_name'], 120, ''),
+                'is_anonymous' => $details['is_anonymous'] ? '1' : '0',
+                'is_recurring' => $details['is_recurring'] ? '1' : '0',
+                'frequency' => (string) ($details['frequency'] ?? ''),
+            ],
+        );
+
         $session = Session::create([
             'payment_method_types' => ['card'],
             'line_items' => [[
@@ -255,22 +271,8 @@ class StripePaymentService
             'mode' => 'payment',
             'customer_email' => $donor->email,
             'client_reference_id' => "donation-{$fundraiser->id}-{$donor->id}",
-            'metadata' => [
-                'purpose' => 'donation',
-                'payment_id' => (string) $payment->id,
-                'communityhub_transaction_id' => $payment->transaction_id,
-                'fundraiser_id' => (string) $fundraiser->id,
-                'user_id' => (string) $donor->id,
-                'donor_name' => Str::limit($details['donor_name'], 120, ''),
-                'is_anonymous' => $details['is_anonymous'] ? '1' : '0',
-                'is_recurring' => $details['is_recurring'] ? '1' : '0',
-                'frequency' => (string) ($details['frequency'] ?? ''),
-            ],
-            'payment_intent_data' => ['metadata' => [
-                'purpose' => 'donation',
-                'payment_id' => (string) $payment->id,
-                'fundraiser_id' => (string) $fundraiser->id,
-            ]],
+            'metadata' => $metadata,
+            'payment_intent_data' => ['metadata' => $metadata],
             'success_url' => $successUrl.'?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $cancelUrl,
         ]);
@@ -700,9 +702,15 @@ class StripePaymentService
 
         $invoiceId = $paymentIntent->metadata->invoice_id ?? null;
 
-        $invoice = $invoiceId
-            ? Invoice::find((int) $invoiceId)
-            : Invoice::where('stripe_payment_intent', $piId)->first();
+        $invoice = null;
+        if ($invoiceId) {
+            $invoice = ctype_digit((string) $invoiceId)
+                ? Invoice::find((int) $invoiceId)
+                : Invoice::where('reference', (string) $invoiceId)->first();
+        }
+        if (! $invoice) {
+            $invoice = Invoice::where('stripe_payment_intent', $piId)->first();
+        }
 
         if (! $invoice) {
             return 'unknown_invoice';
@@ -717,6 +725,7 @@ class StripePaymentService
             $piId,
             (int) $paymentIntent->amount,
             (int) ($paymentIntent->application_fee_amount ?? 0),
+            $paymentIntent,
         );
     }
 
@@ -792,6 +801,9 @@ class StripePaymentService
         $invoiceId = $object->metadata->invoice_id ?? ($object->client_reference_id ?? null);
 
         $invoice = $invoiceId && ctype_digit((string) $invoiceId) ? Invoice::find((int) $invoiceId) : null;
+        if (! $invoice && $invoiceId) {
+            $invoice = Invoice::where('reference', (string) $invoiceId)->first();
+        }
         if (! $invoice && isset($object->payment_intent)) {
             $piId = $this->idOf($object->payment_intent);
             if ($piId) {
@@ -860,6 +872,11 @@ class StripePaymentService
 
         $paymentId = $object->metadata->payment_id ?? null;
         if ($paymentId && $payment = Payment::find((int) $paymentId)) {
+            return $payment;
+        }
+
+        $chTxId = $object->metadata->communityhub_transaction_id ?? ($object->metadata->transaction ?? null);
+        if ($chTxId && $payment = Payment::query()->where('transaction_id', $chTxId)->first()) {
             return $payment;
         }
 

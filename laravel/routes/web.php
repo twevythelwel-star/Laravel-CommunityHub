@@ -99,6 +99,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar');
     Route::post('/profile/ai-consent', [ProfileController::class, 'setAiConsent'])->name('profile.ai-consent');
+    Route::post('/profile/payment-preferences', [ProfileController::class, 'updatePaymentPreferences'])->name('profile.payment-preferences');
 
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::patch('/settings', [SettingsController::class, 'update'])->name('settings.update');
@@ -364,6 +365,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::middleware('can:accessBilling')->group(function () {
         Route::get('/billing', [BillingController::class, 'index'])->name('billing');
         Route::post('/billing/pay', [BillingController::class, 'pay'])->name('billing.pay');
+        Route::post('/billing/card-pay', [BillingController::class, 'processCardPayment'])->name('billing.card-pay');
         // Starts a Created payment and returns its slip. Nothing reaches the
         // ledger or the office queue from here; the limit keeps it that cheap.
         Route::post('/billing/transactions/initiate', [BillingController::class, 'initiatePayment'])
