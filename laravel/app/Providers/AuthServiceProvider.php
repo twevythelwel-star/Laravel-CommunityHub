@@ -40,6 +40,9 @@ class AuthServiceProvider extends ServiceProvider
 
         Gate::define('manageBoundary', fn (User $user) => $user->role === UserRole::SystemAdmin);
         Gate::define('manageLandmarks', fn (User $user) => $user->role->isAdministrative());
+
+        /* Bookable amenities: capacity, hours, map link, and their bookings. */
+        Gate::define('manageAmenities', fn (User $user) => $user->role->isAdministrative());
         Gate::define('viewBoundary', fn (User $user) => $user->role->isAdministrative()
             || $user->role === UserRole::Security);
 

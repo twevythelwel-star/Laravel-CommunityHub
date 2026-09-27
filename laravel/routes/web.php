@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Dashboard\AccessLogController;
 use App\Http\Controllers\Dashboard\AmenityBookingController;
+use App\Http\Controllers\Dashboard\AmenityController;
 use App\Http\Controllers\Dashboard\BillingController;
 use App\Http\Controllers\Dashboard\BlocklistController;
 use App\Http\Controllers\Dashboard\BoundaryController;
@@ -297,6 +298,13 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/guidelines', [GuidelinesController::class, 'store'])->name('guidelines.store');
         Route::patch('/guidelines/{guideline}', [GuidelinesController::class, 'update'])->name('guidelines.update');
         Route::delete('/guidelines/{guideline}', [GuidelinesController::class, 'destroy'])->name('guidelines.destroy');
+    });
+
+    Route::middleware('can:manageAmenities')->group(function () {
+        Route::get('/amenities', [AmenityController::class, 'index'])->name('amenities');
+        Route::post('/amenities', [AmenityController::class, 'store'])->name('amenities.store');
+        Route::patch('/amenities/{amenity}', [AmenityController::class, 'update'])->name('amenities.update');
+        Route::delete('/amenities/{amenity}', [AmenityController::class, 'destroy'])->name('amenities.destroy');
     });
 
     Route::get('/changelog', [ChangelogController::class, 'index'])
