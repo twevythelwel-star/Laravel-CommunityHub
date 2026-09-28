@@ -432,6 +432,14 @@ ALLOW and changes to the outcome once confirmed. The access log keeps both
 entries. Token clients get the link as `confirms` in `access.recorded` and
 should replace that row with the new one.
 
+A scan that needs a decision also records `confirm_by`, the end of its
+two-minute window. Left unconfirmed past it, the kiosk shows it as EXPIRED:
+the pass was not used and has to be scanned again. Nothing is written when a
+scan lapses, so the kiosk reloads its list itself when the soonest pending
+scan runs out. Entries that were final when written (refusals, manual
+check-ins) have no `confirm_by` and never expire. Token clients get it as
+`confirmBy`.
+
 Token clients (the mobile shell and handheld scanners) get their websocket
 details from `POST /api/auth/login` and `GET /api/auth/me`, under `realtime`.
 It is `null` when Reverb is off, and then the client should poll:

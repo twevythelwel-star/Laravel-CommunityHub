@@ -6,6 +6,7 @@ use App\Enums\GateId;
 use App\Enums\PassCategory;
 use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
+use App\Exceptions\ScanNotConfirmable;
 use App\Models\AccessLogEntry;
 use App\Models\GatePass;
 use App\Models\User;
@@ -147,5 +148,62 @@ class GateScannerKioskTest extends TestCase
         app(GateScanner::class)->scan('not-a-real-token', GateId::Gate01, $guard);
 
         $this->assertSame(['DENY'], array_column($this->kioskRows($guard), 'result'));
+    }
+
+    // ── Scans nobody confirmed ──
+
+    public function test_a_scan_waiting_on_the_guard_says_how_long_is_left(): void
+    {
+        [$guard] = $this->scanResident();
+        $this->travel(30)->seconds();
+
+        $row = $this->kioskRows($guard)[0];
+        $this->assertSame('ALLOW', $row['result']);
+        $this->assertSame('pending', $row['decisionWindow']);
+        $this->assertSame((int) config('gatepass.scan_confirm_seconds') - 30, $row['secondsToDecide']);
+    }
+
+    public function test_a_scan_left_unconfirmed_past_its_window_shows_as_expired(): void
+    {
+        [$guard, $scanId] = $this->scanResident();
+        $this->travel((int) config('gatepass.scan_confirm_seconds') + 1)->seconds();
+
+        $row = $this->kioskRows($guard)[0];
+        $this->assertSame('expired', $row['decisionWindow']);
+        $this->assertNull($row['secondsToDecide']);
+        // The log itself is unchanged: what the scan found is still on record.
+        $this->assertSame('ALLOW', $row['result']);
+
+        // And the kiosk is telling the truth: it can no longer be confirmed.
+        $this->expectException(ScanNotConfirmable::class);
+        app(GateScanner::class)->confirm($scanId, $guard);
+    }
+
+    public function test_a_confirmed_scan_is_never_shown_as_expired(): void
+    {
+        [$guard, $scanId] = $this->scanResident();
+        app(GateScanner::class)->confirm($scanId, $guard);
+        $this->travel(1)->hour();
+
+        $row = $this->kioskRows($guard)[0];
+        $this->assertSame('CHECK_IN', $row['result']);
+        $this->assertNull($row['decisionWindow']);
+    }
+
+    public function test_entries_that_never_needed_a_decision_never_expire(): void
+    {
+        $guard = User::factory()->role(UserRole::Security)->create();
+        app(GateScanner::class)->scan('not-a-real-token', GateId::Gate01, $guard);
+
+        // A visitor with no pass, checked in by hand: logged as ALLOW, final.
+        $this->travel(1)->minute();
+        $visitor = Visitor::factory()->create();
+        $this->actingAs($guard, 'sanctum')->postJson("/api/visitors/{$visitor->id}/check-in")->assertOk();
+
+        $this->travel(1)->hour();
+
+        $rows = $this->kioskRows($guard);
+        $this->assertSame(['ALLOW', 'DENY'], array_column($rows, 'result'));
+        $this->assertSame([null, null], array_column($rows, 'decisionWindow'));
     }
 }

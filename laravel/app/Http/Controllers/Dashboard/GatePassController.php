@@ -227,6 +227,11 @@ class GatePassController extends Controller
                 'gate' => $e->gate,
                 'occurredAt' => $e->occurred_at?->diffForHumans() ?? 'Just now',
                 'denyReason' => $e->deny_reason,
+                'decisionWindow' => $e->decisionWindow(),
+                // Relative, so the kiosk's own clock does not matter.
+                'secondsToDecide' => $e->decisionWindow() === 'pending'
+                    ? (int) ceil(now()->diffInSeconds($e->confirm_by))
+                    : null,
             ]);
 
         return Inertia::render('Dashboard/GateScanner', [

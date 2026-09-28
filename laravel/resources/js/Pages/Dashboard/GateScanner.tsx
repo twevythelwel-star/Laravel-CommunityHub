@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,9 @@ type RecentScan = {
   gate: string;
   occurredAt: string;
   denyReason?: string | null;
+  /** Only on a scan still waiting on the guard ('pending') or left unconfirmed ('expired'). */
+  decisionWindow?: 'pending' | 'expired' | null;
+  secondsToDecide?: number | null;
 };
 
 type Props = {
@@ -87,6 +90,21 @@ export default function GateScannerPage({ gates = [], recentScans = NO_SCANS, gu
   // entries this kiosk added itself, since the server's log is the record.
   useEffect(() => {
     setScansList(recentScans);
+  }, [recentScans]);
+
+  // Nothing is written when a scan lapses, so no event arrives: ask the
+  // server again once the soonest pending scan runs out.
+  useEffect(() => {
+    const waits = recentScans
+      .map((scan) => scan.secondsToDecide)
+      .filter((seconds): seconds is number => typeof seconds === 'number');
+    if (waits.length === 0) return;
+
+    const timer = window.setTimeout(
+      () => router.reload({ only: ['recentScans'] }),
+      (Math.min(...waits) + 1) * 1000,
+    );
+    return () => window.clearTimeout(timer);
   }, [recentScans]);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -477,17 +495,28 @@ export default function GateScannerPage({ gates = [], recentScans = NO_SCANS, gu
                     <div key={scan.id} className="p-3.5 hover:bg-muted/40 transition text-xs space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-foreground truncate max-w-[150px]">{scan.userName}</span>
-                        <Badge
-                          variant={DENIED_RESULTS.includes(scan.result) ? 'destructive' : 'default'}
-                          className="text-[10px] uppercase font-bold"
-                        >
-                          {scan.result}
-                        </Badge>
+                        {scan.decisionWindow === 'expired' ? (
+                          <Badge variant="secondary" className="text-[10px] uppercase font-bold">
+                            Expired
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant={DENIED_RESULTS.includes(scan.result) ? 'destructive' : 'default'}
+                            className="text-[10px] uppercase font-bold"
+                          >
+                            {scan.result}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center justify-between text-muted-foreground text-[11px]">
                         <span>{scan.userRole} &middot; {scan.gate}</span>
                         <span>{scan.occurredAt}</span>
                       </div>
+                      {scan.decisionWindow === 'expired' && (
+                        <p className="text-[10px] text-muted-foreground italic">
+                          Not confirmed in time. The pass was not used; scan it again.
+                        </p>
+                      )}
                       {scan.denyReason && (
                         <p className="text-[10px] text-destructive italic truncate">
                           Reason: {scan.denyReason}

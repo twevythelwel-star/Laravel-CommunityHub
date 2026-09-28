@@ -80,7 +80,7 @@ class GateActivityFeedTest extends TestCase
         $event = new AccessLogRecorded($entry);
 
         $this->assertSame(
-            ['id', 'userName', 'userRole', 'result', 'gate', 'occurredAt', 'denyReason', 'confirms'],
+            ['id', 'userName', 'userRole', 'result', 'gate', 'occurredAt', 'denyReason', 'confirms', 'confirmBy'],
             array_keys($event->broadcastWith()),
         );
         $this->assertStringNotContainsString('secret-detail', json_encode($event->broadcastWith()));

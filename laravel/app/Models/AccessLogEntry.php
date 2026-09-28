@@ -15,7 +15,7 @@ class AccessLogEntry extends Model
     protected $fillable = [
         'user_id', 'user_name', 'user_role', 'method', 'gate', 'pass_id',
         'result', 'deny_reason', 'validation_report', 'scanned_by', 'occurred_at',
-        'confirms_entry_id',
+        'confirms_entry_id', 'confirm_by',
     ];
 
     protected static function booted(): void
@@ -29,6 +29,7 @@ class AccessLogEntry extends Model
     {
         return [
             'occurred_at' => 'datetime',
+            'confirm_by' => 'datetime',
             'validation_report' => 'array',
         ];
     }
@@ -53,6 +54,20 @@ class AccessLogEntry extends Model
     public function confirmation(): HasOne
     {
         return $this->hasOne(self::class, 'confirms_entry_id');
+    }
+
+    /**
+     * For a scan with no decision logged against it: 'pending' while the guard
+     * can still confirm it, 'expired' once that window has passed (the pass
+     * was not used), and null for entries that never needed a decision.
+     */
+    public function decisionWindow(): ?string
+    {
+        if ($this->confirm_by === null) {
+            return null;
+        }
+
+        return $this->confirm_by->isPast() ? 'expired' : 'pending';
     }
 
     public function scopeDenied($query)

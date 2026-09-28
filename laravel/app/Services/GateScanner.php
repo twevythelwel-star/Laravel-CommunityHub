@@ -54,6 +54,7 @@ class GateScanner
         $report = $this->engine->validate($token, $gate);
         $pass = GatePass::with(['user', 'visitor'])->where('pass_id', $report['passId'])->first();
         $decision = ScanDecision::from($report['decision']);
+        $ttl = (int) config('gatepass.scan_confirm_seconds', 120);
 
         $entry = AccessLogEntry::create([
             'user_id' => $pass?->user_id ?? $pass?->visitor?->homeowner_id,
@@ -66,6 +67,7 @@ class GateScanner
             'deny_reason' => $decision === ScanDecision::Reject ? $report['primaryReason'] : null,
             'validation_report' => $report,
             'scanned_by' => $guard->id,
+            'confirm_by' => $decision === ScanDecision::Reject ? null : now()->addSeconds($ttl),
             'occurred_at' => now(),
         ]);
 
@@ -80,7 +82,6 @@ class GateScanner
             return ['report' => $report, 'decision' => $decision->value, 'scanId' => null, 'accessLogId' => $entry->id, 'expiresAt' => null];
         }
 
-        $ttl = (int) config('gatepass.scan_confirm_seconds', 120);
         $scanId = (string) Str::uuid();
 
         Cache::put($this->cacheKey($scanId), [
@@ -98,7 +99,7 @@ class GateScanner
             'decision' => $decision->value,
             'scanId' => $scanId,
             'accessLogId' => $entry->id,
-            'expiresAt' => now()->addSeconds($ttl)->toIso8601String(),
+            'expiresAt' => $entry->confirm_by->toIso8601String(),
         ];
     }
 
