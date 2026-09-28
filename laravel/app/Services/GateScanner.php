@@ -90,6 +90,7 @@ class GateScanner
             'gate' => $gate->value,
             'guard_id' => $guard->id,
             'method' => $method,
+            'entry_id' => $entry->id,
         ], $ttl);
 
         return [
@@ -125,7 +126,7 @@ class GateScanner
 
         if (! $accept) {
             $this->log($pass, $gate, $guard, ValidationStatus::Deny->value, $pending['method'],
-                'REFUSED_BY_OFFICER: '.($refusalReason ?: 'Guard refused entry after inspection.'));
+                'REFUSED_BY_OFFICER: '.($refusalReason ?: 'Guard refused entry after inspection.'), confirmsEntryId: $pending['entry_id'] ?? null);
 
             return ['action' => 'REFUSED', 'passStatus' => $pass->status->value, 'time' => $now->format('g:i A'), 'message' => 'Entry refused and logged.'];
         }
@@ -146,7 +147,7 @@ class GateScanner
         }
 
         $this->syncVisitor($pass, $decision, $gate);
-        $this->log($pass, $gate, $guard, $decision->value, $pending['method']);
+        $this->log($pass, $gate, $guard, $decision->value, $pending['method'], confirmsEntryId: $pending['entry_id'] ?? null);
 
         return [
             'action' => $decision->value,
@@ -226,7 +227,8 @@ class GateScanner
         }
     }
 
-    private function log(GatePass $pass, GateId $gate, User $guard, string $result, string $method, ?string $denyReason = null): void
+    /** @param  int|null  $confirmsEntryId  The scan entry a guard's decision settles. */
+    private function log(GatePass $pass, GateId $gate, User $guard, string $result, string $method, ?string $denyReason = null, ?int $confirmsEntryId = null): void
     {
         AccessLogEntry::create([
             'user_id' => $pass->user_id ?? $pass->visitor?->homeowner_id,
@@ -238,6 +240,7 @@ class GateScanner
             'result' => $result,
             'deny_reason' => $denyReason,
             'scanned_by' => $guard->id,
+            'confirms_entry_id' => $confirmsEntryId,
             'occurred_at' => now(),
         ]);
     }

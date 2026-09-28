@@ -213,7 +213,10 @@ class GatePassController extends Controller
             'name' => $g->label(),
         ], GateId::cases());
 
-        $recentScans = AccessLogEntry::latest('occurred_at')
+        // A scan and the guard's decision on it are one row here: the decision
+        // stands in for its scan. The access log keeps both.
+        $recentScans = AccessLogEntry::whereDoesntHave('confirmation')
+            ->latest('occurred_at')
             ->take(12)
             ->get()
             ->map(fn ($e) => [

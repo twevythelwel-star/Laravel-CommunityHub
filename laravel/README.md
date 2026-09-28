@@ -424,6 +424,14 @@ visitor check-ins and refusals alike. `AccessLogEntry` fires
 transaction commits, so every code path that logs is covered. The payload is
 the kiosk row only; the validation report and user ids stay on the server.
 
+A scan and the guard's decision on it are one row on the kiosk. The scan is
+logged as ALLOW or DENY, and the decision (CHECK_IN, CHECK_OUT, or a refusal
+with its reason) is logged with `confirms_entry_id` pointing at that scan.
+The kiosk leaves out any scan that has a decision, so a pending scan shows as
+ALLOW and changes to the outcome once confirmed. The access log keeps both
+entries. Token clients get the link as `confirms` in `access.recorded` and
+should replace that row with the new one.
+
 Token clients (the mobile shell and handheld scanners) get their websocket
 details from `POST /api/auth/login` and `GET /api/auth/me`, under `realtime`.
 It is `null` when Reverb is off, and then the client should poll:

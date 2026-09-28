@@ -23,7 +23,7 @@ class AccessLogRecorded implements ShouldBroadcast, ShouldDispatchAfterCommit, S
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    /** @var array{id: int, userName: string|null, userRole: string|null, result: string, gate: string|null, occurredAt: string|null, denyReason: string|null} */
+    /** @var array{id: int, userName: string|null, userRole: string|null, result: string, gate: string|null, occurredAt: string|null, denyReason: string|null, confirms: int|null} */
     public array $payload;
 
     public function __construct(AccessLogEntry $entry)
@@ -36,6 +36,8 @@ class AccessLogRecorded implements ShouldBroadcast, ShouldDispatchAfterCommit, S
             'gate' => $entry->gate,
             'occurredAt' => $entry->occurred_at?->toIso8601String(),
             'denyReason' => $entry->deny_reason,
+            // Set on a guard's decision: the scan row it replaces on a kiosk.
+            'confirms' => $entry->confirms_entry_id,
         ];
     }
 
