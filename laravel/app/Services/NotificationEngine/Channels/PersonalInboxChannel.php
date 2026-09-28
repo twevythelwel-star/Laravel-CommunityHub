@@ -2,6 +2,7 @@
 
 namespace App\Services\NotificationEngine\Channels;
 
+use App\Events\ResidentMessageCreated;
 use App\Models\ResidentMessage;
 use App\Services\NotificationEngine\ChannelDispatchResult;
 use App\Services\NotificationEngine\Contracts\NotificationChannelInterface;
@@ -59,11 +60,27 @@ class PersonalInboxChannel implements NotificationChannelInterface
                 'action_url' => $payload->actionUrl,
             ]);
 
+            $this->announce($message);
+
             return ChannelDispatchResult::sent($this->name(), (string) $message->id, ['resident_message_id' => $message->id]);
         } catch (Throwable $e) {
             report($e);
 
             return ChannelDispatchResult::failed($this->name(), 'Inbox message could not be saved: '.$e->getMessage());
+        }
+    }
+
+    /**
+     * Tell the resident's open browser tabs, if live updates are running.
+     * The message is already saved, so a websocket failure must not undo it
+     * or report the delivery as failed.
+     */
+    private function announce(ResidentMessage $message): void
+    {
+        try {
+            event(new ResidentMessageCreated($message));
+        } catch (Throwable $e) {
+            report($e);
         }
     }
 }

@@ -41,6 +41,17 @@ services:
     healthcheck:
       disable: true
 
+  # Websocket server for live updates (inbox badge, safety alerts, gate feed).
+  # Browsers reach it through your TLS proxy at wss://<host>/app/...; point
+  # /app and /apps at this port, as deployment/nginx.conf does.
+  reverb:
+    <<: *app
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8081"]
+    ports:
+      - "${REVERB_PUBLIC_PORT:-8081}:8081"
+    healthcheck:
+      disable: true
+
   # Runs routes/console.php: gate-pass nonce pruning (hourly) and visitor
   # no-show expiry (every 15 minutes). Without it, stale pre-clearances stay
   # valid at the gate indefinitely.

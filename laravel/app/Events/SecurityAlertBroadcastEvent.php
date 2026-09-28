@@ -6,10 +6,13 @@ use App\Models\Warning;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class SecurityAlertBroadcastEvent implements ShouldBroadcast
+// ShouldRescue: if Reverb is unreachable the failure is reported, never
+// thrown into the request (a check-in or an alert) that fired the event.
+class SecurityAlertBroadcastEvent implements ShouldBroadcast, ShouldRescue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -33,6 +36,16 @@ class SecurityAlertBroadcastEvent implements ShouldBroadcast
             // resident or not, would receive the estate's security alerts.
             new PrivateChannel('community-alerts'),
         ];
+    }
+
+    /**
+     * Only the summary above, not every public property of the event.
+     *
+     * @return array<string, mixed>
+     */
+    public function broadcastWith(): array
+    {
+        return $this->payload;
     }
 
     public function broadcastAs(): string

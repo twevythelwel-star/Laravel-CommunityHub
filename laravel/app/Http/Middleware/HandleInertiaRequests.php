@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\BillingSetting;
 use App\Models\BrandingSetting;
 use App\Models\Community;
+use App\Models\User;
 use App\Models\Warning;
 use App\Services\GeofenceService;
 use App\Services\Payments\Providers\ProviderRegistry;
@@ -26,6 +27,28 @@ class HandleInertiaRequests extends Middleware
     public function version(Request $request): ?string
     {
         return parent::version($request);
+    }
+
+    /**
+     * What the browser needs to join its websocket channels. The app key is
+     * public by design; the secret never leaves the server.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function realtime(User $user): ?array
+    {
+        if (config('broadcasting.default') !== 'reverb' || blank(config('broadcasting.connections.reverb.key'))) {
+            return null;
+        }
+
+        return [
+            'key' => config('broadcasting.connections.reverb.key'),
+            'host' => config('broadcasting.browser.host'),
+            'port' => config('broadcasting.browser.port'),
+            'scheme' => config('broadcasting.browser.scheme'),
+            'userChannel' => "user.{$user->id}",
+            'gateFeed' => $user->can('scanPasses'),
+        ];
     }
 
     public function share(Request $request): array
@@ -93,6 +116,10 @@ class HandleInertiaRequests extends Middleware
             'billing' => fn () => $this->billing(),
 
             'activeAlert' => fn () => $user ? $this->activeAlert() : null,
+
+            // Live updates: null unless Reverb is the broadcaster, in which case
+            // the page connects and joins only the channels it may.
+            'realtime' => fn () => $user ? $this->realtime($user) : null,
 
             // The nav badge on Inbox. One indexed count query per page.
             'inboxUnread' => fn () => $user ? $user->inboxMessages()->unread()->count() : 0,

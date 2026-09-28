@@ -54,6 +54,7 @@ import { Logo } from '@/components/logo';
 import { UserNav } from '@/components/user-nav';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
+import { startRealtime, type RealtimeConfig } from '@/lib/realtime';
 import type { UserRole } from '@/types';
 import { useIsClient } from '@/hooks/use-is-client';
 import { Button } from '@/components/ui/button';
@@ -122,6 +123,11 @@ export default function DashboardLayout({
   // next/navigation hook and has no Inertia equivalent.
   const { url, props: sharedProps } = usePage();
   const inboxUnread = Number((sharedProps as { inboxUnread?: number }).inboxUnread ?? 0);
+  const realtime = (sharedProps as { realtime?: RealtimeConfig | null }).realtime;
+
+  useEffect(() => {
+    startRealtime(realtime);
+  }, [realtime]);
   const pathname = url.split('?')[0];
 
   const { user, loading, logout, justSignedIn } = useAuth();

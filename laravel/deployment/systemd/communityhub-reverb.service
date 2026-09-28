@@ -1,0 +1,24 @@
+[Unit]
+Description=Community Hub Reverb (websockets)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/html
+# nginx proxies /app and /apps here; see deployment/nginx.conf.
+ExecStart=/usr/bin/php /var/www/html/artisan reverb:start --host=127.0.0.1 --port=8081
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=10000
+
+# Security hardening
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

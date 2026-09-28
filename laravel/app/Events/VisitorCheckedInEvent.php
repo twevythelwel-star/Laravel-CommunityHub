@@ -6,10 +6,13 @@ use App\Models\Visitor;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class VisitorCheckedInEvent implements ShouldBroadcast
+// ShouldRescue: if Reverb is unreachable the failure is reported, never
+// thrown into the request (a check-in or an alert) that fired the event.
+class VisitorCheckedInEvent implements ShouldBroadcast, ShouldRescue
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -36,6 +39,18 @@ class VisitorCheckedInEvent implements ShouldBroadcast
             // vehicle, host) to anyone holding the app's websocket key.
             new PrivateChannel('gatehouse-stream'),
         ];
+    }
+
+    /**
+     * Only the summary above. Without this Laravel sends every public
+     * property, which here includes the whole Visitor record: ID number,
+     * contact details and the share token that opens their guest pass.
+     *
+     * @return array<string, mixed>
+     */
+    public function broadcastWith(): array
+    {
+        return $this->payload;
     }
 
     public function broadcastAs(): string
