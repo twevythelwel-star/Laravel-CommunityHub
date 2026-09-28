@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\GatePassEngine;
+use App\Services\RealtimeConfig;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -13,6 +14,8 @@ use Illuminate\Validation\ValidationException;
 /** Token auth for the Capacitor shell and handheld scanners. */
 class AuthApiController extends Controller
 {
+    public function __construct(private readonly RealtimeConfig $realtime) {}
+
     public function login(Request $request, GatePassEngine $engine): JsonResponse
     {
         $validated = $request->validate([
@@ -41,6 +44,7 @@ class AuthApiController extends Controller
         return response()->json([
             'token' => $user->createToken($validated['device_name'])->plainTextToken,
             'user' => $this->userPayload($user),
+            'realtime' => $this->realtime->forDevice($user),
         ]);
     }
 
@@ -53,7 +57,12 @@ class AuthApiController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['user' => $this->userPayload($request->user())]);
+        return response()->json([
+            'user' => $this->userPayload($request->user()),
+            // Null when Reverb is off: poll instead. Channels and events to
+            // join otherwise, authorised at POST /api/broadcasting/auth.
+            'realtime' => $this->realtime->forDevice($request->user()),
+        ]);
     }
 
     private function userPayload(User $user): array

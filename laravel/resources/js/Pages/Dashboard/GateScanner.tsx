@@ -68,7 +68,12 @@ type ScanOutcome = {
   occurredAt: string;
 };
 
-export default function GateScannerPage({ gates = [], recentScans = [], guard }: Props) {
+const NO_SCANS: RecentScan[] = [];
+
+/** Access-log results that mean the person was turned away; the rest were let through. */
+const DENIED_RESULTS = ['DENY', 'REJECT'];
+
+export default function GateScannerPage({ gates = [], recentScans = NO_SCANS, guard }: Props) {
   const { toast } = useToast();
   const [selectedGate, setSelectedGate] = useState<string>(gates[0]?.id || 'GATE-01');
   const [tokenInput, setTokenInput] = useState<string>('');
@@ -77,6 +82,12 @@ export default function GateScannerPage({ gates = [], recentScans = [], guard }:
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [scansList, setScansList] = useState<RecentScan[]>(recentScans);
+
+  // A live arrival reloads recentScans from the server; it replaces the
+  // entries this kiosk added itself, since the server's log is the record.
+  useEffect(() => {
+    setScansList(recentScans);
+  }, [recentScans]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -467,7 +478,7 @@ export default function GateScannerPage({ gates = [], recentScans = [], guard }:
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-foreground truncate max-w-[150px]">{scan.userName}</span>
                         <Badge
-                          variant={scan.result === 'GRANT' ? 'default' : 'destructive'}
+                          variant={DENIED_RESULTS.includes(scan.result) ? 'destructive' : 'default'}
                           className="text-[10px] uppercase font-bold"
                         >
                           {scan.result}

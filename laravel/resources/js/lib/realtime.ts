@@ -64,6 +64,10 @@ export function startRealtime(config: RealtimeConfig | null | undefined): void {
         title: `Arrived at ${e.entry_gate}`,
         description: e.homeowner_name ? `${e.visitor_name}, visiting ${e.homeowner_name}` : e.visitor_name,
       });
+      // The kiosk's recent-scans list includes check-ins made at other gates.
+      if (window.location.pathname === '/dashboard/gate-scanner') {
+        router.reload({ only: ['recentScans'] });
+      }
     });
   }
 }

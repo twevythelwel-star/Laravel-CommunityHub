@@ -415,6 +415,47 @@ created a `maria.williams` account with the password `password`. The manual
 Check In button on the Visitors list now goes through the same pass rules,
 minus the token checks.
 
+### Live updates on the kiosk, the phone and the handheld
+
+The web kiosk (`/dashboard/gate-scanner`) reloads its recent-clearances list
+whenever a visitor is checked in at any gate. It gets that event over Reverb
+through the dashboard layout, like every other page.
+
+Token clients (the mobile shell and handheld scanners) get their websocket
+details from `POST /api/auth/login` and `GET /api/auth/me`, under `realtime`.
+It is `null` when Reverb is off, and then the client should poll:
+
+```json
+{
+  "broadcaster": "reverb", "key": "…", "host": "hub.example.org", "port": 443, "scheme": "https",
+  "origin": "https://hub.example.org",
+  "authEndpoint": "https://hub.example.org/api/broadcasting/auth",
+  "channels": [
+    { "name": "private-user.12", "events": ["inbox.message", "visitor.checked-in"] },
+    { "name": "private-community-alerts", "events": ["security.alert"] },
+    { "name": "private-gatehouse-stream", "events": ["visitor.checked-in"] }
+  ]
+}
+```
+
+The gatehouse channel is listed only for accounts that may scan passes. To
+connect:
+
+1. Open `wss://host:port/app/{key}` and send `origin` as the `Origin` header.
+   Reverb refuses connections from any origin that is not listed.
+2. For each channel, `POST authEndpoint` with `Authorization: Bearer <token>`,
+   `socket_id` and `channel_name`.
+3. Subscribe with the returned `auth`.
+
+Any Pusher-protocol client can do this: Echo, or the native Pusher SDKs. Echo
+needs `authEndpoint` and a `Bearer` header in `auth.headers`, because the
+`/broadcasting/auth` route it uses by default expects a session cookie.
+
+A Capacitor shell that loads the deployed site (`server.url`) needs none of
+this. It runs the web app, which connects the same way the browser does. A
+build that bundles its own assets has an origin of `capacitor://localhost` or
+`https://localhost`, so add that host to `REVERB_ALLOWED_ORIGINS`.
+
 ### Guest pass page
 
 The QR was drawn by `api.qrserver.com` from the guest-pass URL, which sent
