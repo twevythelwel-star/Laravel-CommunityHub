@@ -418,8 +418,11 @@ minus the token checks.
 ### Live updates on the kiosk, the phone and the handheld
 
 The web kiosk (`/dashboard/gate-scanner`) reloads its recent-clearances list
-whenever a visitor is checked in at any gate. It gets that event over Reverb
-through the dashboard layout, like every other page.
+whenever anything is written to the access log at any gate: resident scans,
+visitor check-ins and refusals alike. `AccessLogEntry` fires
+`access.recorded` on the gatehouse channel when a row is created, after the
+transaction commits, so every code path that logs is covered. The payload is
+the kiosk row only; the validation report and user ids stay on the server.
 
 Token clients (the mobile shell and handheld scanners) get their websocket
 details from `POST /api/auth/login` and `GET /api/auth/me`, under `realtime`.
@@ -433,7 +436,7 @@ It is `null` when Reverb is off, and then the client should poll:
   "channels": [
     { "name": "private-user.12", "events": ["inbox.message", "visitor.checked-in"] },
     { "name": "private-community-alerts", "events": ["security.alert"] },
-    { "name": "private-gatehouse-stream", "events": ["visitor.checked-in"] }
+    { "name": "private-gatehouse-stream", "events": ["visitor.checked-in", "access.recorded"] }
   ]
 }
 ```

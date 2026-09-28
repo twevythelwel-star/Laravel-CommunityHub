@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\AccessLogRecorded;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,13 @@ class AccessLogEntry extends Model
         'user_id', 'user_name', 'user_role', 'method', 'gate', 'pass_id',
         'result', 'deny_reason', 'validation_report', 'scanned_by', 'occurred_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function (self $entry): void {
+            event(new AccessLogRecorded($entry));
+        });
+    }
 
     protected function casts(): array
     {

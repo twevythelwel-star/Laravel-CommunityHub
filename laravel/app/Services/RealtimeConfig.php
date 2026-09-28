@@ -52,7 +52,7 @@ class RealtimeConfig
         ];
 
         if ($this->receivesGateFeed($user)) {
-            $channels[] = ['name' => 'private-gatehouse-stream', 'events' => ['visitor.checked-in']];
+            $channels[] = ['name' => 'private-gatehouse-stream', 'events' => ['visitor.checked-in', 'access.recorded']];
         }
 
         return [

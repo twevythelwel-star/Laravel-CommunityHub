@@ -84,7 +84,7 @@ class DeviceRealtimeTest extends TestCase
         $response = $this->actingAs($guard, 'sanctum')->getJson('/api/auth/me')->assertOk();
 
         $this->assertContains('private-gatehouse-stream', $this->channelNames($response));
-        $this->assertSame(['visitor.checked-in'], $response->json('realtime.channels.2.events'));
+        $this->assertSame(['visitor.checked-in', 'access.recorded'], $response->json('realtime.channels.2.events'));
     }
 
     public function test_every_channel_a_device_is_given_is_one_its_token_can_join(): void
