@@ -17,6 +17,7 @@
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10",
+        "livewire/livewire": "^4.4",
         "simplesoftwareio/simple-qrcode": "^4.2",
         "stripe/stripe-php": "*",
         "tightenco/ziggy": "^2.0"

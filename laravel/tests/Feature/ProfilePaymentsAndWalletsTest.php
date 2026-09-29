@@ -175,7 +175,7 @@ class ProfilePaymentsAndWalletsTest extends TestCase
         $this->assertEquals('Google Pay', $prefs->extra['payment_preferences']['default_payment_method']);
         $this->assertTrue($prefs->extra['payment_preferences']['notifications']['payment_confirmation']);
         $this->assertFalse($prefs->extra['payment_preferences']['notifications']['failed_payment']);
-        
+
         // Strictly verify that no raw credentials exist in database
         $this->assertArrayNotHasKey('card_number', $prefs->extra['payment_preferences']);
         $this->assertArrayNotHasKey('cvv', $prefs->extra['payment_preferences']);

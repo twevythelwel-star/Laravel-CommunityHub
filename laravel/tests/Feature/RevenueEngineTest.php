@@ -303,4 +303,3 @@ class RevenueEngineTest extends TestCase
         $this->assertSame('completed', strtolower($ledgerRow->status));
     }
 }
-

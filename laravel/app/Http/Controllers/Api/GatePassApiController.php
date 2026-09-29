@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\GateId;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\GatePassResource;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
 use Illuminate\Http\JsonResponse;
@@ -32,16 +33,7 @@ class GatePassApiController extends Controller
         $category = $pass->category;
 
         return response()->json([
-            'pass' => [
-                'passId' => $pass->pass_id,
-                'category' => $category->value,
-                'holderName' => $pass->holder_name,
-                'property' => $pass->property,
-                'accessZone' => $pass->access_zone,
-                'gate' => $pass->designated_gate->value,
-                'rotationSeq' => $pass->rotation_seq,
-                'status' => $pass->status->value,
-            ],
+            'pass' => (new GatePassResource($pass))->resolve(),
             'visual' => [
                 'config' => $this->engine->categoryConfig($category),
                 'variant' => $this->engine->variantFor($pass),

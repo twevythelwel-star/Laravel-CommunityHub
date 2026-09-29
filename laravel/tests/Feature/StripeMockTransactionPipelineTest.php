@@ -8,11 +8,11 @@ use App\Models\Payment;
 use App\Models\PaymentReceipt;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Services\Ledger\LedgerService;
 use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\SmsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Mockery;
 use Tests\TestCase;
 
@@ -41,7 +41,7 @@ class StripeMockTransactionPipelineTest extends TestCase
         ]);
     }
 
-    private function deliverWebhook(string $type, array $object, ?string $eventId = null): \Illuminate\Testing\TestResponse
+    private function deliverWebhook(string $type, array $object, ?string $eventId = null): TestResponse
     {
         $payload = [
             'id' => $eventId ?? 'evt_test_'.Str::random(24),

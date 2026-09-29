@@ -7,6 +7,7 @@ use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\VisitorResource;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
 use App\Models\Visitor;
@@ -32,21 +33,9 @@ class VisitorApiController extends Controller
                 fn ($q) => $q->where('status', $request->string('status')))
             ->latest('expected_at')
             ->limit(100)
-            ->get()
-            ->map(fn (Visitor $v) => [
-                'id' => $v->id,
-                'name' => $v->name,
-                'type' => $v->type,
-                'status' => $v->status->value,
-                'expectedAt' => $v->expected_at->toIso8601String(),
-                'homeowner' => $v->homeowner_name,
-                'isBlocked' => $v->is_blocked,
-                'notify_email' => $v->notify_email,
-                'notify_sms' => $v->notify_sms,
-                'notify_whatsapp' => $v->notify_whatsapp,
-            ]);
+            ->get();
 
-        return response()->json(['visitors' => $visitors]);
+        return response()->json(['visitors' => VisitorResource::collection($visitors)->resolve()]);
     }
 
     public function store(Request $request): JsonResponse

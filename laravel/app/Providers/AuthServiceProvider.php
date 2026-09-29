@@ -3,12 +3,16 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\GatePass;
 use App\Models\User;
+use App\Models\Visitor;
+use App\Policies\GatePassPolicy;
+use App\Policies\VisitorPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Central authorization map for the six roles.
+ * Central authorization map for the six roles and domain policies.
  *
  * In the original app these checks were scattered through JSX as
  * `user.role === 'Admin' && ...`, which only hid UI — the underlying data was
@@ -17,8 +21,21 @@ use Illuminate\Support\ServiceProvider;
  */
 class AuthServiceProvider extends ServiceProvider
 {
+    /**
+     * The model-to-policy mappings for the application.
+     *
+     * @var array<class-string, class-string>
+     */
+    protected array $policies = [
+        Visitor::class => VisitorPolicy::class,
+        GatePass::class => GatePassPolicy::class,
+    ];
+
     public function boot(): void
     {
+        Gate::policy(Visitor::class, VisitorPolicy::class);
+        Gate::policy(GatePass::class, GatePassPolicy::class);
+
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {
             return $user->role === UserRole::SystemAdmin ? true : null;

@@ -8,10 +8,10 @@ use App\Models\Payment;
 use App\Models\PaymentReceipt;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Services\Ledger\LedgerService;
 use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\StripePaymentService;
 use Illuminate\Console\Command;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\PaymentIntent;
@@ -61,7 +61,7 @@ class StripeTestTransactionCommand extends Command
         $this->line("Target Amount:   {$currency} ".number_format($amountMajor, 2));
         $this->line("Target Currency: {$currency}");
         $this->line("Payment Method:  {$methodLabel}");
-        $this->line("Execution Mode:  ".($stripeKey && ! $simulate ? 'Live Stripe Test API' : 'Deterministic Simulation'));
+        $this->line('Execution Mode:  '.($stripeKey && ! $simulate ? 'Live Stripe Test API' : 'Deterministic Simulation'));
         $this->newLine();
 
         $user = $this->resolveHomeowner();
@@ -184,7 +184,7 @@ class StripeTestTransactionCommand extends Command
         $timestamp = time();
         $signature = hash_hmac('sha256', "{$timestamp}.{$payloadJson}", $webhookSecret);
 
-        $request = \Illuminate\Http\Request::create(
+        $request = Request::create(
             '/api/webhooks/stripe',
             'POST',
             [],
@@ -251,7 +251,7 @@ class StripeTestTransactionCommand extends Command
         $communityId = Transaction::defaultCommunityCode();
         $userId = Transaction::formatUserCode($user);
         $propertyId = Transaction::formatPropertyCode($user, $invoice) ?: 'PROP-00481';
-        $customerStr = "Homeowner #".($user->id ? sprintf('%06d', $user->id) : '000293');
+        $customerStr = 'Homeowner #'.($user->id ? sprintf('%06d', $user->id) : '000293');
         $description = "CommunityHub Invoice {$invoiceRef}";
         $metadata = $payment->toProcessorMetadata();
 
@@ -393,7 +393,7 @@ class StripeTestTransactionCommand extends Command
             'metadata' => $payment->toProcessorMetadata(),
         ];
 
-        $this->line("Triggering simulated Stripe payment decline (card_declined / insufficient_funds)...");
+        $this->line('Triggering simulated Stripe payment decline (card_declined / insufficient_funds)...');
         $res = $this->deliverSignedWebhook('payment_intent.payment_failed', $piDeclinedData, $webhookSecret);
 
         $payment->refresh();
@@ -534,7 +534,7 @@ class StripeTestTransactionCommand extends Command
             'metadata' => $payment->toProcessorMetadata(),
         ];
 
-        $this->line("1. Settling initial payment of {$currency} ".number_format($amountMajor, 2)."...");
+        $this->line("1. Settling initial payment of {$currency} ".number_format($amountMajor, 2).'...');
         $this->deliverSignedWebhook('payment_intent.succeeded', $piData, $webhookSecret);
 
         // 2. Stripe charge.refunded
@@ -549,7 +549,7 @@ class StripeTestTransactionCommand extends Command
             'refunded' => true,
         ];
 
-        $this->line("2. Delivering authoritative charge.refunded webhook from Stripe...");
+        $this->line('2. Delivering authoritative charge.refunded webhook from Stripe...');
         $this->deliverSignedWebhook('charge.refunded', $chargeData, $webhookSecret);
 
         $payment->refresh();

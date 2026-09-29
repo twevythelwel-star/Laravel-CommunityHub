@@ -35,6 +35,8 @@ class VisitorPassMessagingTest extends TestCase
         config([
             'services.twilio.sid' => 'AC_test',
             'services.twilio.token' => 'secret-token',
+            'services.twilio.api_key' => null,
+            'services.twilio.api_secret' => null,
             'services.twilio.from' => '+18765550000',
             'services.twilio.whatsapp_from' => '+14155238886',
             'services.twilio.whatsapp_content_sid' => null,

@@ -29,6 +29,7 @@
 
     {{-- Public pages need only the stylesheet: no React bundle is shipped. --}}
     @vite(['resources/css/app.css'])
+    @livewireStyles
 
     @if($branding?->primary_color || $branding?->accent_color)
         <style>
@@ -100,5 +101,6 @@
         </div>
     </footer>
 
+    @livewireScripts
 </body>
 </html>
