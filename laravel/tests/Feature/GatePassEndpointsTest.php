@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
+use App\Enums\TokenAbility;
 use App\Enums\UserRole;
 use App\Jobs\SendVisitorPassNotification;
 use App\Models\GatePass;
@@ -118,7 +119,7 @@ class GatePassEndpointsTest extends TestCase
     public function test_the_handheld_api_scans_and_confirms_the_same_way(): void
     {
         $pass = $this->guestPass();
-        Sanctum::actingAs($this->guard);
+        Sanctum::actingAs($this->guard, TokenAbility::forUser($this->guard));
 
         $scan = $this->postJson('/api/gate-pass/validate', [
             'token' => $this->engine()->issueToken($pass)['token'],

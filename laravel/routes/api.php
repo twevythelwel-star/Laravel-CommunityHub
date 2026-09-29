@@ -54,32 +54,41 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthApiController::class, 'me']);
 
     // ── Gate pass ──
-    Route::get('/gate-pass', [GatePassApiController::class, 'show']);
-    Route::get('/gate-pass/token', [GatePassApiController::class, 'token']);
-    Route::post('/gate-pass/rotate', [GatePassApiController::class, 'rotate']);
+    // `ability:` checks the token's own scope (see TokenAbility) on top of the
+    // Gate checks below, which check the user's role. A token narrows what its
+    // holder can do even when the account behind it could do more.
+    Route::middleware('ability:gate-pass:read')->group(function () {
+        Route::get('/gate-pass', [GatePassApiController::class, 'show']);
+        Route::get('/gate-pass/token', [GatePassApiController::class, 'token']);
+        Route::post('/gate-pass/rotate', [GatePassApiController::class, 'rotate']);
+    });
 
     // Scanning is the security-critical endpoint: it both validates and writes
     // the access-log entry, so a scanner cannot record an entry it did not verify.
     Route::post('/gate-pass/validate', [GatePassApiController::class, 'validateToken'])
-        ->middleware('can:scanPasses');
+        ->middleware(['can:scanPasses', 'ability:gate-pass:scan']);
     Route::post('/gate-pass/scans/{scan}/confirm', [GatePassApiController::class, 'confirmScan'])
-        ->middleware(['can:scanPasses', 'throttle:60,1'])
+        ->middleware(['can:scanPasses', 'ability:gate-pass:scan', 'throttle:60,1'])
         ->whereUuid('scan');
 
     // ── Visitors ──
-    Route::get('/visitors', [VisitorApiController::class, 'index']);
-    Route::post('/visitors', [VisitorApiController::class, 'store']);
+    Route::middleware('ability:visitors:manage')->group(function () {
+        Route::get('/visitors', [VisitorApiController::class, 'index']);
+        Route::post('/visitors', [VisitorApiController::class, 'store']);
+    });
     Route::post('/visitors/{visitor}/check-in', [VisitorApiController::class, 'checkIn'])
-        ->middleware('can:manageSecurity');
+        ->middleware(['can:manageSecurity', 'ability:security:manage']);
     Route::post('/visitors/{visitor}/check-out', [VisitorApiController::class, 'checkOut'])
-        ->middleware('can:manageSecurity');
+        ->middleware(['can:manageSecurity', 'ability:security:manage']);
 
     // ── Access log ──
     Route::get('/access-log', [AccessLogApiController::class, 'index'])
-        ->middleware('can:manageSecurity');
+        ->middleware(['can:manageSecurity', 'ability:security:manage']);
 
     // ── Map & geofence ──
-    Route::get('/map/boundary', [MapApiController::class, 'boundary']);
-    Route::get('/map/landmarks', [MapApiController::class, 'landmarks']);
-    Route::post('/map/check-position', [MapApiController::class, 'checkPosition']);
+    Route::middleware('ability:map:read')->group(function () {
+        Route::get('/map/boundary', [MapApiController::class, 'boundary']);
+        Route::get('/map/landmarks', [MapApiController::class, 'landmarks']);
+        Route::post('/map/check-position', [MapApiController::class, 'checkPosition']);
+    });
 });

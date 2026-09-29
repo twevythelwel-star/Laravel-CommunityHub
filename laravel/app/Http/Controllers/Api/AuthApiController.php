@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\GatePassEngine;
 use Illuminate\Http\JsonResponse;
@@ -39,8 +41,8 @@ class AuthApiController extends Controller
         $user->recordActivity("Signed in from {$validated['device_name']}");
 
         return response()->json([
-            'token' => $user->createToken($validated['device_name'])->plainTextToken,
-            'user' => $this->userPayload($user),
+            'token' => $user->createToken($validated['device_name'], TokenAbility::forUser($user))->plainTextToken,
+            'user' => (new UserResource($user))->resolve(),
         ]);
     }
 
@@ -53,23 +55,6 @@ class AuthApiController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json(['user' => $this->userPayload($request->user())]);
-    }
-
-    private function userPayload(User $user): array
-    {
-        return [
-            'uid' => $user->uid,
-            'name' => $user->name,
-            'displayName' => $user->display_name,
-            'email' => $user->email,
-            'phone' => $user->phone,
-            'role' => $user->role->value,
-            'lot' => $user->lot,
-            'street' => $user->street,
-            'title' => $user->title,
-            'avatarUrl' => $user->avatar_url,
-            'property' => $user->propertyLabel(),
-        ];
+        return response()->json(['user' => (new UserResource($request->user()))->resolve()]);
     }
 }
