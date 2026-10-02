@@ -219,6 +219,10 @@ class DirectoryController extends Controller
 
         $user->update($validated);
 
+        if (! $user->isActive()) {
+            $user->tokens()->delete();
+        }
+
         $actor->recordActivity("Updated user {$user->email}");
 
         return back()->with('success', 'User updated.');

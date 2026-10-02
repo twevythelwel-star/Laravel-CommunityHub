@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\TokenAbility;
 use App\Enums\UserRole;
+use App\Models\Renter;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -115,6 +116,88 @@ class AuthApiTest extends TestCase
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/auth/logout')
             ->assertOk();
+
+        $this->assertCount(0, $user->fresh()->tokens);
+    }
+
+    // ── Accounts that stop being active lose their devices too ──
+
+    private function bearer(User $user): array
+    {
+        return ['Authorization' => 'Bearer '.$user->createToken('Test device', TokenAbility::forUser($user))->plainTextToken];
+    }
+
+    public function test_a_deactivated_accounts_existing_token_is_refused_and_deleted(): void
+    {
+        $user = User::factory()->role(UserRole::Homeowner)->create();
+        $headers = $this->bearer($user);
+
+        $user->update(['status' => 'Inactive', 'deactivated_at' => now()]);
+
+        $this->getJson('/api/auth/me', $headers)->assertUnauthorized();
+
+        $this->assertCount(0, $user->fresh()->tokens);
+    }
+
+    public function test_a_deactivated_guard_cannot_scan_with_an_old_token(): void
+    {
+        $guard = User::factory()->role(UserRole::Security)->create();
+        $headers = $this->bearer($guard);
+
+        $guard->update(['status' => 'Inactive', 'deactivated_at' => now()]);
+
+        $this->postJson('/api/gate-pass/validate', ['token' => 'anything'], $headers)->assertUnauthorized();
+    }
+
+    public function test_a_token_stops_working_when_a_temporary_stay_ends(): void
+    {
+        $guest = User::factory()->role(UserRole::TemporaryHomeowner)->create();
+        $renter = Renter::create([
+            'homeowner_id' => User::factory()->role(UserRole::Homeowner)->create()->id,
+            'user_id' => $guest->id,
+            'name' => $guest->name,
+            'stay_type' => 'Short-term (Airbnb)',
+            'lease_start' => now()->subDays(10)->toDateString(),
+            'lease_end' => now()->addDay()->toDateString(),
+        ]);
+        $headers = $this->bearer($guest);
+
+        $renter->update(['lease_end' => now()->subDay()->toDateString()]);
+
+        $this->getJson('/api/auth/me', $headers)
+            ->assertUnauthorized()
+            ->assertJsonPath('message', fn (string $message) => str_contains($message, 'temporary homeowner access expired'));
+    }
+
+    public function test_an_active_accounts_token_keeps_working(): void
+    {
+        $user = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->getJson('/api/auth/me', $this->bearer($user))->assertOk();
+    }
+
+    public function test_an_administrator_deactivating_an_account_revokes_its_tokens(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $resident->createToken('Phone');
+
+        $this->actingAs($admin)
+            ->patch("/dashboard/directory/users/{$resident->id}", ['status' => 'Inactive'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertCount(0, $resident->fresh()->tokens);
+    }
+
+    public function test_deactivating_your_own_account_revokes_your_tokens(): void
+    {
+        $user = User::factory()->create();
+        $user->createToken('Phone');
+
+        $this->actingAs($user)->post('/dashboard/deactivation', [
+            'password' => 'password',
+            'confirm' => '1',
+        ]);
 
         $this->assertCount(0, $user->fresh()->tokens);
     }

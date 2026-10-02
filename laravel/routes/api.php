@@ -48,7 +48,7 @@ Route::post('/webhooks/{provider}', ProviderWebhookController::class)
 Route::post('/webhooks/twilio/status', [TwilioWebhookController::class, 'messagingStatus'])
     ->name('webhooks.twilio.status');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::post('/auth/logout', [AuthApiController::class, 'logout']);
     Route::get('/auth/me', [AuthApiController::class, 'me']);

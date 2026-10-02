@@ -50,6 +50,7 @@ class DeactivationController extends Controller
          | "Undefined property: HasMany::$each" and deactivation 500'd.
          */
         $user->gatePasses()->active()->get()->each->revoke($user, 'Account deactivated by holder');
+        $user->tokens()->delete();
 
         $user->recordActivity('Deactivated own account');
 
