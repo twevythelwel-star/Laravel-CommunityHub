@@ -935,14 +935,6 @@ export function PaymentCenterHero({
         onClose={() => setIsCardModalOpen(false)}
         amount={Number(currentPayTotal)}
         currency={selectedCurrency}
-        onSuccess={(slip) => {
-          setIsCardModalOpen(false);
-          toast({
-            title: 'Card Payment Succeeded',
-            description: `Payment #${slip?.transaction_id || ''} confirmed and posted to community ledger.`,
-          });
-          router.reload({ preserveScroll: true });
-        }}
       />
     </div>
   );

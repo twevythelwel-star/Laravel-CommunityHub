@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, 
   Smartphone, 
@@ -1204,15 +1204,7 @@ export function ProfilePaymentsAndWallets({ billing, userRole }: ProfilePayments
         amount={balance}
         currency={currency}
         invoiceId={billing?.latestInvoice?.id}
-        invoiceReference={billing?.latestInvoice?.invoiceNumber ?? 'INV-2026-75000'}
-        savedCards={savedMethods.filter((m) => m.methodType === 'card')}
-        onSuccess={(slip) => {
-          setCurrentBalance(0);
-          toast({
-            title: 'Card Payment Succeeded',
-            description: `Payment #${slip?.transaction_id || ''} confirmed and posted to community ledger.`,
-          });
-        }}
+        invoiceReference={billing?.latestInvoice?.invoiceNumber}
       />
     </div>
   );

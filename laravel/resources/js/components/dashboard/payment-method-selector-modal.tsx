@@ -468,7 +468,7 @@ export function PaymentMethodSelectorModal({
               </div>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+                <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
                   Cancel
                 </Button>
                 <Button
@@ -569,7 +569,7 @@ export function PaymentMethodSelectorModal({
                 variant="outline"
                 onClick={() => {
                   setConfirmedSlip(null);
-                  onClose();
+                  handleClose();
                 }}
               >
                 Close
@@ -593,7 +593,7 @@ export function PaymentMethodSelectorModal({
                       onSuccess: (page) => {
                         setIsSubmitting(false);
                         setConfirmedSlip(null);
-                        onClose();
+                        handleClose();
                         const message = (page.props as { flash?: { success?: string | null } }).flash?.success;
                         if (message) {
                           toast({ title: 'Payment submitted', description: message });
@@ -629,13 +629,6 @@ export function PaymentMethodSelectorModal({
       currency={targetCurrency}
       invoiceId={invoice?.id}
       invoiceReference={targetReference}
-      onSuccess={(slip) => {
-        setCardModalOpen(false);
-        handleClose();
-        if (onSuccess) {
-          onSuccess();
-        }
-      }}
     />
     </>
   );

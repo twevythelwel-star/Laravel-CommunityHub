@@ -8,15 +8,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { CreditCard, Lock, AlertCircle, ExternalLink } from 'lucide-react';
 
-export interface SavedCardMethod {
-  id: number;
-  methodType: string;
-  brand?: string;
-  lastFour?: string;
-  displayName?: string;
-  isDefault?: boolean;
-}
-
 export interface CardPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -24,8 +15,6 @@ export interface CardPaymentModalProps {
   currency?: string;
   invoiceId?: number;
   invoiceReference?: string;
-  savedCards?: SavedCardMethod[];
-  onSuccess?: (slip: any) => void;
 }
 
 type PaymentStage = 'INPUT' | 'REDIRECTING' | 'FAILED';
