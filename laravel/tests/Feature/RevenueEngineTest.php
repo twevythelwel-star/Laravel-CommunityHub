@@ -258,7 +258,11 @@ class RevenueEngineTest extends TestCase
         $this->assertStringContainsString('USD', $csvContent);
     }
 
-    public function test_resident_can_pay_invoice_via_card_payment_endpoint(): void
+    /**
+     * The card endpoint starts a Stripe Checkout; it never settles a
+     * statement itself. Without Stripe configured there is no card payment.
+     */
+    public function test_card_payment_endpoint_does_not_settle_without_the_processor(): void
     {
         $homeowner = User::where('role', UserRole::Homeowner)->first() ?? User::factory()->create(['role' => UserRole::Homeowner]);
 
@@ -273,6 +277,8 @@ class RevenueEngineTest extends TestCase
             'due_on' => now()->addDays(14),
         ]);
 
+        $cardRowsBefore = Transaction::where('user_id', $homeowner->id)->count();
+
         $response = $this->actingAs($homeowner)->postJson('/dashboard/billing/card-pay', [
             'invoice_id' => $invoice->id,
             'amount' => 75000.00,
@@ -283,23 +289,10 @@ class RevenueEngineTest extends TestCase
             'save_card' => true,
         ]);
 
-        $response->assertOk();
-        $response->assertJson([
-            'success' => true,
-            'invoice' => [
-                'status' => 'Paid',
-                'balance_remaining' => 0.0,
-            ],
-        ]);
+        $response->assertStatus(503);
 
-        // Verify database invariants: invoice is Paid, balanced ledger entry exists, receipt issued
-        $this->assertSame('Paid', $invoice->fresh()->status);
-        $this->assertSame(0, $invoice->fresh()->balanceRemainingMinor());
-        $this->assertNotNull($invoice->fresh()->paid_at);
-
-        $ledgerRow = Transaction::where('user_id', $homeowner->id)->whereIn('payment_channel', ['card', 'stripe_card'])->latest()->first();
-        $this->assertNotNull($ledgerRow);
-        $this->assertSame(7500000, $ledgerRow->amount_minor);
-        $this->assertSame('completed', strtolower($ledgerRow->status));
+        $this->assertSame('Unpaid', $invoice->fresh()->status);
+        $this->assertSame(7500000, $invoice->fresh()->balanceRemainingMinor());
+        $this->assertSame($cardRowsBefore, Transaction::where('user_id', $homeowner->id)->count());
     }
 }

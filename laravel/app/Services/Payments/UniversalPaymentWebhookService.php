@@ -11,6 +11,7 @@ use App\Models\PaymentReceipt;
 use App\Models\Transaction;
 use App\Services\Ledger\LedgerService;
 use App\Services\Payments\Providers\ProviderRegistry;
+use App\Services\Payments\Providers\WiPay\WiPayProvider;
 use App\Services\StripePaymentService;
 use DomainException;
 use Illuminate\Http\Request;
@@ -90,6 +91,10 @@ class UniversalPaymentWebhookService
 
         // 1. Authenticate Provider
         $this->authenticateProvider($provider);
+
+        if ($provider === WiPayProvider::KEY && ! $request->hasHeader('X-WiPay-Signature')) {
+            return $this->confirmWiPayReturn($request);
+        }
 
         // 2. Verify Signature
         if (! $this->verifySignature($request, $provider)) {
@@ -227,6 +232,70 @@ class UniversalPaymentWebhookService
     }
 
     /**
+     * A WiPay result in WiPay's own return format: status, transaction_id,
+     * order_id, total and hash = md5(transaction_id . total . API key).
+     *
+     * That hash covers two fields and reaches us through the payer's browser,
+     * so every other field is the sender's to choose. The payment is found by
+     * the signed transaction_id alone, then WiPayProvider::confirmPayment()
+     * binds order_id and re-derives the hash from the payment's own amount.
+     * Only successes are taken: a failure carries no hash, so accepting one
+     * would let anyone fail another resident's payment.
+     *
+     * @return array{received: bool, outcome: string, event_id: string, message?: string}
+     */
+    protected function confirmWiPayReturn(Request $request): array
+    {
+        $payload = $this->parsePayload($request);
+        $wipayTransactionId = (string) ($payload['transaction_id'] ?? '');
+
+        if ($wipayTransactionId === '' || (string) ($payload['hash'] ?? '') === '' || ($payload['status'] ?? null) !== 'success') {
+            throw new DomainException('Invalid signature or payload for provider [wipay].');
+        }
+
+        $wipay = $this->providers->byKey(WiPayProvider::KEY);
+
+        if (! $wipay instanceof WiPayProvider || ! $wipay->isAvailable()) {
+            throw new DomainException('WiPay is not configured on this server.');
+        }
+
+        $payment = Payment::query()
+            ->where('provider', WiPayProvider::KEY)
+            ->where('provider_payment_id', $wipayTransactionId)
+            ->first();
+
+        if (! $payment) {
+            throw new DomainException('Invalid signature or payload for provider [wipay].');
+        }
+
+        $eventId = "wipay:{$wipayTransactionId}";
+
+        if ($payment->state === PaymentState::Paid) {
+            return ['received' => true, 'outcome' => 'duplicate', 'event_id' => $eventId, 'message' => 'Event already processed.'];
+        }
+
+        $payment = $wipay->confirmPayment($payment, $payload);
+
+        if (! in_array($payment->state, [PaymentState::Paid, PaymentState::Succeeded], true)) {
+            throw new DomainException('Invalid signature or payload for provider [wipay].');
+        }
+
+        PaymentEvent::query()->updateOrCreate(
+            ['provider' => WiPayProvider::KEY, 'event_id' => $eventId],
+            [
+                'event_type' => 'success',
+                'status' => 'processed',
+                'payload' => $payload,
+                'payment_id' => $payment->id,
+                'transaction_id' => $payment->ledgerPayment()?->id,
+                'processed_at' => now(),
+            ]
+        );
+
+        return ['received' => true, 'outcome' => 'processed', 'event_id' => $eventId];
+    }
+
+    /**
      * Authenticate whether the provider is recognized and active.
      */
     protected function authenticateProvider(string $provider): void
@@ -269,33 +338,18 @@ class UniversalPaymentWebhookService
                 }
 
             case 'wipay':
+                // Only an HMAC over the whole body is accepted here, because
+                // the pipeline below trusts every field of the body. WiPay's
+                // own md5 hash covers two fields and goes through
+                // confirmWiPayReturn() instead.
                 $apiKey = config('payments.providers.wipay.api_key');
-                if (! $apiKey) {
+                $headerSig = (string) $request->header('X-WiPay-Signature');
+
+                if (! $apiKey || $headerSig === '') {
                     return false;
                 }
 
-                // Check header or payload hash
-                $headerSig = $request->header('X-WiPay-Signature');
-                $payload = $this->parsePayload($request);
-                $hash = strtolower((string) ($payload['hash'] ?? $headerSig ?? ''));
-
-                $txId = (string) ($payload['transaction_id'] ?? $payload['order_id'] ?? '');
-                $total = (string) ($payload['total'] ?? '');
-
-                if ($hash !== '' && $txId !== '' && $total !== '') {
-                    $expected = md5($txId.$total.$apiKey);
-
-                    return hash_equals($expected, $hash);
-                }
-
-                // Fallback to HMAC header if provided
-                if ($headerSig) {
-                    $expectedHmac = hash_hmac('sha256', $content, $apiKey);
-
-                    return hash_equals($expectedHmac, $headerSig);
-                }
-
-                return false;
+                return hash_equals(hash_hmac('sha256', $content, $apiKey), $headerSig);
 
             case 'paypal':
                 // Check PayPal webhook signature header

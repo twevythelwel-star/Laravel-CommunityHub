@@ -15,7 +15,6 @@ use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\PaymentChannelSetting;
 use App\Models\PaymentLink;
-use App\Models\PaymentMethod;
 use App\Models\PaymentPlan;
 use App\Models\PaymentTerminal;
 use App\Models\Payout;
@@ -36,7 +35,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use Stripe\Exception\ApiErrorException;
@@ -822,26 +820,22 @@ class BillingController extends Controller
     }
 
     /**
-     * Process an authentic or test card payment for an invoice.
+     * Start a card payment for a statement by handing the resident to Stripe
+     * Checkout, and answer with the URL to send them to.
      *
-     * Non-custodial: only tokenized metadata (brand, last four, cardholder name)
-     * is processed; raw PAN and CVV never touch the database.
-     * Settles the invoice, updates the double-entry ledger, and issues an official receipt.
+     * Nothing is settled here. This used to mark the payment Succeeded, post
+     * it to the ledger and mark the statement Paid on the browser's word —
+     * no card was ever charged, so any resident could clear their own dues
+     * for free. The invoice is now settled only once Stripe reports the money,
+     * by the verified webhook or the checked return in StripeCheckoutController.
      */
-    public function processCardPayment(Request $request): JsonResponse
+    public function processCardPayment(Request $request, StripePaymentService $stripe): JsonResponse
     {
         $user = $request->user();
 
         $validated = $request->validate([
             'invoice_id' => ['nullable', 'integer'],
             'amount' => ['required', 'numeric', 'min:0.01'],
-            'currency' => ['nullable', 'string', 'in:JMD,USD,CAD,GBP,EUR,jmd,usd,cad,gbp,eur'],
-            'cardholder_name' => ['nullable', 'string', 'max:150'],
-            'last_four' => ['nullable', 'string', 'regex:/^\d{4}$/'],
-            'brand' => ['nullable', 'string', 'max:30'],
-            'save_card' => ['nullable', 'boolean'],
-            'payer_reference' => ['nullable', 'string', 'max:100'],
-            'payment_intent_id' => ['nullable', 'string', 'max:100'],
         ]);
 
         $invoice = isset($validated['invoice_id'])
@@ -856,93 +850,32 @@ class BillingController extends Controller
             return response()->json(['message' => 'There is no open statement to pay.', 'errors' => ['invoice_id' => ['There is no open statement to pay.']]], 422);
         }
 
-        $currency = strtoupper($validated['currency'] ?? ($invoice->currency ?? 'JMD'));
         $amountMinor = (int) round($validated['amount'] * 100);
 
         if ($amountMinor > $invoice->balanceRemainingMinor()) {
             return response()->json(['message' => 'That is more than the balance still owed on this statement.', 'errors' => ['amount' => ['That is more than the balance still owed on this statement.']]], 422);
         }
 
-        $lastFour = $validated['last_four'] ?? '4242';
-        $brand = ucfirst($validated['brand'] ?? 'Visa');
-        $cardholderName = $validated['cardholder_name'] ?? $user->display_name;
-        $paymentIntent = $validated['payment_intent_id'] ?? ('pi_test_'.Str::random(24));
-
-        $payment = $this->orchestrator->startPayment([
-            'user' => $user,
-            'channel' => 'card',
-            'invoice' => $invoice,
-            'purpose' => "HOA Assessment ({$brand} •••• {$lastFour})",
-            'amount_minor' => $amountMinor,
-            'currency' => $currency,
-            'payer_reference' => $validated['payer_reference'] ?? $invoice->reference,
-            'metadata' => [
-                'card_brand' => $brand,
-                'card_last_four' => $lastFour,
-                'cardholder_name' => $cardholderName,
-                'payment_intent' => $paymentIntent,
-                'settlement_mode' => 'card_processor_authorized',
-            ],
-            'source' => 'stripe:card_checkout',
-        ]);
-
-        $payment->update([
-            'channel' => 'card',
-            'provider' => 'stripe',
-            'provider_payment_id' => $paymentIntent,
-            'amount_minor' => $amountMinor,
-        ]);
-
-        $payment->advanceTo(PaymentState::Succeeded, 'stripe:card_checkout', 'Card payment authorized via card processor');
-
-        $ledger = [
-            'reference' => 'STRIPE-'.strtoupper(Str::random(12)),
-            'provider_reference' => $paymentIntent,
-            'provider_status' => 'succeeded',
-            'amount_minor' => $amountMinor,
-            'fee_minor' => 0,
-            'net_amount_minor' => $amountMinor,
-            'notes' => "Card payment ({$brand} •••• {$lastFour}) for Invoice {$invoice->reference}",
-        ];
-
-        $this->orchestrator->applyPayment($payment, $ledger, null, 'stripe:card_checkout');
-
-        if (! empty($validated['save_card'])) {
-            PaymentMethod::updateOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'last_four' => $lastFour,
-                    'brand' => $brand,
-                ],
-                [
-                    'provider' => 'stripe',
-                    'method_type' => 'card',
-                    'display_name' => "{$brand} ending in {$lastFour}",
-                    'status' => 'active',
-                    'is_default' => true,
-                    'provider_payment_method_id' => 'pm_test_'.Str::random(20),
-                ]
-            );
+        if (! $stripe->isLive()) {
+            return response()->json(['message' => 'Card payments are not available yet. Please pay at the community office or by bank transfer.'], 503);
         }
 
-        $invoice->refresh();
-        $slip = $payment->toSlip();
+        try {
+            $checkoutUrl = $stripe->createCheckoutSession(
+                $invoice,
+                route('dashboard.billing.stripe.success', ['invoice' => $invoice->id]),
+                route('dashboard.billing.stripe.cancel', ['invoice' => $invoice->id]),
+                $amountMinor,
+            );
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } catch (ApiErrorException $e) {
+            report($e);
 
-        $user->recordActivity("Paid {$currency} ".number_format($amountMinor / 100, 2)." via Card ({$brand} •••• {$lastFour})");
+            return response()->json(['message' => 'Card checkout could not be started. Please try again shortly.'], 502);
+        }
 
-        return response()->json([
-            'success' => true,
-            'message' => "Payment of {$currency} ".number_format($amountMinor / 100, 2).' successfully processed.',
-            'transaction' => $slip,
-            'slip' => $slip,
-            'transaction_id' => $payment->transaction_id,
-            'invoice' => [
-                'id' => $invoice->id,
-                'reference' => $invoice->reference,
-                'status' => $invoice->status,
-                'balance_remaining' => (float) ($invoice->balanceRemainingMinor() / 100),
-            ],
-        ]);
+        return response()->json(['checkout_url' => $checkoutUrl]);
     }
 
     /**
