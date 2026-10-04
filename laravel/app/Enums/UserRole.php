@@ -20,6 +20,12 @@ enum UserRole: string
         return in_array($this, [self::SystemAdmin, self::Admin], true);
     }
 
+    /** The gatehouse's role: scans passes and works the security desk. */
+    public function isSecurity(): bool
+    {
+        return $this === self::Security;
+    }
+
     /** Roles that occupy a property (own or lease). */
     public function isResident(): bool
     {

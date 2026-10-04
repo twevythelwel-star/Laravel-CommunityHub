@@ -132,14 +132,17 @@ class DashboardAccessTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_user_can_log_out_via_get(): void
+    /**
+     * A GET could be triggered by any page linking to /logout (an image tag
+     * in an email will do), so it must not sign anyone out.
+     */
+    public function test_a_get_request_does_not_log_out(): void
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->get('/logout');
+        $this->actingAs($user)->get('/logout')->assertMethodNotAllowed();
 
-        $response->assertRedirect(route('landing'));
-        $this->assertGuest();
+        $this->assertAuthenticatedAs($user);
     }
 
     public function test_inertia_logout_returns_location_response_without_plain_text_error(): void

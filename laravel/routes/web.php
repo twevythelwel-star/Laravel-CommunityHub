@@ -74,7 +74,9 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:6,1');
 });
 
-Route::match(['get', 'post'], '/logout', [AuthenticatedSessionController::class, 'destroy'])
+// POST only: as a GET, any page — an <img src="/logout"> in an email or forum
+// post — could sign a resident out. POST also brings CSRF protection.
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
 /*

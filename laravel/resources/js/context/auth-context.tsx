@@ -101,7 +101,21 @@ export function useAuth() {
                     window.location.href = '/';
                 },
                 onError: () => {
-                    window.location.href = '/logout';
+                    // /logout is POST-only (a GET could be fired by any page linking
+                    // to it), so the fallback is a plain form post, not a navigation.
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = '/logout';
+                    const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+                    if (token) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = '_token';
+                        input.value = token;
+                        form.appendChild(input);
+                    }
+                    document.body.appendChild(form);
+                    form.submit();
                 },
             });
         },
