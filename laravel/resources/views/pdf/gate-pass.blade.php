@@ -91,8 +91,12 @@
 
         <div class="qr-section">
             <div class="qr-box">
-                <img 
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data={{ urlencode($qrData) }}" 
+                {{-- Rendered on the server (App\Services\QrCodePng) and inlined as a
+                     data: URI. It was fetched from api.qrserver.com, which handed a
+                     third party each pass's QR content — for a visitor, the bearer
+                     guest-pass link — and cannot load at all with remote fetching off. --}}
+                <img
+                    src="{{ $qrImage }}"
                     alt="Access QR Code"
                     width="180" 
                     height="180"

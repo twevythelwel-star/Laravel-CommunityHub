@@ -7,6 +7,7 @@ use App\Models\GatePass;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Services\QrCodePng;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -55,7 +56,7 @@ class PdfController extends Controller
      * unauthenticated caller. The token is the credential the guest actually
      * holds, and GuestPassController::show() already treats it that way.
      */
-    public function downloadVisitorPass(string $token): Response
+    public function downloadVisitorPass(string $token, QrCodePng $qr): Response
     {
         $visitor = Visitor::with('homeowner')->where('share_token', $token)->firstOrFail();
         $community = Community::first();
@@ -67,7 +68,7 @@ class PdfController extends Controller
             'category' => $visitor->type ?? 'Visitor',
             'lot' => $visitor->homeowner?->lot ?? 'Residential Lot',
             'vehicle' => $visitor->vehicle,
-            'qrData' => $qrData,
+            'qrImage' => $this->qrImage($qr, $qrData),
             'community' => $community,
         ])->setPaper('a5', 'landscape');
 
@@ -80,7 +81,7 @@ class PdfController extends Controller
      * A pass is a credential document naming its holder and their lot. Only
      * the holder and the security roles that police the gate may print one.
      */
-    public function downloadGatePass(Request $request, GatePass $gatePass): Response
+    public function downloadGatePass(Request $request, GatePass $gatePass, QrCodePng $qr): Response
     {
         $user = $request->user();
 
@@ -98,11 +99,22 @@ class PdfController extends Controller
             'category' => $gatePass->category->value ?? 'Resident',
             'lot' => $gatePass->user->lot ?? 'Residential Zone',
             'vehicle' => 'REGISTERED RESIDENT',
-            'qrData' => "GATE-PASS-{$gatePass->pass_id}",
+            'qrImage' => $this->qrImage($qr, "GATE-PASS-{$gatePass->pass_id}"),
             'community' => $community,
         ])->setPaper('a5', 'landscape');
 
         return $pdf->download("resident-permit-{$gatePass->pass_id}.pdf");
+    }
+
+    /**
+     * The QR as an inline PNG data: URI, rendered here rather than by a third
+     * party; DomPDF draws data: URIs with remote fetching disabled. 180 px
+     * matches the slot in pdf/gate-pass.blade.php; margin 4 is the standard
+     * quiet zone, which printed codes need more than screens do.
+     */
+    private function qrImage(QrCodePng $qr, string $content): string
+    {
+        return 'data:image/png;base64,'.base64_encode($qr->render($content, 180, 4));
     }
 
     /**
