@@ -36,6 +36,12 @@ FROM php:8.4-apache-bookworm
 COPY --from=mlocati/php-extension-installer:2 /usr/bin/install-php-extensions /usr/local/bin/
 RUN install-php-extensions bcmath exif gd intl opcache pcntl pdo_mysql pdo_pgsql zip
 
+# Command-line optimizers behind App\Services\Media\ImageService::optimize()
+# and Media Library conversions; any that are missing are silently skipped.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends jpegoptim optipng pngquant gifsicle webp libavif-bin \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 COPY docker/php.ini "$PHP_INI_DIR/conf.d/zz-community-hub.ini"
 
