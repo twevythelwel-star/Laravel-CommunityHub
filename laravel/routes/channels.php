@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\GatePass;
 use App\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -20,11 +21,57 @@ Broadcast::channel('community-alerts', function (User $user) {
 });
 
 // Private channel for user-specific real-time notifications (e.g. visitor arrival notices)
+// Every rule checks isActive() itself: /broadcasting/auth does not run the
+// `active` middleware, so a deactivated account's session could otherwise
+// keep subscribing until it next loads a dashboard page.
 Broadcast::channel('users.{id}', function (User $user, $id) {
-    return (int) $user->id === (int) $id;
+    return $user->isActive() && (int) $user->id === (int) $id;
 });
 
 // Private channel for security gate personnel
 Broadcast::channel('gate.{gateId}', function (User $user, $gateId) {
-    return $user->role->isSecurity() || $user->role->isAdministrative();
+    return $user->isActive() && ($user->role->isSecurity() || $user->role->isAdministrative());
+});
+
+// Private channel for pass-specific real-time status tracking
+Broadcast::channel('passes.{passId}', function (User $user, $passId) {
+    if (! $user->isActive()) {
+        return false;
+    }
+
+    if ($user->role->isAdministrative() || $user->role->isSecurity()) {
+        return true;
+    }
+
+    return GatePass::where('id', $passId)
+        ->where('user_id', $user->id)
+        ->exists();
+});
+
+// Presence channel for real-time community chat and collaboration rooms
+Broadcast::channel('chat.room.{roomId}', function (User $user, $roomId) {
+    if ($user->isActive()) {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'role' => $user->role instanceof BackedEnum ? $user->role->value : (string) $user->role,
+            'avatar_url' => $user->avatar_url,
+        ];
+    }
+
+    return false;
+});
+
+// Presence channel for operations command center
+Broadcast::channel('operations-center', function (User $user) {
+    if ($user->isActive() && ($user->role->isAdministrative() || $user->role->isSecurity())) {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'role' => $user->role instanceof BackedEnum ? $user->role->value : (string) $user->role,
+            'title' => $user->title ?? 'Operator',
+        ];
+    }
+
+    return false;
 });

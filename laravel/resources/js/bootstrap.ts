@@ -20,3 +20,6 @@ if (token) {
 }
 
 window.axios.defaults.withCredentials = true;
+
+// Initialize Laravel Echo real-time WebSockets
+import './echo';
