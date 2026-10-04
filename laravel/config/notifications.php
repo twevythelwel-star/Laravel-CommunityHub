@@ -141,7 +141,8 @@ return [
 
         // Outbound Signed Webhooks
         'webhook' => [
-            'signing_secret' => env('NOTIFICATION_WEBHOOK_SECRET', 'ch_whsec_universal_notifications_token'),
+            // No default: a secret in the source signs nothing a receiver can trust.
+            'signing_secret' => env('NOTIFICATION_WEBHOOK_SECRET'),
             'timeout' => 5, // seconds
             'user_agent' => 'CommunityHub-NotificationEngine/2.0',
         ],

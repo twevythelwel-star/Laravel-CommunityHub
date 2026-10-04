@@ -31,6 +31,7 @@
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="GATE_ENGINE_SECRET" value="base64:dGVzdGluZy1zZWNyZXQtZm9yLXBocHVuaXQtb25seS1ub3QtcmVhbA=="/>
         <env name="GATE_COMMUNITY_ID" value="CID-CYPRESS-BAY"/>
+        <env name="NOTIFICATION_WEBHOOK_SECRET" value="testing-notification-webhook-secret-not-real"/>
         <env name="STRIPE_SECRET" value=""/>
         <env name="PAYMENTS_CARD_PROVIDER" value=""/>
     </php>

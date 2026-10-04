@@ -203,9 +203,12 @@
             </p>
         </div>
 
-        @if (config('app.env') !== 'production')
+        {{-- Local and testing only, like users:set-passwords: the password below is
+             every seeded account's, the System Admin's included. It used to be
+             printed into this page's script in every environment. --}}
+        @if (app()->environment('local', 'testing'))
             <!-- Demo Credentials Quick Fill Drawer -->
-            <details id="credentials-drawer" class="mt-6 rounded-xl border border-border/60 bg-muted/20 p-3.5 transition-all">
+            <details id="credentials-drawer" data-demo-password="{{ config('auth.seed_password') }}" class="mt-6 rounded-xl border border-border/60 bg-muted/20 p-3.5 transition-all">
                 <summary class="cursor-pointer text-xs sm:text-sm font-medium text-foreground flex items-center justify-between select-none">
                     <span class="flex items-center gap-2">
                         <svg class="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -215,7 +218,7 @@
                     </span>
                     <span class="text-[11px] text-primary bg-primary/10 px-2 py-0.5 rounded-full font-semibold">1-Click</span>
                 </summary>
-                <p class="mt-2 text-[11px] text-muted-foreground">Click any role to autofill credentials instantly (default password: <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">ChangeMe!2026</code>):</p>
+                <p class="mt-2 text-[11px] text-muted-foreground">Click any role to autofill credentials instantly (default password: <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">{{ config('auth.seed_password') }}</code>):</p>
                 <div class="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     @foreach ([
                         ['Alexander Wright', 'System Admin',        'alexander.wright@communityhub.org'],
@@ -355,7 +358,7 @@
         document.querySelectorAll('[data-fill]').forEach(function (button) {
             button.addEventListener('click', function () {
                 var fillEmail = button.dataset.fill;
-                var defaultPassword = @json(env('SEED_PASSWORD', 'ChangeMe!2026'));
+                var defaultPassword = document.getElementById('credentials-drawer')?.dataset.demoPassword ?? '';
                 if (emailInput && passwordInput) {
                     emailInput.value = fillEmail;
                     passwordInput.value = defaultPassword;

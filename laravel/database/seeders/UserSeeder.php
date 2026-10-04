@@ -21,7 +21,9 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        $password = env('SEED_PASSWORD', 'ChangeMe!2026');
+        // From config: the env helper returns null once config is cached,
+        // which silently seeded every account with the literal default.
+        $password = config('auth.seed_password');
 
         $accounts = [
             [

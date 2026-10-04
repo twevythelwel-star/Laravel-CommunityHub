@@ -20,7 +20,7 @@ class SignedHttpWebhookProvider
 
     public function __construct()
     {
-        $this->secret = (string) config('notifications.providers.webhook.signing_secret', 'ch_whsec_universal_token');
+        $this->secret = (string) config('notifications.providers.webhook.signing_secret');
         $this->timeout = (int) config('notifications.providers.webhook.timeout', 5);
         $this->userAgent = (string) config('notifications.providers.webhook.user_agent', 'CommunityHub-NotificationEngine/2.0');
     }
@@ -41,6 +41,12 @@ class SignedHttpWebhookProvider
 
         if (empty($targetUrl)) {
             return ChannelDeliveryReport::skipped('webhook', $this->providerKey(), 'No webhook target URL provided.');
+        }
+
+        // Without a secret of our own there is no signature a receiver can
+        // trust; it used to fall back to a token published in this source.
+        if (! $this->isConfigured()) {
+            return ChannelDeliveryReport::skipped('webhook', $this->providerKey(), 'NOTIFICATION_WEBHOOK_SECRET is not set.');
         }
 
         try {
