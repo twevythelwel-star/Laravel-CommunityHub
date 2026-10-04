@@ -23,3 +23,8 @@ yarn-error.log
 # local tenant creation): data, never source.
 /database/tenant*
 /storage/tenant*
+# Unmodified copies published from packages (spatie/laravel-backup
+# translations, maatwebsite/excel stubs). Laravel reads the package's own;
+# committing copies would freeze them. Remove a line here to customise.
+/lang/vendor
+/stubs
