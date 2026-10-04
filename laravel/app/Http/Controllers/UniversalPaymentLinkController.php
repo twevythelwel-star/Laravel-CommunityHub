@@ -8,6 +8,7 @@ use App\Models\PaymentLink;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\Payments\PaymentOrchestratorService;
+use App\Services\QrCodePng;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -53,7 +54,14 @@ class UniversalPaymentLinkController extends Controller
         ]);
     }
 
-    public function poster(string $token): Response
+    /**
+     * Printable poster whose QR opens the public payment page.
+     *
+     * The QR is rendered here and inlined as a PNG data: URI, which DomPDF
+     * draws with remote fetching disabled. 220 px matches .qr-img in
+     * pdf/qr-poster.blade.php; margin 4 is the standard quiet zone for print.
+     */
+    public function poster(string $token, QrCodePng $qr): Response
     {
         $this->ensureEnabled();
 
@@ -63,6 +71,7 @@ class UniversalPaymentLinkController extends Controller
         $pdf = Pdf::loadView('pdf.qr-poster', [
             'paymentLink' => $paymentLink,
             'community' => $community,
+            'qrImage' => 'data:image/png;base64,'.base64_encode($qr->render($paymentLink->publicUrl(), 220, 4)),
         ]);
 
         return $pdf->stream('payment-poster-'.$token.'.pdf');

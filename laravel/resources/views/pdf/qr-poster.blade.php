@@ -115,7 +115,11 @@
         @endif
 
         <div class="qr-wrapper">
-            <img class="qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ urlencode($paymentLink->publicUrl()) }}" alt="Scan to Pay">
+            {{-- Rendered on the server (App\Services\QrCodePng) and inlined as a
+                 data: URI. It was fetched from api.qrserver.com, which handed a
+                 third party every payment link, and cannot load at all with
+                 remote fetching off. --}}
+            <img class="qr-img" src="{{ $qrImage }}" alt="Scan to Pay">
         </div>
 
         <div class="scan-prompt">Point Your Phone Camera to Pay</div>

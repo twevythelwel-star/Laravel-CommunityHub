@@ -3,19 +3,21 @@
 namespace Tests\Feature;
 
 use App\Enums\VisitorStatus;
+use App\Models\PaymentLink;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GatePassEngine;
 use App\Services\QrCodePng;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Gate and visitor pass PDFs carry their QR code as an image rendered on the
- * server. They used to point at api.qrserver.com, which received each pass's
- * QR content — for a visitor, the guest-pass link, a bearer credential — and
- * which DomPDF cannot fetch anyway with remote loading off.
+ * Gate pass, visitor pass and payment poster PDFs carry their QR code as an
+ * image rendered on the server. They used to point at api.qrserver.com, which
+ * received each QR's content — for a visitor, the guest-pass link, a bearer
+ * credential — and which DomPDF cannot fetch anyway with remote loading off.
  */
 class PassPdfQrCodeTest extends TestCase
 {
@@ -29,10 +31,10 @@ class PassPdfQrCodeTest extends TestCase
     }
 
     /** Lets the real renderer run while checking what it was asked to encode. */
-    private function expectQrFor(string $content): void
+    private function expectQrFor(string $content, int $size = 180): void
     {
-        $this->partialMock(QrCodePng::class, function (MockInterface $qr) use ($content) {
-            $qr->shouldReceive('render')->once()->with($content, 180, 4)->passthru();
+        $this->partialMock(QrCodePng::class, function (MockInterface $qr) use ($content, $size) {
+            $qr->shouldReceive('render')->once()->with($content, $size, 4)->passthru();
         });
     }
 
@@ -68,9 +70,41 @@ class PassPdfQrCodeTest extends TestCase
         $this->assertEmbedsAnImage($response->getContent());
     }
 
-    public function test_the_template_no_longer_calls_a_third_party(): void
+    public function test_the_payment_poster_pdf_embeds_a_locally_rendered_qr(): void
     {
-        $template = file_get_contents(resource_path('views/pdf/gate-pass.blade.php'));
+        config(['payments.public_links_enabled' => true]);
+
+        $link = PaymentLink::create([
+            'token' => 'poster-qr-1234',
+            'title' => 'Perimeter Lighting Fund',
+            'amount_minor' => 5000,
+            'currency' => 'JMD',
+            'active' => true,
+        ]);
+
+        // 220 px matches .qr-img in pdf/qr-poster.blade.php.
+        $this->expectQrFor($link->publicUrl(), 220);
+
+        $response = $this->get("/pay/{$link->token}/poster")
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $this->assertEmbedsAnImage($response->getContent());
+    }
+
+    /** @return array<string, array{string}> */
+    public static function qrTemplates(): array
+    {
+        return [
+            'gate pass' => ['views/pdf/gate-pass.blade.php'],
+            'payment poster' => ['views/pdf/qr-poster.blade.php'],
+        ];
+    }
+
+    #[DataProvider('qrTemplates')]
+    public function test_the_template_no_longer_calls_a_third_party(string $path): void
+    {
+        $template = file_get_contents(resource_path($path));
 
         // No image is loaded from anywhere off the server (the comment may name the old host).
         $this->assertDoesNotMatchRegularExpression('#src\s*=\s*["\']\s*(https?:)?//#i', $template);
