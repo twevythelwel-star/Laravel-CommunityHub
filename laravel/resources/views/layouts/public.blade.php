@@ -1,5 +1,6 @@
 @php
     $branding = $branding ?? \App\Models\BrandingSetting::current();
+    $community = $community ?? \App\Models\Community::default();
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -8,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>@yield('title', $branding->app_name ?? 'Community Hub')</title>
+    <title>@yield('title', ($community?->name ? $community->name . ' — ' : '') . ($branding->app_name ?? 'Community Hub'))</title>
     <meta name="description" content="@yield('description', 'Secure gated-community management — digital gate passes, visitor clearance and community services.')">
 
     <link rel="manifest" href="/manifest.json">
@@ -53,10 +54,22 @@
                 @if($branding?->logo_url)
                     <img src="{{ $branding->logo_url }}" alt="" class="h-8 w-8 rounded" width="32" height="32">
                 @endif
-                {{ $branding->app_name ?? 'Community Hub' }}
+                <div class="flex flex-col">
+                    <span class="text-sm font-bold leading-tight">{{ $branding->app_name ?? 'Community Hub' }}</span>
+                    @if($community?->name)
+                        <span class="text-[11px] font-medium text-muted-foreground leading-tight">{{ $community->name }}</span>
+                    @endif
+                </div>
             </a>
 
             <div class="flex items-center gap-3 text-sm">
+                {{-- Only for those who can open it: the hub is the security desk's. --}}
+                @can('manageSecurity')
+                <a href="{{ route('operations.hub') }}" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                    Livewire Hub
+                </a>
+                @endcan
                 <a href="{{ route('privacy') }}" class="text-muted-foreground hover:text-foreground">Privacy</a>
                 @auth
                     <a href="{{ route('dashboard.index') }}" class="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground">Dashboard</a>

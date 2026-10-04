@@ -32,6 +32,22 @@ use App\Http\Controllers\GuestPassController;
 use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PublicPageController;
 use App\Http\Controllers\UniversalPaymentLinkController;
+use App\Http\Controllers\UniversalSearchController;
+use App\Livewire\CommunityOperationsHub;
+use App\Livewire\Components\UiShowcase;
+use App\Livewire\Features\FeatureFlagHub;
+use App\Livewire\Filament\FilamentHub;
+use App\Livewire\GatePasses\PassManager;
+use App\Livewire\Notifications\UniversalNotificationHub;
+use App\Livewire\Observability\ObservabilityHub;
+use App\Livewire\Payments\PaymentGatewayHub;
+use App\Livewire\Pdf\PdfGenerationHub;
+use App\Livewire\Performance\OctanePerformanceHub;
+use App\Livewire\Queue\HorizonQueueHub;
+use App\Livewire\Realtime\RealtimeOperationsHub;
+use App\Livewire\Residents\ResidentDirectory;
+use App\Livewire\Spreadsheets\SpreadsheetOperationsHub;
+use App\Livewire\Warnings\WarningDesk;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -61,6 +77,70 @@ Route::get('/rsvp/{token}', [EventRsvpController::class, 'show'])->name('rsvp.sh
 Route::post('/rsvp/{token}', [EventRsvpController::class, 'submit'])
     ->middleware('throttle:30,1')
     ->name('rsvp.submit');
+
+/*
+|--------------------------------------------------------------------------
+| Livewire Operations Hub — Livewire 4 + Alpine.js + Tailwind CSS
+|--------------------------------------------------------------------------
+| Reactive operations center: forms, tables, search, filtering, dashboards,
+| modals, dynamic components, gate passes, residents, and security desk.
+|
+| Signed-in, active accounts only: these pages list residents and passes and
+| can create, revoke and check passes in and out. Livewire re-applies this
+| middleware to each component update, not just the first page load.
+*/
+Route::middleware(['auth', 'active'])->group(function () {
+    Route::get('/operations', CommunityOperationsHub::class)->middleware('can:manageSecurity')->name('operations.hub');
+    Route::get('/operations/passes', PassManager::class)->middleware('can:manageSecurity')->name('operations.passes');
+    Route::get('/operations/directory', ResidentDirectory::class)->middleware('can:manageUsers')->name('operations.directory');
+    Route::get('/operations/warnings', WarningDesk::class)->name('operations.warnings');
+    Route::get('/operations/ui-kit', UiShowcase::class)->name('operations.ui-kit');
+    Route::get('/operations/realtime', RealtimeOperationsHub::class)->middleware('can:manageSecurity')->name('operations.realtime-hub');
+    Route::middleware('can:operatePlatform')->group(function () {
+        Route::get('/operations/queues', HorizonQueueHub::class)->name('operations.queues');
+        Route::get('/operations/octane', OctanePerformanceHub::class)->name('operations.octane');
+        Route::get('/operations/observability', ObservabilityHub::class)->name('operations.observability');
+    });
+    Route::get('/operations/features', FeatureFlagHub::class)->middleware('can:operatePlatform')->name('operations.features');
+    Route::get('/operations/pdf', PdfGenerationHub::class)->middleware('can:issueDocuments')->name('operations.pdf');
+    // Gated per blueprint inside the component (EnterpriseSpreadsheetService::EXPORT_GATES).
+    Route::get('/operations/spreadsheets', SpreadsheetOperationsHub::class)->name('operations.spreadsheets');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Universal Search Module — Laravel Scout Full-Text & Cross-Entity Search
+    |--------------------------------------------------------------------------
+    | Powered by Laravel Scout: database, meilisearch, algolia, typesense drivers.
+    | What each account can find is narrowed by EntityAccess in the service.
+    */
+    Route::get('/search', [UniversalSearchController::class, 'index'])->name('search.index');
+    Route::get('/api/search', [UniversalSearchController::class, 'search'])->name('api.search');
+    Route::get('/api/search/driver', [UniversalSearchController::class, 'driverInfo'])->name('api.search.driver');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Query Builder Module — Spatie Laravel Query Builder Explorer
+    |--------------------------------------------------------------------------
+    | Dynamic filtering, sorting, includes, sparse fieldsets, and pagination.
+    | The explorer offers only the entities EntityAccess allows the viewer.
+    */
+    Route::get('/query-builder', function () {
+        return view('query-builder.index');
+    })->name('query-builder.index');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Filament Module Suite — Multi-Panel, CRUD, Forms, Tables, Infolists
+    |--------------------------------------------------------------------------
+    | Admin Panel for internal teams (/admin) and Resident Portal for customers (/portal).
+    | Security desk only: every panel lists and acts on the estate's passes.
+    */
+    Route::middleware('can:manageSecurity')->group(function () {
+        Route::get('/admin', FilamentHub::class)->name('filament.admin');
+        Route::get('/portal', FilamentHub::class)->name('filament.portal');
+        Route::get('/filament', FilamentHub::class)->name('filament.hub');
+    });
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -274,6 +354,8 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/notifications/broadcast', [NotificationController::class, 'broadcastEmergency'])
         ->middleware('can:broadcastNotices')
         ->name('notifications.broadcast');
+    Route::get('/notifications/hub', UniversalNotificationHub::class)
+        ->name('notifications.universal-hub');
 
     Route::get('/updates', [UpdateController::class, 'index'])
         ->middleware('can:accessCommunityLife')
@@ -418,6 +500,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])
             ->middleware('can:manageBilling')
             ->name('billing.transactions.refund');
+        Route::get('/billing/gateway-hub', PaymentGatewayHub::class)
+            ->middleware('can:manageBilling')
+            ->name('billing.gateway-hub');
     });
 
     Route::middleware('can:accessCommunityLife')->group(function () {
