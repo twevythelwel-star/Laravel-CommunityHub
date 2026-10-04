@@ -4,6 +4,21 @@ use App\Http\Controllers\Api\AccessLogApiController;
 use App\Http\Controllers\Api\AuthApiController;
 use App\Http\Controllers\Api\GatePassApiController;
 use App\Http\Controllers\Api\MapApiController;
+use App\Http\Controllers\Api\QueryApiController;
+use App\Http\Controllers\Api\V1\DocsApiController;
+use App\Http\Controllers\Api\V1\FeatureFlagApiController;
+use App\Http\Controllers\Api\V1\ModularPaymentApiController;
+use App\Http\Controllers\Api\V1\MonitoringApiController;
+use App\Http\Controllers\Api\V1\ObservabilityApiController;
+use App\Http\Controllers\Api\V1\OctaneApiController;
+use App\Http\Controllers\Api\V1\PdfApiController;
+use App\Http\Controllers\Api\V1\QueueApiController;
+use App\Http\Controllers\Api\V1\RealtimeApiController;
+use App\Http\Controllers\Api\V1\SpreadsheetApiController;
+use App\Http\Controllers\Api\V1\TokenApiController;
+use App\Http\Controllers\Api\V1\UniversalNotificationApiController;
+use App\Http\Controllers\Api\V1\VersionApiController;
+use App\Http\Controllers\Api\V1\WebhookApiController;
 use App\Http\Controllers\Api\VisitorApiController;
 use App\Http\Controllers\ProviderWebhookController;
 use App\Http\Controllers\StripeWebhookController;
@@ -91,4 +106,186 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/map/landmarks', [MapApiController::class, 'landmarks']);
         Route::post('/map/check-position', [MapApiController::class, 'checkPosition']);
     });
+});
+
+/*
+|--------------------------------------------------------------------------
+| Spatie Query Builder RESTful API (v1)
+|--------------------------------------------------------------------------
+| Declarative filtering (?filter[...]), sorting (?sort=...),
+| relationship inclusion (?include=...), sparse fieldsets (?fields[...]=...),
+| and pagination (?page[number]=...&page[size]=... or ?per_page=...).
+|
+| Token holders only, and each entity behind its own gate (EntityAccess,
+| checked in QueryApiController) — these list residents, the ledger, and
+| the estate's passes and visitors.
+*/
+Route::prefix('v1')->middleware(['auth:sanctum', 'active'])->group(function () {
+    Route::get('/query-meta', [QueryApiController::class, 'meta'])->name('api.v1.query.meta');
+    Route::get('/gate-passes', [QueryApiController::class, 'gatePasses'])->name('api.v1.gate-passes');
+    Route::get('/visitors', [QueryApiController::class, 'visitors'])->name('api.v1.visitors');
+    Route::get('/transactions', [QueryApiController::class, 'transactions'])->name('api.v1.transactions');
+    Route::get('/users', [QueryApiController::class, 'users'])->name('api.v1.users');
+    Route::get('/warnings', [QueryApiController::class, 'warnings'])->name('api.v1.warnings');
+    Route::get('/query/{entity}', [QueryApiController::class, 'query'])->name('api.v1.query.entity');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Standard Enterprise API Architecture Layer
+|--------------------------------------------------------------------------
+| OpenAPI Documentation, API Versioning (/api/v1, /api/v2),
+| Health & Telemetry Metrics, Sanctum Token Lifecycle & Scoped Abilities,
+| Outgoing & Incoming Webhooks.
+*/
+
+// Root API Discovery & Docs
+Route::get('/docs', [DocsApiController::class, 'ui'])->name('api.docs');
+Route::get('/openapi.json', [DocsApiController::class, 'openApiJson'])->name('api.openapi');
+Route::get('/versions', [VersionApiController::class, 'index'])->name('api.versions');
+Route::get('/version', [VersionApiController::class, 'show'])->name('api.version');
+Route::get('/health', [MonitoringApiController::class, 'health'])->name('api.health');
+
+// ── API v1 ──
+Route::prefix('v1')->group(function () {
+    // Documentation & Version Meta
+    Route::get('/docs', [DocsApiController::class, 'ui'])->defaults('version', 'v1')->name('api.v1.docs');
+    Route::get('/openapi.json', [DocsApiController::class, 'openApiJson'])->defaults('version', 'v1')->name('api.v1.openapi');
+    Route::get('/version', [VersionApiController::class, 'show'])->name('api.v1.version');
+    Route::get('/health', [MonitoringApiController::class, 'health'])->name('api.v1.health');
+
+    // External incoming webhooks (signature verified, rate-limited)
+    Route::post('/webhooks/incoming/{service}', [WebhookApiController::class, 'incoming'])
+        ->middleware('throttle:api.webhooks')
+        ->name('api.v1.webhooks.incoming');
+
+    // Authenticated API v1 routes
+    Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        // Personal Access Token Management (creation, scoped abilities, revocation)
+        Route::get('/tokens', [TokenApiController::class, 'index'])->name('api.v1.tokens.index');
+        Route::post('/tokens', [TokenApiController::class, 'store'])->name('api.v1.tokens.store');
+        Route::delete('/tokens', [TokenApiController::class, 'destroyAll'])->name('api.v1.tokens.destroy-all');
+        Route::delete('/tokens/{tokenId}', [TokenApiController::class, 'destroy'])->name('api.v1.tokens.destroy');
+
+        // Webhook Subscriptions & Testing (System Admin: outbound integrations)
+        Route::middleware('can:operatePlatform')->group(function () {
+            Route::get('/webhooks/subscriptions', [WebhookApiController::class, 'index'])->name('api.v1.webhooks.subscriptions.index');
+            Route::post('/webhooks/subscriptions', [WebhookApiController::class, 'store'])->name('api.v1.webhooks.subscriptions.store');
+            Route::get('/webhooks/subscriptions/{subscription}', [WebhookApiController::class, 'show'])->name('api.v1.webhooks.subscriptions.show');
+            Route::delete('/webhooks/subscriptions/{subscription}', [WebhookApiController::class, 'destroy'])->name('api.v1.webhooks.subscriptions.destroy');
+            Route::post('/webhooks/subscriptions/{subscription}/test', [WebhookApiController::class, 'test'])->name('api.v1.webhooks.subscriptions.test');
+        });
+
+        // Optional Modular Payments & Subscriptions (Cashier, Stripe, PayPal, Square, Adyen, Braintree, Flutterwave, Paystack, Mollie, Authorize.Net)
+        Route::post('/payments/checkout-session', [ModularPaymentApiController::class, 'createCheckoutSession'])->name('api.v1.payments.checkout-session');
+        Route::post('/payments/billing-portal', [ModularPaymentApiController::class, 'createBillingPortalSession'])->name('api.v1.payments.billing-portal');
+        Route::post('/payments/subscriptions', [ModularPaymentApiController::class, 'createSubscription'])->name('api.v1.payments.subscriptions');
+        Route::delete('/payments/subscriptions/{id}', [ModularPaymentApiController::class, 'cancelSubscription'])->name('api.v1.payments.subscriptions.cancel');
+        Route::post('/payments/coupons/validate', [ModularPaymentApiController::class, 'validateCoupon'])->name('api.v1.payments.coupons.validate');
+        // Universal Multi-Channel Notification Engine (Email, SMS, WhatsApp, Push, Slack, Teams, Webhook, In-App, Database)
+        Route::post('/notifications/dispatch', [UniversalNotificationApiController::class, 'dispatchNotification'])->name('api.v1.notifications.dispatch');
+        Route::get('/notifications/inbox', [UniversalNotificationApiController::class, 'inbox'])->name('api.v1.notifications.inbox');
+        Route::post('/notifications/{id}/read', [UniversalNotificationApiController::class, 'markAsRead'])->name('api.v1.notifications.mark-read');
+        Route::post('/notifications/read-all', [UniversalNotificationApiController::class, 'markAllAsRead'])->name('api.v1.notifications.mark-all-read');
+        Route::get('/notifications/deliveries', [UniversalNotificationApiController::class, 'deliveries'])->name('api.v1.notifications.deliveries');
+        // Real-Time WebSockets (Laravel Reverb & Echo)
+        Route::post('/realtime/broadcast', [RealtimeApiController::class, 'broadcast'])->name('api.v1.realtime.broadcast');
+    });
+
+    /*
+    | Platform operations: queues, Octane, observability and metrics. These
+    | were public (or any token's): anyone could read the application and
+    | audit logs, write fake audit entries, inject or resolve tracked errors,
+    | run concurrency benchmarks, and queue email, SMS, export and webhook
+    | jobs. System Admin tokens only (`operatePlatform`). Load balancers keep
+    | Laravel's /up, and /api/health above, for liveness.
+    */
+    Route::middleware(['auth:sanctum', 'active', 'throttle:api', 'can:operatePlatform'])->group(function () {
+        // System & Telemetry Monitoring
+        Route::get('/metrics', [MonitoringApiController::class, 'metrics'])->name('api.v1.metrics');
+
+        // Background Queues & Horizon Processing Layer (11 Domains)
+        Route::post('/queues/dispatch', [QueueApiController::class, 'dispatchJob'])->name('api.v1.queues.dispatch');
+        Route::get('/queues/stats', [QueueApiController::class, 'stats'])->name('api.v1.queues.stats');
+        Route::get('/queues/jobs', [QueueApiController::class, 'jobs'])->name('api.v1.queues.jobs');
+        Route::get('/queues/horizon-status', [QueueApiController::class, 'horizonStatus'])->name('api.v1.queues.horizon-status');
+
+        // Laravel Octane Performance & Concurrency Endpoints
+        Route::get('/octane/status', [OctaneApiController::class, 'status'])->name('api.v1.octane.status');
+        Route::get('/octane/servers', [OctaneApiController::class, 'servers'])->name('api.v1.octane.servers');
+        Route::get('/octane/suitability', [OctaneApiController::class, 'suitability'])->name('api.v1.octane.suitability');
+        Route::post('/octane/benchmark-concurrency', [OctaneApiController::class, 'benchmarkConcurrency'])->name('api.v1.octane.benchmark-concurrency');
+
+        // Reusable Observability Module Endpoints
+        Route::get('/observability/status', [ObservabilityApiController::class, 'status'])->name('api.v1.observability.status');
+        Route::get('/observability/health', [ObservabilityApiController::class, 'health'])->name('api.v1.observability.health');
+        Route::get('/observability/performance', [ObservabilityApiController::class, 'performance'])->name('api.v1.observability.performance');
+        Route::get('/observability/logs', [ObservabilityApiController::class, 'logs'])->name('api.v1.observability.logs');
+        Route::get('/observability/audit-logs', [ObservabilityApiController::class, 'auditLogs'])->name('api.v1.observability.audit-logs');
+        Route::get('/observability/errors', [ObservabilityApiController::class, 'errors'])->name('api.v1.observability.errors');
+        Route::post('/observability/errors/{id}/resolve', [ObservabilityApiController::class, 'resolveError'])->name('api.v1.observability.resolve-error');
+        Route::get('/observability/queue-metrics', [ObservabilityApiController::class, 'queueMetrics'])->name('api.v1.observability.queue-metrics');
+        Route::post('/observability/simulate-error', [ObservabilityApiController::class, 'simulateError'])->name('api.v1.observability.simulate-error');
+        Route::post('/observability/write-audit', [ObservabilityApiController::class, 'writeAudit'])->name('api.v1.observability.write-audit');
+    });
+
+    // Public catalog of notification channels. Sending and reading are not
+    // public: `send` reached any email, phone, user or webhook URL without a
+    // token, and the inbox without a token listed every user's notifications.
+    Route::get('/notifications/channels', [UniversalNotificationApiController::class, 'channels'])->name('api.v1.notifications.channels');
+    Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        Route::post('/notifications/send', [UniversalNotificationApiController::class, 'dispatchNotification'])->name('api.v1.notifications.send');
+        Route::get('/notifications/inbox', [UniversalNotificationApiController::class, 'inbox'])->name('api.v1.notifications.public-inbox');
+    });
+
+    // Real-Time WebSocket Echo Config & Channels Catalog
+    Route::get('/realtime/config', [RealtimeApiController::class, 'config'])->name('api.v1.realtime.config');
+    Route::get('/realtime/channels', [RealtimeApiController::class, 'channels'])->name('api.v1.realtime.channels');
+
+    /*
+    | Feature flags, PDF documents and spreadsheets. All three were public:
+    | anyone could switch features on or off for everybody, produce invoices
+    | and receipts in the estate's name, and download the resident roster or
+    | the ledger. Token holders only, then each action behind its own gate;
+    | spreadsheets are gated per blueprint in SpreadsheetApiController.
+    */
+    Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
+        // Laravel Pennant Feature Flags (feature.enabled, beta, A/B, rollout, tenant, role)
+        Route::get('/features', [FeatureFlagApiController::class, 'index'])->name('api.v1.features.index');
+        Route::get('/features/catalog', [FeatureFlagApiController::class, 'catalog'])->name('api.v1.features.catalog');
+        Route::post('/features/check', [FeatureFlagApiController::class, 'check'])->name('api.v1.features.check');
+        Route::middleware('can:operatePlatform')->group(function () {
+            Route::post('/features/activate', [FeatureFlagApiController::class, 'activate'])->name('api.v1.features.activate');
+            Route::post('/features/deactivate', [FeatureFlagApiController::class, 'deactivate'])->name('api.v1.features.deactivate');
+            Route::post('/features/purge', [FeatureFlagApiController::class, 'purge'])->name('api.v1.features.purge');
+            Route::post('/features/simulate', [FeatureFlagApiController::class, 'simulate'])->name('api.v1.features.simulate');
+        });
+
+        // PDF Generation Architecture (DOMPDF / Spatie, Invoices, Certificates, Reports, Receipts, Statements, Letters, Tickets, Government Forms)
+        Route::get('/pdf/catalog', [PdfApiController::class, 'catalog'])->name('api.v1.pdf.catalog');
+        Route::get('/pdf/drivers', [PdfApiController::class, 'drivers'])->name('api.v1.pdf.drivers');
+        Route::middleware('can:issueDocuments')->group(function () {
+            Route::post('/pdf/preview/{type}', [PdfApiController::class, 'preview'])->name('api.v1.pdf.preview');
+            Route::post('/pdf/download/{type}', [PdfApiController::class, 'download'])->name('api.v1.pdf.download');
+            Route::post('/pdf/generate', [PdfApiController::class, 'generate'])->name('api.v1.pdf.generate');
+        });
+
+        // Excel & CSV Data Processing Module (Maatwebsite / Laravel Excel, XLSX/CSV, Imports, Exports, Queued Exports, Large Datasets)
+        Route::get('/spreadsheets/blueprints', [SpreadsheetApiController::class, 'blueprints'])->name('api.v1.spreadsheets.blueprints');
+        Route::get('/spreadsheets/export/{blueprint}', [SpreadsheetApiController::class, 'export'])->name('api.v1.spreadsheets.export');
+        Route::post('/spreadsheets/export-queue/{blueprint}', [SpreadsheetApiController::class, 'queueExport'])->name('api.v1.spreadsheets.export-queue');
+        Route::post('/spreadsheets/import/{blueprint}', [SpreadsheetApiController::class, 'import'])->name('api.v1.spreadsheets.import');
+        Route::get('/spreadsheets/sample-template/{blueprint}', [SpreadsheetApiController::class, 'sampleTemplate'])->name('api.v1.spreadsheets.sample-template');
+    });
+
+    // Public payment module catalog
+    Route::get('/payments/modules', [ModularPaymentApiController::class, 'modules'])->name('api.v1.payments.modules');
+});
+
+// ── API v2 (Next Gen Architecture Preview) ──
+Route::prefix('v2')->group(function () {
+    Route::get('/docs', [DocsApiController::class, 'ui'])->defaults('version', 'v2')->name('api.v2.docs');
+    Route::get('/openapi.json', [DocsApiController::class, 'openApiJson'])->defaults('version', 'v2')->name('api.v2.openapi');
+    Route::get('/version', [VersionApiController::class, 'show'])->name('api.v2.version');
+    Route::get('/health', [MonitoringApiController::class, 'health'])->name('api.v2.health');
 });

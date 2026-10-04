@@ -69,6 +69,8 @@ return [
 
     'wallets' => array_values(array_filter(array_map('trim', explode(',', (string) env('PAYMENTS_WALLETS', ''))))),
 
+    'default_gateway' => env('PAYMENTS_DEFAULT_GATEWAY', 'stripe'),
+
     'providers' => [
 
         /*
@@ -85,6 +87,58 @@ return [
             'origin' => env('WIPAY_ORIGIN', 'CommunityHub'),
         ],
 
+        /*
+         | Optional Modular Drivers Configuration (Cashier & Direct SDKs)
+         | All payment drivers remain optional modules decoupled from core Laravel.
+         */
+        'paypal' => [
+            'client_id' => env('PAYPAL_CLIENT_ID'),
+            'secret' => env('PAYPAL_SECRET'),
+            'mode' => env('PAYPAL_MODE', 'sandbox'), // sandbox | live
+        ],
+
+        'square' => [
+            'access_token' => env('SQUARE_ACCESS_TOKEN'),
+            'location_id' => env('SQUARE_LOCATION_ID'),
+            'environment' => env('SQUARE_ENVIRONMENT', 'sandbox'), // sandbox | production
+            'webhook_signature_key' => env('SQUARE_WEBHOOK_SIGNATURE_KEY'),
+        ],
+
+        'adyen' => [
+            'api_key' => env('ADYEN_API_KEY'),
+            'merchant_account' => env('ADYEN_MERCHANT_ACCOUNT'),
+            'environment' => env('ADYEN_ENVIRONMENT', 'test'), // test | live
+            'hmac_key' => env('ADYEN_HMAC_KEY'),
+        ],
+
+        'braintree' => [
+            'merchant_id' => env('BRAINTREE_MERCHANT_ID'),
+            'public_key' => env('BRAINTREE_PUBLIC_KEY'),
+            'private_key' => env('BRAINTREE_PRIVATE_KEY'),
+            'environment' => env('BRAINTREE_ENVIRONMENT', 'sandbox'),
+        ],
+
+        'flutterwave' => [
+            'public_key' => env('FLUTTERWAVE_PUBLIC_KEY'),
+            'secret_key' => env('FLUTTERWAVE_SECRET_KEY'),
+            'secret_hash' => env('FLUTTERWAVE_SECRET_HASH'),
+        ],
+
+        'paystack' => [
+            'public_key' => env('PAYSTACK_PUBLIC_KEY'),
+            'secret_key' => env('PAYSTACK_SECRET_KEY'),
+        ],
+
+        'mollie' => [
+            'api_key' => env('MOLLIE_API_KEY'),
+        ],
+
+        'authorizenet' => [
+            'api_login_id' => env('AUTHORIZENET_API_LOGIN_ID'),
+            'transaction_key' => env('AUTHORIZENET_TRANSACTION_KEY'),
+            'signature_key' => env('AUTHORIZENET_SIGNATURE_KEY'),
+            'environment' => env('AUTHORIZENET_ENVIRONMENT', 'sandbox'),
+        ],
     ],
 
 ];
