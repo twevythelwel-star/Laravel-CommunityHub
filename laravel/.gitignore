@@ -19,3 +19,7 @@ yarn-error.log
 /.idea
 /.vscode
 /database/database.sqlite
+# Per-tenant SQLite databases and storage created by stancl/tenancy (tests and
+# local tenant creation): data, never source.
+/database/tenant*
+/storage/tenant*

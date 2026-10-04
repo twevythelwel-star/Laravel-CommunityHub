@@ -3,13 +3,23 @@
 namespace App\Providers;
 
 use App\Events\VisitorCheckedInEvent;
+use App\Http\Middleware\EnsureUserIsActive;
+use App\Models\Community;
+use App\Services\Api\RateLimiting\ApiRateLimiter;
+use App\Services\Features\FeatureFlagService;
 use App\Services\GatePassEngine;
 use App\Services\GeofenceService;
 use App\Services\NotificationEngine\NotificationEngine;
+use App\Services\Notifications\NotificationService;
+use App\Services\Notifications\Universal\Contracts\NotificationServiceInterface;
+use App\Services\Notifications\Universal\UniversalNotificationService;
+use App\Services\Payments\Modular\PaymentGatewayManager;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -17,20 +27,45 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(GeofenceService::class);
 
-        // Resolved lazily so the missing-secret guard only fires when the engine
-        // is actually used, not on every container boot.
         $this->app->singleton(GatePassEngine::class, fn () => new GatePassEngine);
+        $this->app->singleton(PaymentGatewayManager::class);
+        $this->app->singleton(UniversalNotificationService::class);
+        $this->app->singleton(NotificationService::class);
+        $this->app->singleton(FeatureFlagService::class);
+        $this->app->bind(NotificationServiceInterface::class, UniversalNotificationService::class);
     }
 
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
 
+        // Register custom API Rate Limiters (api, api.sensitive, api.webhooks)
+        ApiRateLimiter::register();
+
+        // Register enterprise Laravel Pennant feature flags
+        app(FeatureFlagService::class)->registerFeatures();
+
+        // Livewire re-runs `auth` on every component update by default, but not
+        // `active`; without this a deactivated account keeps working an open page.
+        if (class_exists(Livewire::class)) {
+            Livewire::addPersistentMiddleware([EnsureUserIsActive::class]);
+        }
+
         Event::listen(VisitorCheckedInEvent::class, function (VisitorCheckedInEvent $event) {
             try {
                 app(NotificationEngine::class)->dispatchArrivalNotice($event->visitor, $event->gate);
             } catch (\Throwable $e) {
                 Log::warning('Failed to dispatch arrival notice: '.$e->getMessage());
+            }
+        });
+
+        View::composer(['blade.*', 'layouts.public', 'pdf.*'], function ($view) {
+            $community = Community::default() ?? Community::first();
+            if (! array_key_exists('community', $view->getData())) {
+                $view->with('community', $community);
+            }
+            if (! array_key_exists('community_name', $view->getData())) {
+                $view->with('community_name', $community?->name ?? 'Community Hub');
             }
         });
     }

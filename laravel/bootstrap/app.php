@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ApiLoggingMiddleware;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -28,11 +29,16 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        $middleware->api(append: [
+            ApiLoggingMiddleware::class,
+        ]);
+
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'role' => EnsureUserHasRole::class,
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
+            'api.log' => ApiLoggingMiddleware::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

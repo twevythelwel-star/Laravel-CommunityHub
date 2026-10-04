@@ -86,6 +86,24 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('viewAppChangelog', fn (User $user) => $user->role === UserRole::SystemAdmin);
 
         /*
+         | Running the platform rather than the estate: dispatching queue jobs,
+         | load benchmarks, and the application and audit logs. The logs carry
+         | residents' personal data, and an audit trail anyone could write to
+         | would prove nothing, so this is the System Admin's alone.
+         */
+        Gate::define('operatePlatform', fn (User $user) => $user->role === UserRole::SystemAdmin);
+
+        // Scramble's generated API reference (/docs/api) outside local: a map of every endpoint.
+        Gate::define('viewApiDocs', fn (User $user) => $user->role === UserRole::SystemAdmin);
+
+        /*
+         | Issuing documents in the estate's name — invoices, receipts,
+         | statements, certificates, letters, government forms — from content
+         | the caller supplies. In anyone else's hands that is a forgery kit.
+         */
+        Gate::define('issueDocuments', fn (User $user) => $user->role->isAdministrative());
+
+        /*
          | Who may open the payments area at all: administrators, Homeowners and
          | Temporary Homeowners. Security and Staff are not billed by the estate
          | and have no invoices, so the page held nothing for them — and merely

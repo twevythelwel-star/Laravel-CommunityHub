@@ -17,6 +17,7 @@
         "laravel-vite-plugin": "^1.0.5",
         "postcss": "^8.4.39",
         "tailwindcss": "^3.4.6",
+        "tailwindcss-animate": "^1.0.7",
         "typescript": "^5.5.3",
         "vite": "^5.3.4"
     },
@@ -52,8 +53,10 @@
         "embla-carousel-react": "^8.6.0",
         "framer-motion": "^12.38.0",
         "jsqr": "^1.4.0",
+        "laravel-echo": "^2.5.0",
         "leaflet": "^1.9.4",
         "lucide-react": "^0.475.0",
+        "pusher-js": "^8.6.0",
         "qrcode-generator": "^2.0.4",
         "react": "^18.3.1",
         "react-day-picker": "^8.10.1",
@@ -63,7 +66,6 @@
         "react-qr-code": "^2.0.15",
         "recharts": "^2.15.1",
         "tailwind-merge": "^3.0.1",
-        "tailwindcss-animate": "^1.0.7",
         "zod": "^3.24.2"
     }
 }
