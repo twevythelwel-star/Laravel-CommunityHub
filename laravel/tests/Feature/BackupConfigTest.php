@@ -87,12 +87,28 @@ class BackupConfigTest extends TestCase
 
     public function test_backup_disks_and_the_monitor_follow_backup_disks(): void
     {
+        // Laravel reads $_SERVER and $_ENV before getenv(), and .env (copied
+        // from .env.example in CI) already sets BACKUP_DISKS — so all three
+        // must be overridden, and restored.
+        $saved = [$_SERVER['BACKUP_DISKS'] ?? null, $_ENV['BACKUP_DISKS'] ?? null, getenv('BACKUP_DISKS')];
+        $_SERVER['BACKUP_DISKS'] = $_ENV['BACKUP_DISKS'] = ' s3, local ,';
         putenv('BACKUP_DISKS= s3, local ,');
 
         try {
             $config = require config_path('backup.php');
         } finally {
-            putenv('BACKUP_DISKS');
+            [$server, $env, $getenv] = $saved;
+            if ($server === null) {
+                unset($_SERVER['BACKUP_DISKS']);
+            } else {
+                $_SERVER['BACKUP_DISKS'] = $server;
+            }
+            if ($env === null) {
+                unset($_ENV['BACKUP_DISKS']);
+            } else {
+                $_ENV['BACKUP_DISKS'] = $env;
+            }
+            putenv($getenv === false ? 'BACKUP_DISKS' : "BACKUP_DISKS={$getenv}");
         }
 
         $this->assertSame(['s3', 'local'], $config['backup']['destination']['disks']);
