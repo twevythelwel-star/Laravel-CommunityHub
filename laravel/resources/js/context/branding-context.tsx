@@ -88,6 +88,7 @@ const DEFAULT_BRANDING: BrandingState = {
 /** Shape shared by HandleInertiaRequests::branding(). */
 type SharedBranding = {
     appName?: string;
+    communityName?: string;
     logoUrl?: string | null;
     primaryColor?: string | null;
     accentColor?: string | null;
@@ -116,9 +117,11 @@ function readBranding(shared: SharedBranding | undefined): BrandingState {
     return {
         appName: shared?.appName || DEFAULT_BRANDING.appName,
         communityName:
-            typeof tokens.communityName === 'string'
-                ? tokens.communityName
-                : DEFAULT_BRANDING.communityName,
+            typeof shared?.communityName === 'string' && shared.communityName
+                ? shared.communityName
+                : typeof tokens.communityName === 'string'
+                    ? tokens.communityName
+                    : DEFAULT_BRANDING.communityName,
         iconUrl: shared?.logoUrl ?? DEFAULT_BRANDING.iconUrl,
         iconSize: typeof tokens.iconSize === 'number' ? tokens.iconSize : DEFAULT_BRANDING.iconSize,
         themePreset: isThemePreset(tokens.themePreset)
@@ -159,6 +162,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
                         '/dashboard/settings',
                         {
                             app_name: next.appName,
+                            community_name: next.communityName,
                             logo_url: next.iconUrl,
                             // Preset, icon size and community name are
                             // presentation-only, so they ride in theme_tokens.

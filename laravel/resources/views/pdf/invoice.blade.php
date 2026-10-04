@@ -101,7 +101,7 @@
                 <div class="logo-text">{{ $community->name ?? 'Community Hub' }}</div>
                 <div style="color: #64748b; font-size: 12px; margin-top: 4px;">
                     Residential Homeowners Association<br>
-                    Cypress Bay Estate Operations
+                    {{ $community->name ?? 'Community' }} Estate Operations
                 </div>
             </td>
             <td class="invoice-title">

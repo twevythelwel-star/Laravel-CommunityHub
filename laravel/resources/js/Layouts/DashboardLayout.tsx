@@ -116,8 +116,10 @@ export default function DashboardLayout({
 }) {
   // Inertia exposes the current URL on the page object; `usePathname` was a
   // next/navigation hook and has no Inertia equivalent.
-  const { url } = usePage();
+  const { url, props } = usePage();
   const pathname = url.split('?')[0];
+  const branding = (props as Record<string, any>).branding;
+  const communityName = branding?.communityName || branding?.themeTokens?.communityName;
 
   const { user, loading, logout, justSignedIn } = useAuth();
   const isClient = useIsClient();
@@ -187,6 +189,7 @@ export default function DashboardLayout({
     <TooltipProvider delayDuration={200}>
       {showSplash && user && (
         <WelcomeAnimation
+          communityName={communityName}
           username={user.displayName || user.name}
           onComplete={() => setShowSplash(false)}
         />

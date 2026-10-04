@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
 use App\Models\BrandingSetting;
+use App\Models\Community;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rules\Password;
@@ -26,6 +27,7 @@ class SettingsController extends Controller
         $user = $request->user();
         $preferences = $user->preferences;
         $branding = BrandingSetting::query()->first();
+        $community = Community::default();
 
         return Inertia::render('Dashboard/Settings', [
             'preferences' => [
@@ -40,12 +42,16 @@ class SettingsController extends Controller
 
             'branding' => [
                 'appName' => $branding?->app_name ?? config('app.name'),
+                'communityName' => $community?->name ?? 'Cypress Bay',
                 'logoUrl' => $branding?->logo_url,
                 'primaryColor' => $branding?->primary_color,
                 'accentColor' => $branding?->accent_color,
                 'backgroundColor' => $branding?->background_color,
                 'defaultTheme' => $branding?->default_theme ?? 'system',
-                'themeTokens' => $branding?->theme_tokens ?? [],
+                'themeTokens' => array_merge(
+                    $branding?->theme_tokens ?? [],
+                    ['communityName' => $community?->name ?? 'Cypress Bay']
+                ),
             ],
 
             'can' => [
@@ -69,8 +75,9 @@ class SettingsController extends Controller
             'notify_push' => ['sometimes', 'boolean'],
             'notify_sms' => ['sometimes', 'boolean'],
 
-            // ── Estate-wide branding, admin only ──
+            // ── Estate-wide branding & community name, admin only ──
             'app_name' => ['sometimes', 'string', 'max:80'],
+            'community_name' => ['sometimes', 'string', 'max:120'],
             'logo_url' => ['nullable', 'string', 'max:2048'],
             'primary_color' => ['nullable', 'string', 'max:32'],
             'accent_color' => ['nullable', 'string', 'max:32'],
@@ -98,12 +105,28 @@ class SettingsController extends Controller
             'background_color', 'default_theme', 'theme_tokens',
         ]));
 
-        if ($branding !== []) {
+        $communityName = $validated['community_name']
+            ?? $validated['theme_tokens']['communityName']
+            ?? null;
+
+        if ($branding !== [] || $communityName !== null) {
             $this->authorize('manageUsers');
 
-            BrandingSetting::current()->update($branding);
+            if ($branding !== []) {
+                BrandingSetting::current()->update($branding);
+            }
 
-            $user->recordActivity('Updated community branding');
+            if ($communityName !== null && trim($communityName) !== '') {
+                $cleanName = trim($communityName);
+                Community::query()->update(['name' => $cleanName]);
+
+                $currentBranding = BrandingSetting::current();
+                $tokens = $currentBranding->theme_tokens ?? [];
+                $tokens['communityName'] = $cleanName;
+                $currentBranding->update(['theme_tokens' => $tokens]);
+            }
+
+            $user->recordActivity('Updated community branding and name');
         }
 
         if (isset($validated['password'])) {

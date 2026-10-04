@@ -90,7 +90,7 @@
 <body>
     <div class="header">
         <span class="receipt-badge">DONATION RECORD</span>
-        <div class="org-name">{{ $community->name ?? 'Cypress Bay Community' }}</div>
+        <div class="org-name">{{ $community->name ?? 'Community' }}</div>
         <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Community Fund Contribution Record</div>
     </div>
 

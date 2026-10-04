@@ -15,7 +15,7 @@
         <div class="mb-7 text-center">
             <div class="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-md mb-3">
                 <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Community Portal Access
+                <span>{{ $community->name ?? $branding->theme_tokens['communityName'] ?? 'Community Portal Access' }}</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Welcome Back</h1>
             <p class="mt-1.5 text-xs sm:text-sm text-muted-foreground">Sign in to access your gated residence ecosystem</p>
@@ -52,6 +52,17 @@
 
             <!-- Stage Container for Inputs -->
             <div id="liquid-stage" class="space-y-3 mx-auto w-full max-w-[380px]">
+                <!-- Community Name Indicator above username -->
+                <div class="flex items-center justify-between px-3 text-xs">
+                    <span class="inline-flex items-center gap-1.5 font-semibold text-foreground/80 tracking-wide uppercase text-[11px]">
+                        <svg class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <span>{{ $community->name ?? $branding->theme_tokens['communityName'] ?? 'Community Hub' }}</span>
+                    </span>
+                    <span class="text-[11px] font-medium text-muted-foreground/80">Authorized Access</span>
+                </div>
+
                 <!-- TOP CAPSULE: Email input -->
                 <div id="capsule-top" class="liquid-capsule relative z-10 w-full transition-all duration-200">
                     <div id="capsule-top-skin" class="liquid-chrome-surface relative flex h-14 w-full items-center justify-between rounded-full px-5 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/40">

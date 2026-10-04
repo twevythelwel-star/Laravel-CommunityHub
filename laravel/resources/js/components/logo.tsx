@@ -21,7 +21,14 @@ export function Logo() {
         ) : (
              <Building2 className="h-6 w-6 text-primary" />
         )}
-      <h1 className="font-headline text-xl font-bold text-foreground">{branding.appName}</h1>
+      <div className="flex flex-col min-w-0">
+        <h1 className="font-headline text-base font-bold leading-tight text-foreground truncate">{branding.appName}</h1>
+        {branding.communityName && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate leading-tight">
+            {branding.communityName}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

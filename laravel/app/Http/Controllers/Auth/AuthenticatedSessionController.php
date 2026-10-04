@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\BrandingSetting;
+use App\Models\Community;
 use App\Services\GatePassEngine;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +27,7 @@ class AuthenticatedSessionController extends Controller
     {
         return view('blade.landing', [
             'branding' => BrandingSetting::current(),
+            'community' => Community::default(),
         ]);
     }
 

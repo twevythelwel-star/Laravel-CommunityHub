@@ -191,15 +191,21 @@ class HandleInertiaRequests extends Middleware
     private function branding(): array
     {
         $branding = BrandingSetting::query()->first();
+        $community = Community::default();
+        $communityName = $community?->name ?? ($branding?->theme_tokens['communityName'] ?? 'Community Hub');
+
+        $tokens = $branding?->theme_tokens ?? [];
+        $tokens['communityName'] = $communityName;
 
         return [
             'appName' => $branding?->app_name ?? config('app.name'),
+            'communityName' => $communityName,
             'logoUrl' => $branding?->logo_url,
             'primaryColor' => $branding?->primary_color,
             'accentColor' => $branding?->accent_color,
             'backgroundColor' => $branding?->background_color,
             'defaultTheme' => $branding?->default_theme ?? 'system',
-            'themeTokens' => $branding?->theme_tokens ?? [],
+            'themeTokens' => $tokens,
         ];
     }
 }

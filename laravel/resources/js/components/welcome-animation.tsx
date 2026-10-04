@@ -5,10 +5,11 @@ import { Image } from "@/components/ui/image";
 
 interface WelcomeAnimationProps {
   username: string;
+  communityName?: string;
   onComplete?: () => void;
 }
 
-export function WelcomeAnimation({ username, onComplete }: WelcomeAnimationProps) {
+export function WelcomeAnimation({ username, communityName, onComplete }: WelcomeAnimationProps) {
   const [isDone, setIsDone] = useState(false);
 
   useEffect(() => {
@@ -93,9 +94,9 @@ export function WelcomeAnimation({ username, onComplete }: WelcomeAnimationProps
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: 0.85 }}
-                className="text-amber-200/70 text-[10px] uppercase tracking-[0.35em] font-medium mb-3"
+                className="text-amber-200/80 text-[10px] uppercase tracking-[0.35em] font-medium mb-3"
               >
-                Welcome
+                {communityName ? `Welcome to ${communityName}` : 'Welcome'}
               </motion.p>
               <motion.h2
                 initial={{ opacity: 0, y: 10 }}

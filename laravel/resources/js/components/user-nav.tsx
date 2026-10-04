@@ -13,9 +13,11 @@ import {
 import { CreditCard, KeyRound, LogOut, Settings, User } from "lucide-react";
 import { Link } from "@inertiajs/react";
 import { useAuth } from "@/context/auth-context";
+import { useBranding } from "@/context/branding-context";
 
 export function UserNav() {
   const { user, logout } = useAuth();
+  const { branding } = useBranding();
 
   if (!user) {
     return null;
@@ -63,6 +65,11 @@ export function UserNav() {
       <DropdownMenuContent className="w-60" align="end" forceMount>
         <DropdownMenuLabel className="font-normal py-2">
           <div className="flex flex-col space-y-1.5">
+            {branding.communityName && (
+              <span className="text-[10px] font-bold tracking-wider uppercase text-primary leading-none">
+                {branding.communityName}
+              </span>
+            )}
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold leading-none truncate">{user.displayName || user.name}</p>
               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-4 border ${getRoleBadgeClass(user.role)}`}>

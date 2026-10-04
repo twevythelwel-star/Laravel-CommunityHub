@@ -101,7 +101,7 @@
 <body>
     <div class="poster">
         <div class="header">
-            <div class="estate-name">{{ $community->name ?? 'Cypress Bay Community' }}</div>
+            <div class="estate-name">{{ $community->name ?? 'Community' }}</div>
             <h1 class="campaign-title">{{ $paymentLink->title }}</h1>
             @if($paymentLink->description)
                 <p class="campaign-desc">{{ $paymentLink->description }}</p>

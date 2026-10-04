@@ -85,7 +85,7 @@
 
     <div class="permit-card">
         <div class="permit-header">
-            <h1 class="title">{{ $community->name ?? 'CYPRESS BAY' }}</h1>
+            <h1 class="title">{{ strtoupper($community->name ?? 'Community Access') }}</h1>
             <div class="subtitle">OFFICIAL VEHICLE DASHBOARD ENTRY PERMIT</div>
         </div>
 

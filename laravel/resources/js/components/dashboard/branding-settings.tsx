@@ -1,18 +1,20 @@
 
 
 import { useBranding, ThemePreset, THEME_PRESETS } from '@/context/branding-context';
+import { router } from '@inertiajs/react';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import { useToast } from '@/hooks/use-toast';
-import { ChangeEvent } from 'react';
+import { ChangeEvent, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Check } from 'lucide-react';
+import { Check, Loader2, Save } from 'lucide-react';
 
 export function BrandingSettings() {
   const { branding, setBranding, resetBranding } = useBranding();
   const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleAppNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setBranding({ appName: e.target.value });
@@ -20,6 +22,42 @@ export function BrandingSettings() {
 
   const handleNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setBranding({ communityName: e.target.value });
+  };
+
+  const handleSave = () => {
+    setIsSaving(true);
+    router.patch(
+      '/dashboard/settings',
+      {
+        app_name: branding.appName,
+        community_name: branding.communityName,
+        logo_url: branding.iconUrl,
+        theme_tokens: {
+          themePreset: branding.themePreset,
+          iconSize: branding.iconSize,
+          communityName: branding.communityName,
+        },
+      },
+      {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+          setIsSaving(false);
+          toast({
+            title: "Settings Saved",
+            description: `Community name updated to "${branding.communityName}". All documents and system screens will reflect this change.`,
+          });
+        },
+        onError: () => {
+          setIsSaving(false);
+          toast({
+            variant: "destructive",
+            title: "Save Failed",
+            description: "Unable to update community branding. Please check permissions.",
+          });
+        }
+      }
+    );
   };
 
   const handleIconUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -142,9 +180,15 @@ export function BrandingSettings() {
         </div>
       </div>
       
-      <Button onClick={handleReset} variant="outline">
-        Reset to Defaults
-      </Button>
+      <div className="flex items-center gap-3 pt-2">
+        <Button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2">
+          {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          <span>{isSaving ? "Saving..." : "Save Changes"}</span>
+        </Button>
+        <Button onClick={handleReset} variant="outline" disabled={isSaving}>
+          Reset to Defaults
+        </Button>
+      </div>
     </div>
   );
 }

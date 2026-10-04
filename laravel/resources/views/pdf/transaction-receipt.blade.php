@@ -85,7 +85,7 @@
 <body>
     <div class="header">
         <div class="receipt-badge">OFFICIAL PAYMENT RECEIPT</div>
-        <div class="org-name">{{ $community->name ?? 'Cypress Bay Community HOA' }}</div>
+        <div class="org-name">{{ $community->name ?? 'Community HOA' }}</div>
         <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Treasury & Revenue Orchestration Engine</div>
         <div class="clear"></div>
     </div>
@@ -135,7 +135,7 @@
     </div>
 
     <div style="font-size: 12px; color: #64748b; line-height: 1.6; margin-top: 20px;">
-        This document serves as formal confirmation of payment processed through the Cypress Bay Community Treasury. Payment is recorded in minor units to the Master Ledger and reconciled with financial settlement institutions.
+        This document serves as formal confirmation of payment processed through the {{ $community->name ?? 'Community' }} Treasury. Payment is recorded in minor units to the Master Ledger and reconciled with financial settlement institutions.
     </div>
 
     <div class="footer">
