@@ -24,13 +24,17 @@ class QrPaymentDriver implements PaymentDriverInterface
         $qrToken = 'CH-'.strtoupper(Str::random(12));
         $paymentUrl = url('/p/'.$qrToken);
 
+        /*
+         | A failed render leaves the image out and the payment URL still works.
+         | It used to fall back to api.qrserver.com, which handed a third party
+         | the payment URL.
+         */
         $qrPngBase64 = null;
         try {
-            $qrRenderer = app(QrCodePng::class);
-            $pngBinary = $qrRenderer->render($paymentUrl, 260, 2);
+            $pngBinary = app(QrCodePng::class)->render($paymentUrl, 260, 2);
             $qrPngBase64 = 'data:image/png;base64,'.base64_encode($pngBinary);
-        } catch (\Throwable) {
-            $qrPngBase64 = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data='.urlencode($paymentUrl);
+        } catch (\Throwable $e) {
+            report($e);
         }
 
         return [
