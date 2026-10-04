@@ -32,12 +32,23 @@
     @vite(['resources/css/app.css'])
     @livewireStyles
 
-    @if($branding?->primary_color || $branding?->accent_color)
+    {{-- Only a chosen preset overrides app.css, whose dark mode has its own brighter primary. --}}
+    @php
+        $presetColors = $branding?->hasThemePreset() ? $branding->getThemePresetColors() : null;
+    @endphp
+    @if($presetColors || $branding?->primary_color || $branding?->accent_color || $branding?->background_color)
         <style>
-            :root {
-                @if($branding->primary_color) --brand-primary: {{ $branding->primary_color }}; @endif
-                @if($branding->accent_color) --brand-accent: {{ $branding->accent_color }}; @endif
-                @if($branding->background_color) --brand-background: {{ $branding->background_color }}; @endif
+            :root, .dark {
+                @if($presetColors)
+                    --primary: {{ $presetColors['primary'] }};
+                    --primary-foreground: {{ $presetColors['primary_foreground'] }};
+                    --accent: {{ $presetColors['accent'] }};
+                    --accent-foreground: {{ $presetColors['accent_foreground'] }};
+                    --ring: {{ $presetColors['primary'] }};
+                @endif
+                @if($branding?->primary_color) --brand-primary: {{ $branding->primary_color }}; @endif
+                @if($branding?->accent_color) --brand-accent: {{ $branding->accent_color }}; @endif
+                @if($branding?->background_color) --brand-background: {{ $branding->background_color }}; @endif
             }
         </style>
     @endif

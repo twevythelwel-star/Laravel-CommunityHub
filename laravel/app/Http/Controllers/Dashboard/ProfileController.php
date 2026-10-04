@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Models\BrandingSetting;
 use App\Services\GatePassEngine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -96,6 +98,7 @@ class ProfileController extends Controller
                 'avatarUrl' => $user->avatar_url,
                 'aiConsent' => $user->ai_consent,
                 'property' => $user->propertyLabel(),
+                'userThemePreset' => $userPrefs?->theme_preset,
             ],
             'passVisual' => [
                 'passId' => $pass->pass_id,
@@ -228,5 +231,25 @@ class ProfileController extends Controller
         }
 
         return back()->with('success', 'Payment preferences updated successfully.');
+    }
+
+    /**
+     * Allows any authenticated user (Homeowner, Resident, Security, Staff, Admin)
+     * to personalize the application theme preset for their individual profile.
+     */
+    public function updateThemePreset(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            // 'default' and 'community' (or nothing) mean: follow the community's preset.
+            'theme_preset' => ['nullable', 'string', Rule::in([...array_keys(BrandingSetting::THEME_PRESETS), 'default', 'community'])],
+        ]);
+
+        $preset = BrandingSetting::isValidPreset($validated['theme_preset'] ?? null) ? $validated['theme_preset'] : null;
+
+        $user = $request->user();
+        // Keep the loaded relation current: the shared Inertia props read it.
+        $user->setRelation('preferences', $user->preferences()->updateOrCreate([], ['theme_preset' => $preset]));
+
+        return back()->with('success', $preset ? 'Personal theme preset updated.' : 'Theme reset to community default.');
     }
 }

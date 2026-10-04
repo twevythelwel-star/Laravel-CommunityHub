@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CreditCard, KeyRound, LogOut, Settings, User } from "lucide-react";
+import { CreditCard, KeyRound, LogOut, Palette, Settings, User } from "lucide-react";
 import { Link } from "@inertiajs/react";
 import { useAuth } from "@/context/auth-context";
 import { useBranding } from "@/context/branding-context";
@@ -87,6 +87,12 @@ export function UserNav() {
             <DropdownMenuItem className="cursor-pointer">
               <User className="mr-2 h-4 w-4 text-muted-foreground" />
               <span>Profile Details</span>
+            </DropdownMenuItem>
+          </Link>
+          <Link href="/dashboard/profile">
+            <DropdownMenuItem className="cursor-pointer">
+              <Palette className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Theme & Appearance</span>
             </DropdownMenuItem>
           </Link>
           {(user.role === 'Homeowner' || user.role === 'Admin' || user.role === 'System Admin') && (

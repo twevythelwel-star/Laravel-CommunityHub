@@ -12,7 +12,7 @@ class UserPreference extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'theme', 'map_show_boundary', 'map_show_landmarks',
+        'user_id', 'theme', 'theme_preset', 'map_show_boundary', 'map_show_landmarks',
         'notify_email', 'notify_push', 'notify_sms', 'extra',
     ];
 

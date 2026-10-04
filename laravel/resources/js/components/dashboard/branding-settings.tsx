@@ -152,7 +152,7 @@ export function BrandingSettings() {
             );
           })}
         </div>
-        <p className="text-xs text-muted-foreground">Select a curated color palette for the application branding.</p>
+        <p className="text-xs text-muted-foreground">Select a curated color palette for the application branding (15 palettes available).</p>
       </div>
 
       <div className="space-y-2">

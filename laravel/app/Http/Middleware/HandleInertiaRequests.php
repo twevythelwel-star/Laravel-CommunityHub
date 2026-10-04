@@ -67,7 +67,7 @@ class HandleInertiaRequests extends Middleware
                 ] : [],
             ],
 
-            'branding' => fn () => $this->branding(),
+            'branding' => fn () => $this->branding($user?->preferences?->theme_preset),
 
             /*
              | Published community boundary.
@@ -83,6 +83,7 @@ class HandleInertiaRequests extends Middleware
 
             'theme' => [
                 'preference' => $user?->preferences?->theme ?? 'system',
+                'preset' => $user?->preferences?->theme_preset,
             ],
 
             /*
@@ -188,7 +189,7 @@ class HandleInertiaRequests extends Middleware
         ];
     }
 
-    private function branding(): array
+    private function branding(?string $userThemePreset = null): array
     {
         $branding = BrandingSetting::query()->first();
         $community = Community::default();
@@ -206,6 +207,7 @@ class HandleInertiaRequests extends Middleware
             'backgroundColor' => $branding?->background_color,
             'defaultTheme' => $branding?->default_theme ?? 'system',
             'themeTokens' => $tokens,
+            'userThemePreset' => $userThemePreset,
         ];
     }
 }

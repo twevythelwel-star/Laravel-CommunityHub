@@ -6,8 +6,8 @@
 @section('content')
 <div class="relative mx-auto flex min-h-[calc(100vh-12rem)] max-w-lg flex-col justify-center px-4 py-8 sm:py-12">
 
-    <!-- Ambient Background Friendly Community Glow -->
-    <div class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-amber-200/25 via-orange-100/15 to-emerald-100/20 blur-[100px] dark:from-stone-800/40 dark:via-amber-950/20 dark:to-stone-900/40"></div>
+    <!-- Ambient Background Theme-Coordinated Glow -->
+    <div class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[420px] w-[420px] rounded-full bg-gradient-to-tr from-primary/25 via-accent/20 to-primary/10 blur-[100px] dark:from-primary/30 dark:via-accent/20 dark:to-transparent"></div>
 
     <div class="relative z-10 overflow-hidden rounded-2xl border border-border/80 bg-card/90 p-6 shadow-2xl backdrop-blur-xl sm:p-9">
 
@@ -84,14 +84,15 @@
 
                 <!-- TOP CAPSULE: Email input -->
                 <div id="capsule-top" class="liquid-capsule relative z-10 w-full transition-all duration-200">
-                    <div id="capsule-top-skin" class="liquid-chrome-surface relative flex h-14 w-full items-center justify-between rounded-full px-5 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/40">
-                        <!-- Soft Warm Pearl Shimmer -->
+                    <div id="capsule-top-skin" class="liquid-chrome-surface relative flex h-14 w-full items-center justify-between rounded-full px-5 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+                        <!-- Soft Theme Shimmer -->
                         <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/70 via-transparent to-stone-400/15 mix-blend-overlay"></div>
-                        <div class="pointer-events-none absolute -left-1/2 top-0 h-[200%] w-[50%] -rotate-45 bg-gradient-to-r from-transparent via-amber-100/35 dark:via-white/20 to-transparent chrome-shimmer"></div>
+                        <div class="pointer-events-none absolute -left-1/2 top-0 h-[200%] w-[50%] -rotate-45 bg-gradient-to-r from-transparent via-primary/20 dark:via-primary/25 to-transparent chrome-shimmer"></div>
 
                         <!-- Email Field -->
+                        <label for="email" class="sr-only">Email address</label>
                         <div id="email-field-content" class="relative z-10 flex w-full items-center gap-3">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-stone-200/70 dark:bg-stone-800/80 text-stone-600 dark:text-stone-300">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206" />
                                 </svg>
@@ -105,28 +106,28 @@
                                 autofocus
                                 placeholder="name@community.org"
                                 autocomplete="username"
+                                spellcheck="false"
+                                autocapitalize="none"
                                 aria-label="Email address"
                                 class="w-full bg-transparent text-sm font-medium text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none"
                             >
                         </div>
-                        <label for="email" class="sr-only">Email address</label>
                     </div>
                 </div>
 
                 <!-- BOTTOM CAPSULE: Password input -->
                 <div id="capsule-bottom" class="liquid-capsule relative z-10 w-full transition-all duration-200">
-                    <div id="capsule-bottom-skin" class="liquid-chrome-surface relative flex h-14 w-full items-center justify-between rounded-full px-5 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/40">
-                        <!-- Soft Warm Pearl Shimmer -->
+                    <div id="capsule-bottom-skin" class="liquid-chrome-surface relative flex h-14 w-full items-center justify-between rounded-full px-5 overflow-hidden transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+                        <!-- Soft Theme Shimmer -->
                         <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/70 via-transparent to-stone-400/15 mix-blend-overlay"></div>
-                        <div class="pointer-events-none absolute -left-1/2 top-0 h-[200%] w-[50%] -rotate-45 bg-gradient-to-r from-transparent via-amber-100/35 dark:via-white/20 to-transparent chrome-shimmer"></div>
+                        <div class="pointer-events-none absolute -left-1/2 top-0 h-[200%] w-[50%] -rotate-45 bg-gradient-to-r from-transparent via-primary/20 dark:via-primary/25 to-transparent chrome-shimmer"></div>
 
                         <!-- Password Field -->
+                        <label for="password" class="sr-only">Password</label>
                         <div id="password-field-content" class="relative z-10 flex w-full items-center gap-3">
-                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-stone-200/70 dark:bg-stone-800/80 text-stone-600 dark:text-stone-300">
+                            <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                spellcheck="false"
-                                autocapitalize="none"
                                 </svg>
                             </div>
                             <input
@@ -142,8 +143,7 @@
                             <button
                                 type="button"
                                 id="toggle-password-visibility"
-                        <label for="password" class="sr-only">Password</label>
-                                class="flex h-7 w-7 items-center justify-center text-stone-400 hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200 transition-colors"
+                                class="flex h-7 w-7 items-center justify-center text-stone-400 hover:text-primary dark:text-stone-500 dark:hover:text-primary transition-colors"
                                 aria-label="Show password"
                             >
                                 <svg id="eye-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,29 +163,29 @@
                         <input type="checkbox" name="remember" value="1" class="rounded border-input text-primary focus:ring-ring">
                         <span>Remember me</span>
                     </label>
-                    <button type="button" data-toggle-reset aria-expanded="false" aria-controls="reset-password-drawer" class="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline">
+                    <button type="button" data-toggle-reset aria-expanded="false" aria-controls="reset-password-drawer" class="text-xs font-semibold text-primary hover:underline hover:brightness-110 underline-offset-4">
                         Forgot Password?
                     </button>
                 </div>
 
-                <!-- Friendly Community Submission Button -->
+                <!-- Theme Preset-Driven Submission Button -->
                 <button
                     type="submit"
                     id="liquid-submit-button"
-                    class="group relative flex h-12 w-full items-center justify-center overflow-hidden rounded-full font-semibold text-sm tracking-wide text-white shadow-md hover:shadow-lg transition-all duration-200 active:scale-[0.98] bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 dark:from-stone-800 dark:via-stone-700 dark:to-stone-800 border border-stone-700/60 dark:border-stone-600/60"
+                    class="group relative flex h-12 w-full items-center justify-center overflow-hidden rounded-full font-semibold text-sm tracking-wide text-primary-foreground shadow-md hover:shadow-lg hover:brightness-105 active:scale-[0.98] transition-all duration-200 bg-primary border border-primary/40"
                 >
                     <!-- Ambient Sheen Overlay -->
-                    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/20"></div>
-                    <div class="pointer-events-none absolute -left-1/2 top-0 h-[200%] w-[50%] -rotate-45 bg-gradient-to-r from-transparent via-amber-200/20 to-transparent group-hover:translate-x-[250%] transition-transform duration-700"></div>
+                    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/15"></div>
+                    <div class="pointer-events-none absolute -left-1/2 top-0 h-[200%] w-[50%] -rotate-45 bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:translate-x-[250%] transition-transform duration-700"></div>
 
                     <!-- Button Content -->
-                    <span id="submit-text" class="relative z-10 flex items-center gap-2 text-stone-100 font-semibold drop-shadow-sm">
+                    <span id="submit-text" class="relative z-10 flex items-center gap-2 text-primary-foreground font-semibold drop-shadow-sm">
                         <span>Access Community</span>
                         <svg class="h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                         </svg>
                     </span>
-                    <span id="submit-spinner" class="relative z-10 hidden items-center gap-2 text-stone-100 font-semibold">
+                    <span id="submit-spinner" class="relative z-10 hidden items-center gap-2 text-primary-foreground font-semibold">
                         <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -213,7 +213,7 @@
                         </svg>
                         <span>Quick-Fill Demo Credentials</span>
                     </span>
-                    <span class="text-[11px] text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">1-Click</span>
+                    <span class="text-[11px] text-primary bg-primary/10 px-2 py-0.5 rounded-full font-semibold">1-Click</span>
                 </summary>
                 <p class="mt-2 text-[11px] text-muted-foreground">Click any role to autofill credentials instantly (default password: <code class="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">ChangeMe!2026</code>):</p>
                 <div class="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -228,7 +228,7 @@
                         <button
                             type="button"
                             data-fill="{{ $accountEmail }}"
-                            class="flex flex-col items-start rounded-lg border border-border/40 bg-card/60 px-2.5 py-1.5 text-left text-xs hover:border-border hover:bg-muted/50 transition-colors"
+                            class="flex flex-col items-start rounded-lg border border-border/40 bg-card/60 px-2.5 py-1.5 text-left text-xs hover:border-primary/50 hover:bg-primary/5 transition-colors"
                         >
                             <span class="font-medium text-foreground truncate w-full">{{ $name }}</span>
                             <span class="text-[10px] text-muted-foreground">{{ $role }}</span>

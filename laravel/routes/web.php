@@ -182,6 +182,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/profile/avatar', [ProfileController::class, 'updateAvatar'])->name('profile.avatar');
     Route::post('/profile/ai-consent', [ProfileController::class, 'setAiConsent'])->name('profile.ai-consent');
     Route::post('/profile/payment-preferences', [ProfileController::class, 'updatePaymentPreferences'])->name('profile.payment-preferences');
+    Route::post('/profile/theme-preset', [ProfileController::class, 'updateThemePreset'])->name('profile.theme-preset');
 
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
     Route::patch('/settings', [SettingsController::class, 'update'])->name('settings.update');

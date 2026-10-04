@@ -31,9 +31,11 @@ import {
   Save,
   Clock,
   Activity,
-  Wallet
+  Wallet,
+  Palette
 } from 'lucide-react';
 import { ProfilePaymentsAndWallets } from '@/components/dashboard/ProfilePaymentsAndWallets';
+import { ProfileThemeSelector } from '@/components/dashboard/ProfileThemeSelector';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { ClientFormattedDate } from '@/components/client-formatted-date';
 import {
@@ -248,6 +250,7 @@ export default function ProfilePage({ profile, passVisual, activity = [], billin
                                     </CardContent>
                                 </Card>
                             </div>
+                            <ProfileThemeSelector className="mt-6" />
                         </TabsContent>
 
                         <TabsContent value="activity" className="space-y-4 m-0">
@@ -379,6 +382,7 @@ export default function ProfilePage({ profile, passVisual, activity = [], billin
                                     </CardContent>
                                 </Card>
                             </div>
+                            <ProfileThemeSelector className="mt-6" />
                         </TabsContent>
 
                         <TabsContent value="activity" className="space-y-4 m-0">
@@ -441,8 +445,12 @@ export default function ProfilePage({ profile, passVisual, activity = [], billin
                 </div>
 
                 <Tabs defaultValue="details" className="w-full space-y-6">
-                    <TabsList className="grid w-full sm:w-[620px] grid-cols-4">
+                    <TabsList className="grid w-full sm:w-[760px] grid-cols-5">
                         <TabsTrigger value="details">Profile Details</TabsTrigger>
+                        <TabsTrigger value="appearance" className="flex items-center gap-1.5">
+                            <Palette className="w-3.5 h-3.5" />
+                            Appearance
+                        </TabsTrigger>
                         <TabsTrigger value="payments" className="flex items-center gap-1.5">
                             <Wallet className="w-3.5 h-3.5" />
                             Payments & Wallets
@@ -624,6 +632,10 @@ export default function ProfilePage({ profile, passVisual, activity = [], billin
                         </div>
                     </TabsContent>
                     
+                    <TabsContent value="appearance" className="space-y-6 m-0">
+                        <ProfileThemeSelector />
+                    </TabsContent>
+
                     <TabsContent value="payments" className="space-y-6 m-0">
                         <ProfilePaymentsAndWallets billing={billing} userRole={user.role} />
                     </TabsContent>
