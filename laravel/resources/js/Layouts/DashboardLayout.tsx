@@ -264,12 +264,16 @@ export default function DashboardLayout({
                  </TooltipTrigger>
                  <TooltipContent>{isDark ? 'Light Mode' : 'Dark Mode'}</TooltipContent>
              </Tooltip>
-             
-             <DropdownMenu>
+              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="default" size="sm" className="hidden md:flex gap-1 h-9 px-4 rounded-full shadow-md hover:shadow-lg transition-all duration-200 bg-primary text-primary-foreground">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-full shadow-md hover:shadow-lg transition-all duration-200 bg-primary text-primary-foreground"
+                    aria-label="Quick Action"
+                  >
                     <Plus className="h-4 w-4" />
-                    <span>Quick Action</span>
+                    <span className="hidden sm:inline font-medium">Quick Action</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -309,10 +313,6 @@ export default function DashboardLayout({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <Button variant="default" size="icon" className="md:hidden rounded-full h-10 w-10 bg-primary text-primary-foreground shadow-md">
-                <Plus className="h-5 w-5" />
-              </Button>
             <UserNav />
           </div>
         </header>
