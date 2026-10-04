@@ -90,6 +90,7 @@
                                 class="w-full bg-transparent text-sm font-medium text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none"
                             >
                         </div>
+                        <label for="email" class="sr-only">Email address</label>
                     </div>
                 </div>
 
@@ -105,6 +106,8 @@
                             <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-stone-200/70 dark:bg-stone-800/80 text-stone-600 dark:text-stone-300">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                spellcheck="false"
+                                autocapitalize="none"
                                 </svg>
                             </div>
                             <input
@@ -120,6 +123,7 @@
                             <button
                                 type="button"
                                 id="toggle-password-visibility"
+                        <label for="password" class="sr-only">Password</label>
                                 class="flex h-7 w-7 items-center justify-center text-stone-400 hover:text-stone-700 dark:text-stone-500 dark:hover:text-stone-200 transition-colors"
                                 aria-label="Show password"
                             >
@@ -266,21 +270,23 @@
         border: 1px solid rgba(168, 150, 130, 0.3);
     }
 
-    /* Active open field look */
-    .liquid-capsule.is-open .liquid-chrome-surface {
-        background: rgba(255, 255, 255, 0.92);
-        border: 1.5px solid rgba(195, 180, 160, 0.75);
+    /* Active focused input capsule */
+    .liquid-capsule:focus-within .liquid-chrome-surface {
+        background: rgba(255, 255, 255, 0.98);
+        border-color: hsl(var(--primary));
         box-shadow:
-            0 6px 20px -3px rgba(120, 105, 88, 0.09),
-            inset 0 1px 3px rgba(0, 0, 0, 0.03);
+            0 8px 24px -4px hsl(var(--primary) / 0.18),
+            0 0 0 3px hsl(var(--primary) / 0.2),
+            inset 0 1.5px 2px rgba(255, 255, 255, 0.95);
     }
 
-    .dark .liquid-capsule.is-open .liquid-chrome-surface {
-        background: rgba(33, 29, 26, 0.92);
-        border: 1.5px solid rgba(160, 140, 120, 0.45);
+    .dark .liquid-capsule:focus-within .liquid-chrome-surface {
+        background: rgba(33, 29, 26, 0.98);
+        border-color: hsl(var(--primary));
         box-shadow:
-            0 8px 24px -4px rgba(0, 0, 0, 0.45),
-            inset 0 1px 2px rgba(255, 255, 255, 0.08);
+            0 12px 28px -6px hsl(var(--primary) / 0.3),
+            0 0 0 3px hsl(var(--primary) / 0.25),
+            inset 0 1px 1.5px rgba(255, 255, 255, 0.15);
     }
 
     .chrome-shimmer {
