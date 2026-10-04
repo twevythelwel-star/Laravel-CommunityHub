@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use Laravel\Scout\Searchable;
 
 class Transaction extends Model
 {
-    use HasFactory;
+    use Auditable, HasFactory, Searchable;
 
     protected $fillable = [
         'payment_id',
@@ -429,6 +431,23 @@ class Transaction extends Model
             'terminal' => $this->terminal_id,
             'location' => $this->location_id,
             'created' => $this->created_at?->format('Y-m-d'),
+        ];
+    }
+
+    /**
+     * Get the indexable data array for Scout.
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'transaction_id' => (string) $this->transaction_id,
+            'reference' => (string) $this->reference,
+            'purpose' => (string) $this->purpose,
+            'status' => (string) $this->status,
+            'user_code' => (string) $this->user_code,
+            'property_code' => (string) $this->property_code,
+            'receipt_number' => (string) $this->receipt_number,
         ];
     }
 }

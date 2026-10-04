@@ -11,10 +11,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Laravel\Scout\Searchable;
 
 class Visitor extends Model
 {
-    use HasFactory;
+    use HasFactory, Searchable;
 
     protected $fillable = [
         'name', 'contact', 'vehicle', 'id_type', 'id_number', 'type', 'share_token', 'status',
@@ -126,5 +127,21 @@ class Visitor extends Model
         // Generate new QR code and resend
         $this->update(['qr_code_path' => null]);
         SendVisitorPassNotification::dispatch($this, $channels);
+    }
+
+    /**
+     * Get the indexable data array for Scout.
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'name' => (string) $this->name,
+            'contact' => (string) $this->contact,
+            'vehicle' => (string) $this->vehicle,
+            'id_number' => (string) $this->id_number,
+            'type' => (string) $this->type,
+            'homeowner_name' => (string) $this->homeowner_name,
+        ];
     }
 }

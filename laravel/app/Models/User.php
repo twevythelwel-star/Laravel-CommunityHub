@@ -11,19 +11,24 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
+use Laravel\Scout\Searchable;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
+use Spatie\MediaLibrary\MediaCollections\Models\Media as SpatieMedia;
 
 /**
  * Replaces the mockUserDatabase in src/context/auth-context.tsx with real,
  * hashed-credential accounts. `uid` preserves the original string identifier
  * shape so existing front-end code keyed on user.uid keeps working.
  */
-class User extends Authenticatable
+class User extends Authenticatable implements HasMedia
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, InteractsWithMedia, Notifiable, Searchable;
 
     protected $fillable = [
         'uid', 'name', 'display_name', 'email', 'phone', 'role', 'title',
         'lot', 'street', 'avatar_url', 'status', 'password', 'ai_consent',
+        'deactivated_at',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -159,6 +164,16 @@ class User extends Authenticatable
         return $this->hasMany(PaymentLink::class, 'created_by');
     }
 
+    public function inAppNotifications(): HasMany
+    {
+        return $this->hasMany(InAppNotification::class)->latest();
+    }
+
+    public function unreadInAppNotificationsCount(): int
+    {
+        return $this->inAppNotifications()->unread()->count();
+    }
+
     // ── Domain helpers ───────────────────────────────────────────────
 
     public function isActive(): bool
@@ -227,5 +242,87 @@ class User extends Authenticatable
             'action' => $action,
             'occurred_at' => now(),
         ]);
+    }
+
+    /**
+     * Determine whether the user can access a specific Filament panel.
+     * Internal teams (Admins, Security) access 'admin'; residents access 'portal'.
+     */
+    public function canAccessFilamentPanel(string $panelId): bool
+    {
+        if (strtolower($this->status ?? 'active') === 'deactivated') {
+            return false;
+        }
+
+        return match ($panelId) {
+            'admin' => $this->role->isAdministrative() || $this->role === UserRole::Security,
+            'portal' => $this->role->isResident(),
+            default => false,
+        };
+    }
+
+    /**
+     * Register media collections for profile picture / avatar and documents.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('avatar')
+            ->singleFile()
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']);
+
+        $this->addMediaCollection('documents')
+            ->acceptsMimeTypes([
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'image/jpeg',
+                'image/png',
+            ]);
+    }
+
+    /**
+     * Register media conversions for thumbnails and previews.
+     */
+    public function registerMediaConversions(?SpatieMedia $media = null): void
+    {
+        $this->addMediaConversion('thumb')
+            ->width(120)
+            ->height(120)
+            ->nonQueued();
+
+        $this->addMediaConversion('preview')
+            ->width(400)
+            ->height(400)
+            ->nonQueued();
+    }
+
+    /**
+     * Seamlessly return media library avatar or fallback to original avatar_url.
+     */
+    public function getAvatarUrlAttribute(?string $value): ?string
+    {
+        if ($this->hasMedia('avatar')) {
+            return $this->getFirstMediaUrl('avatar');
+        }
+
+        return $value;
+    }
+
+    /**
+     * Get the indexable data array for the model.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'name' => $this->name,
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'role' => $this->role instanceof \BackedEnum ? $this->role->value : (string) $this->role,
+            'lot' => $this->lot,
+            'street' => $this->street,
+        ];
     }
 }

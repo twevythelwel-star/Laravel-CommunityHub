@@ -6,6 +6,7 @@ use App\Enums\GateId;
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Exceptions\InvalidPassTransition;
+use App\Traits\Auditable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Laravel\Scout\Searchable;
 
 /**
  * Pass registry. Every pass belongs either to an account (residents, staff,
@@ -23,7 +25,7 @@ use Illuminate\Support\Facades\DB;
  */
 class GatePass extends Model
 {
-    use HasFactory;
+    use Auditable, HasFactory, Searchable;
 
     protected $fillable = [
         'pass_id', 'user_id', 'visitor_id', 'category', 'holder_name', 'property',
@@ -182,5 +184,22 @@ class GatePass extends Model
     public function revoke(?User $by = null, ?string $reason = null): void
     {
         $this->transitionTo(PassStatus::Revoked, $by, $reason);
+    }
+
+    /**
+     * Get the indexable data array for the model.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'id' => (int) $this->id,
+            'pass_id' => $this->pass_id,
+            'holder_name' => $this->holder_name,
+            'property' => $this->property,
+            'status' => $this->status instanceof \BackedEnum ? $this->status->value : (string) $this->status,
+            'category' => $this->category instanceof \BackedEnum ? $this->category->value : (string) $this->category,
+        ];
     }
 }
