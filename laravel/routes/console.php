@@ -124,3 +124,36 @@ Artisan::command('users:set-passwords {password?}', function (?string $password 
 
     return Command::SUCCESS;
 })->purpose('Set all user passwords to a shared default (local and testing only)');
+
+/*
+ |--------------------------------------------------------------------------
+ | Spatie Laravel Backup Automations
+ |--------------------------------------------------------------------------
+ | 1. Automated database backups daily at 01:00 UTC
+ | 2. Full application archive (code + files + database) weekly on Sunday at 02:00 UTC
+ | 3. Expired backup cleanup according to retention policy daily at 03:00 UTC
+ | 4. Backup health checks and monitoring alerts daily at 04:00 UTC
+ */
+Schedule::command('backup:run', ['--only-db' => true])
+    ->dailyAt('01:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('backup:daily-database');
+
+Schedule::command('backup:run')
+    ->weeklyOn(0, '02:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('backup:weekly-full');
+
+Schedule::command('backup:clean')
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('backup:clean-expired');
+
+Schedule::command('backup:monitor')
+    ->dailyAt('04:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->description('backup:health-monitor');
