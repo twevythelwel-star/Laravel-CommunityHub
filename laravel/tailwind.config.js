@@ -15,6 +15,11 @@ module.exports = {
   ],
   theme: {
     extend: {
+      boxShadow: {
+        // Tailwind v4's name for the smallest shadow (v3's shadow-sm). Used
+        // across the ported components, where it was otherwise a no-op.
+        xs: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+      },
       fontFamily: {
         body: ['var(--font-family)', 'sans-serif'],
         headline: ['var(--font-family)', 'sans-serif'],
