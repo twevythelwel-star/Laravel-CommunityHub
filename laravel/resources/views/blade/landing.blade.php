@@ -13,8 +13,22 @@
 
         <!-- Header -->
         <div class="mb-7 text-center">
-            <div class="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-md mb-3">
-                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <!-- App / Community Logo -->
+            <div class="mx-auto mb-4 flex justify-center">
+                <div class="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-background to-accent/15 p-2.5 shadow-md ring-1 ring-primary/25 backdrop-blur-md transition-all duration-300 hover:scale-105 hover:shadow-lg">
+                    @if($branding?->logo_url)
+                        <img src="{{ $branding->logo_url }}" alt="{{ $community->name ?? $branding->app_name ?? 'Community Hub' }} Logo" class="h-full w-full rounded-xl object-contain">
+                    @else
+                        <picture>
+                            <source srcset="/community-hub-app-icon-128.webp" type="image/webp">
+                            <img src="/community-hub-app-icon-128.png" alt="{{ $community->name ?? $branding->app_name ?? 'Community Hub' }} Logo" class="h-full w-full rounded-xl object-contain">
+                        </picture>
+                    @endif
+                </div>
+            </div>
+
+            <div class="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-3 py-1 text-xs font-medium text-foreground/80 backdrop-blur-md mb-3">
+                <span class="h-1.5 w-1.5 rounded-full bg-accent animate-pulse"></span>
                 <span>{{ $community->name ?? $branding->theme_tokens['communityName'] ?? 'Community Portal Access' }}</span>
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Welcome Back</h1>
@@ -54,10 +68,15 @@
             <div id="liquid-stage" class="space-y-3 mx-auto w-full max-w-[380px]">
                 <!-- Community Name Indicator above username -->
                 <div class="flex items-center justify-between px-3 text-xs">
-                    <span class="inline-flex items-center gap-1.5 font-semibold text-foreground/80 tracking-wide uppercase text-[11px]">
-                        <svg class="h-3.5 w-3.5 text-primary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
+                    <span class="inline-flex items-center gap-2 font-bold text-primary tracking-wide uppercase text-[11px]">
+                        @if($branding?->logo_url)
+                            <img src="{{ $branding->logo_url }}" alt="" class="h-4 w-4 rounded object-contain flex-shrink-0">
+                        @else
+                            <picture class="flex-shrink-0">
+                                <source srcset="/community-hub-app-icon-128.webp" type="image/webp">
+                                <img src="/community-hub-app-icon-128.png" alt="" class="h-4 w-4 rounded object-contain flex-shrink-0">
+                            </picture>
+                        @endif
                         <span>{{ $community->name ?? $branding->theme_tokens['communityName'] ?? 'Community Hub' }}</span>
                     </span>
                     <span class="text-[11px] font-medium text-muted-foreground/80">Authorized Access</span>

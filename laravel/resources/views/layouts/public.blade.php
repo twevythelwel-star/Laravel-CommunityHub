@@ -49,10 +49,15 @@
     </a>
 
     <header class="border-b border-border/60">
-        <nav class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4" aria-label="Primary">
-            <a href="{{ route('landing') }}" class="flex items-center gap-2 font-semibold tracking-tight">
+        <nav class="mx-auto flex max-w-7xl items-center justify-between p-4 sm:px-6 lg:px-8" aria-label="Global">
+            <a href="{{ route('landing') }}" class="flex items-center gap-2.5 font-semibold tracking-tight">
                 @if($branding?->logo_url)
-                    <img src="{{ $branding->logo_url }}" alt="" class="h-8 w-8 rounded" width="32" height="32">
+                    <img src="{{ $branding->logo_url }}" alt="" class="h-8 w-8 rounded-lg object-contain shadow-sm" width="32" height="32">
+                @else
+                    <picture>
+                        <source srcset="/community-hub-app-icon-128.webp" type="image/webp">
+                        <img src="/community-hub-app-icon-128.png" alt="" class="h-8 w-8 rounded-lg object-contain shadow-sm" width="32" height="32">
+                    </picture>
                 @endif
                 <div class="flex flex-col">
                     <span class="text-sm font-bold leading-tight">{{ $branding->app_name ?? 'Community Hub' }}</span>
