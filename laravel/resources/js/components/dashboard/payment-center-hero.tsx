@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import qrcode from 'qrcode-generator';
 import { PaymentMethodSelectorModal } from './payment-method-selector-modal';
 import { CardPaymentModal } from './CardPaymentModal';
 
@@ -190,6 +191,22 @@ export function PaymentCenterHero({
   const [copiedId, setCopiedId] = useState(false);
   const [isSelectorModalOpen, setIsSelectorModalOpen] = useState(false);
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+
+  /*
+   * The scan-to-pay QR carries this payment's transaction ID, the reference
+   * the office confirms it by. It was an api.qrserver.com image of a made-up
+   * communityhub.org demo URL: a third party drew it, and scanning it opened
+   * a site this app does not own.
+   */
+  const qrSlipImage = useMemo(() => {
+    if (!pendingSlip?.transaction_id) {
+      return null;
+    }
+    const qr = qrcode(0, 'M');
+    qr.addData(pendingSlip.transaction_id);
+    qr.make();
+    return qr.createDataURL(5, 4);
+  }, [pendingSlip?.transaction_id]);
 
   // Compute selected total
   const baseSelectedTotal = itemizedCharges.length > 0 && showItemized
@@ -879,12 +896,22 @@ export function PaymentCenterHero({
 
             {activeModal === 'qr_code' && (
               <div className="text-center space-y-3">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent('https://communityhub.org/pay/qr-demo')}`}
-                  alt="QR Code"
-                  className="mx-auto rounded-lg border p-2 bg-white"
-                />
-                <p className="text-xs text-muted-foreground">Scan with your mobile camera or banking app to complete payment.</p>
+                {qrSlipImage ? (
+                  <img
+                    src={qrSlipImage}
+                    alt={`QR code for payment ${pendingSlip?.transaction_id}`}
+                    className="mx-auto rounded-lg border p-2 bg-white"
+                    width={180}
+                    height={180}
+                  />
+                ) : (
+                  <div className="mx-auto flex h-[180px] w-[180px] items-center justify-center rounded-lg border p-2 text-xs text-muted-foreground">
+                    {isInitiating ? <Loader2 className="h-5 w-5 animate-spin" aria-label="Starting payment" /> : 'Shown once the payment starts'}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Scan with your banking app, or quote <strong className="font-mono">{pendingSlip?.transaction_id || 'your transaction ID'}</strong> as the reference. The office confirms the payment before your statement updates.
+                </p>
               </div>
             )}
 

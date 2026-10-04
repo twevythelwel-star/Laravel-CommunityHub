@@ -37,4 +37,22 @@ class QrPaymentDriverTest extends TestCase
         $this->assertStringStartsWith(url('/p/CH-'), $intent['payment_url']);
         $this->assertStringNotContainsString('qrserver', json_encode($intent));
     }
+
+    public function test_no_page_loads_a_qr_from_a_third_party(): void
+    {
+        $offenders = [];
+
+        foreach ([resource_path('js'), resource_path('views')] as $root) {
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+
+            foreach ($files as $file) {
+                // A URL, not a mention: comments may name the old host.
+                if (preg_match('#//api\.qrserver\.com#i', file_get_contents($file->getPathname()))) {
+                    $offenders[] = $file->getPathname();
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders, 'QR codes must be drawn locally, not fetched from api.qrserver.com');
+    }
 }
