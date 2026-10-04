@@ -157,3 +157,33 @@ Schedule::command('backup:monitor')
     ->withoutOverlapping()
     ->onOneServer()
     ->description('backup:health-monitor');
+
+/*
+ |--------------------------------------------------------------------------
+ | Housekeeping
+ |--------------------------------------------------------------------------
+ | Tables that only ever grow unless something prunes them. activitylog:clean
+ | keeps config('activitylog.delete_records_older_than_days') (365 by
+ | default). Horizon's metrics graphs need a snapshot every five minutes, and
+ | only exist when the queue runs on Redis.
+ */
+Schedule::command('queue:prune-failed', ['--hours' => 24 * 30])
+    ->dailyAt('04:30')
+    ->onOneServer()
+    ->description('queue:prune-failed-jobs');
+
+Schedule::command('queue:prune-batches', ['--hours' => 48, '--unfinished' => 72])
+    ->dailyAt('04:35')
+    ->onOneServer()
+    ->description('queue:prune-batches');
+
+Schedule::command('activitylog:clean', ['--force' => true])
+    ->dailyAt('04:40')
+    ->onOneServer()
+    ->description('activitylog:clean');
+
+Schedule::command('horizon:snapshot')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->when(fn () => config('queue.default') === 'redis')
+    ->description('horizon:snapshot');

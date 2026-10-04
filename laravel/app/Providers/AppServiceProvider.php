@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
@@ -38,6 +39,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // Password::defaults() backs every admin- and user-set password. It was
+        // never configured, so eight characters of anything passed — for
+        // System Admin accounts too. Development and tests keep the easy rule.
+        Password::defaults(fn () => app()->isProduction()
+            ? Password::min(12)->mixedCase()->numbers()
+            : Password::min(8));
 
         // Register custom API Rate Limiters (api, api.sensitive, api.webhooks)
         ApiRateLimiter::register();
