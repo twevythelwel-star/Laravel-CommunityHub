@@ -42,7 +42,12 @@ class TokenApiController extends Controller
                 status: 422,
             );
         }
-        $expiresAt = isset($validated['expires_at']) ? Carbon::parse($validated['expires_at']) : null;
+        // Without one asked for, the token gets the configured lifetime, so
+        // its expiresAt tells the holder the truth instead of null.
+        $maxMinutes = (int) config('sanctum.expiration');
+        $expiresAt = isset($validated['expires_at'])
+            ? Carbon::parse($validated['expires_at'])
+            : ($maxMinutes > 0 ? now()->addMinutes($maxMinutes) : null);
 
         $tokenName = $validated['token_name'] ?? $validated['name'];
 

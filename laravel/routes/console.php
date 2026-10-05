@@ -177,6 +177,11 @@ Schedule::command('queue:prune-batches', ['--hours' => 48, '--unfinished' => 72]
     ->onOneServer()
     ->description('queue:prune-batches');
 
+Schedule::command('sanctum:prune-expired', ['--hours' => 24])
+    ->dailyAt('04:45')
+    ->onOneServer()
+    ->description('sanctum:prune-expired-tokens');
+
 Schedule::command('activitylog:clean', ['--force' => true])
     ->dailyAt('04:40')
     ->onOneServer()

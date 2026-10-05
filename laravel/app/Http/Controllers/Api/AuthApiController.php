@@ -40,8 +40,13 @@ class AuthApiController extends Controller
         $engine->issuePassFor($user);
         $user->recordActivity("Signed in from {$validated['device_name']}");
 
+        // Expires after config('sanctum.expiration'); the app signs in again then.
+        $minutes = (int) config('sanctum.expiration');
+        $expiresAt = $minutes > 0 ? now()->addMinutes($minutes) : null;
+
         return response()->json([
-            'token' => $user->createToken($validated['device_name'], TokenAbility::forUser($user))->plainTextToken,
+            'token' => $user->createToken($validated['device_name'], TokenAbility::forUser($user), $expiresAt)->plainTextToken,
+            'expires_at' => $expiresAt?->toIso8601String(),
             'user' => (new UserResource($user))->resolve(),
         ]);
     }
