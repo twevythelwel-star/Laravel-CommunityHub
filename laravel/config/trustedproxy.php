@@ -16,6 +16,8 @@ return [
     |
     */
 
-    'proxies' => env('TRUSTED_PROXIES'),
+    // ?: null — an empty TRUSTED_PROXIES= must mean unset, not '', or it
+    // switches off TrustProxies' own Forge, Vapor and Laravel Cloud detection.
+    'proxies' => env('TRUSTED_PROXIES') ?: null,
 
 ];

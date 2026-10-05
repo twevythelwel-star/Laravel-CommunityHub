@@ -15,7 +15,9 @@ return [
     'cookie' => env('SESSION_COOKIE', Str::slug(env('APP_NAME', 'community-hub'), '_').'_session'),
     'path' => env('SESSION_PATH', '/'),
     'domain' => env('SESSION_DOMAIN'),
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // HTTPS-only in production unless SESSION_SECURE_COOKIE says otherwise. It
+    // was unset, so the session cookie could ride a plain-HTTP request.
+    'secure' => (bool) env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
     'http_only' => (bool) env('SESSION_HTTP_ONLY', true),
     'same_site' => env('SESSION_SAME_SITE', 'lax'),
     'partitioned' => (bool) env('SESSION_PARTITIONED_COOKIE', false),

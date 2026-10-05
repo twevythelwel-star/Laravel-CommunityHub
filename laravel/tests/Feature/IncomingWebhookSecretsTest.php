@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Testing\TestResponse;
+use Tests\Concerns\LoadsConfigWithEnv;
 use Tests\TestCase;
 
 /**
@@ -14,40 +15,7 @@ use Tests\TestCase;
  */
 class IncomingWebhookSecretsTest extends TestCase
 {
-    /**
-     * Load config/services.php with these environment variables, as
-     * config:cache would. Laravel reads $_SERVER and $_ENV before getenv(),
-     * so all three are set, and restored.
-     *
-     * @param  array<string, string>  $vars
-     */
-    private function servicesConfigWith(array $vars): array
-    {
-        $saved = [];
-        foreach ($vars as $name => $value) {
-            $saved[$name] = [$_SERVER[$name] ?? null, $_ENV[$name] ?? null, getenv($name)];
-            $_SERVER[$name] = $_ENV[$name] = $value;
-            putenv("{$name}={$value}");
-        }
-
-        try {
-            return require config_path('services.php');
-        } finally {
-            foreach ($saved as $name => [$server, $env, $getenv]) {
-                if ($server === null) {
-                    unset($_SERVER[$name]);
-                } else {
-                    $_SERVER[$name] = $server;
-                }
-                if ($env === null) {
-                    unset($_ENV[$name]);
-                } else {
-                    $_ENV[$name] = $env;
-                }
-                putenv($getenv === false ? $name : "{$name}={$getenv}");
-            }
-        }
-    }
+    use LoadsConfigWithEnv;
 
     private function postSigned(string $service, string $secret): TestResponse
     {
@@ -61,7 +29,7 @@ class IncomingWebhookSecretsTest extends TestCase
 
     public function test_listed_senders_get_their_own_secret_in_config(): void
     {
-        $config = $this->servicesConfigWith([
+        $config = $this->configFileWith('services.php', [
             'INCOMING_WEBHOOK_SERVICES' => ' Acme, github ,',
             'ACME_WEBHOOK_SECRET' => 'acme-secret',
             'GITHUB_WEBHOOK_SECRET' => 'github-secret',
@@ -75,7 +43,7 @@ class IncomingWebhookSecretsTest extends TestCase
 
     public function test_no_senders_are_accepted_unless_listed(): void
     {
-        $config = $this->servicesConfigWith(['INCOMING_WEBHOOK_SERVICES' => '']);
+        $config = $this->configFileWith('services.php', ['INCOMING_WEBHOOK_SERVICES' => '']);
 
         $this->assertSame([], $config['webhooks']);
     }
