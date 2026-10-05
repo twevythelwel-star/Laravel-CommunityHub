@@ -1,13 +1,10 @@
 <?php
 
 use App\Http\Middleware\ApiLoggingMiddleware;
-use App\Http\Middleware\AssignCorrelationId;
-use App\Http\Middleware\EnforceIdempotency;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RequirePasswordConfirmation;
-use App\Http\Middleware\ResolveCommunityContext;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -29,21 +26,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->append([
-            AssignCorrelationId::class,
-            SecurityHeaders::class,
-        ]);
+        $middleware->append(SecurityHeaders::class);
 
         $middleware->web(append: [
-            ResolveCommunityContext::class,
-            EnforceIdempotency::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
         $middleware->api(append: [
-            ResolveCommunityContext::class,
-            EnforceIdempotency::class,
             ApiLoggingMiddleware::class,
         ]);
 
@@ -53,9 +43,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
             'api.log' => ApiLoggingMiddleware::class,
-            'correlation' => AssignCorrelationId::class,
-            'idempotency' => EnforceIdempotency::class,
-            'community.context' => ResolveCommunityContext::class,
             // Replaces Laravel's: Inertia submissions get a validation error, not a redirect.
             'password.confirm' => RequirePasswordConfirmation::class,
         ]);
