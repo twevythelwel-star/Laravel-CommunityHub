@@ -11,7 +11,6 @@ use App\Events\Realtime\OperationsCommandCenterEvent;
 use App\Livewire\Realtime\RealtimeOperationsHub;
 use App\Models\User;
 use App\Services\Realtime\RealtimeBroadcasterService;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,13 +69,10 @@ class RealTimeReverbEchoModuleTest extends TestCase
         Event::assertDispatched(CommunityChatMessageEvent::class);
 
         $channels = $event->broadcastOn();
-        $this->assertCount(2, $channels);
+        $this->assertCount(1, $channels);
 
         $this->assertInstanceOf(PresenceChannel::class, $channels[0]);
         $this->assertSame('presence-chat.room.main-lounge', $channels[0]->name);
-
-        $this->assertInstanceOf(Channel::class, $channels[1]);
-        $this->assertSame('community-chat-stream', $channels[1]->name);
 
         $payload = $event->broadcastWith();
         $this->assertSame('Hello community from Reverb WebSocket!', $payload['message']);
@@ -85,7 +81,7 @@ class RealTimeReverbEchoModuleTest extends TestCase
         $this->assertSame('chat.message', $event->broadcastAs());
     }
 
-    public function test_dashboard_telemetry_updated_event_broadcasts_on_public_telemetry_channel(): void
+    public function test_dashboard_telemetry_updated_event_broadcasts_on_private_telemetry_channel(): void
     {
         Event::fake([DashboardTelemetryUpdatedEvent::class]);
 
@@ -102,8 +98,8 @@ class RealTimeReverbEchoModuleTest extends TestCase
 
         $channels = $event->broadcastOn();
         $this->assertCount(1, $channels);
-        $this->assertInstanceOf(Channel::class, $channels[0]);
-        $this->assertSame('dashboard-telemetry', $channels[0]->name);
+        $this->assertInstanceOf(PrivateChannel::class, $channels[0]);
+        $this->assertSame('private-dashboard-telemetry', $channels[0]->name);
 
         $payload = $event->broadcastWith();
         $this->assertSame(32, $payload['active_visitors']);
@@ -156,8 +152,8 @@ class RealTimeReverbEchoModuleTest extends TestCase
         $channels = $event->broadcastOn();
         $this->assertCount(2, $channels);
 
-        $this->assertInstanceOf(Channel::class, $channels[0]);
-        $this->assertSame('gatehouse-stream', $channels[0]->name);
+        $this->assertInstanceOf(PrivateChannel::class, $channels[0]);
+        $this->assertSame('private-gatehouse-stream', $channels[0]->name);
 
         $this->assertInstanceOf(PrivateChannel::class, $channels[1]);
         $this->assertSame('private-passes.442', $channels[1]->name);
@@ -168,7 +164,7 @@ class RealTimeReverbEchoModuleTest extends TestCase
         $this->assertSame('gatepass.status-updated', $event->broadcastAs());
     }
 
-    public function test_operations_command_center_event_broadcasts_on_presence_and_public_alert_channels(): void
+    public function test_operations_command_center_event_broadcasts_on_the_operations_presence_channel_only(): void
     {
         Event::fake([OperationsCommandCenterEvent::class]);
 
@@ -185,13 +181,10 @@ class RealTimeReverbEchoModuleTest extends TestCase
         Event::assertDispatched(OperationsCommandCenterEvent::class);
 
         $channels = $event->broadcastOn();
-        $this->assertCount(2, $channels);
+        $this->assertCount(1, $channels);
 
         $this->assertInstanceOf(PresenceChannel::class, $channels[0]);
         $this->assertSame('presence-operations-center', $channels[0]->name);
-
-        $this->assertInstanceOf(Channel::class, $channels[1]);
-        $this->assertSame('community-alerts', $channels[1]->name);
 
         $payload = $event->broadcastWith();
         $this->assertSame('critical', $payload['severity']);

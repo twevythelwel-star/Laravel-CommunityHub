@@ -3,7 +3,6 @@
 namespace App\Events;
 
 use App\Models\Visitor;
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -33,9 +32,23 @@ class VisitorCheckedInEvent implements ShouldBroadcast, ShouldRescue
     public function broadcastOn(): array
     {
         return [
-            new PrivateChannel("user.{$this->visitor->homeowner_id}"),
-            new Channel('gatehouse-stream'),
+            // users.{id}, as routes/channels.php defines it: "user." matched no
+            // rule, so no homeowner could ever subscribe to their arrivals.
+            new PrivateChannel("users.{$this->visitor->homeowner_id}"),
+            new PrivateChannel('gatehouse-stream'),
         ];
+    }
+
+    /**
+     * The summary only. Without this, Laravel broadcasts every public property,
+     * the whole Visitor included: ID number, contact, and the share_token that
+     * opens their guest pass — on what was a public channel.
+     *
+     * @return array<string, mixed>
+     */
+    public function broadcastWith(): array
+    {
+        return $this->payload;
     }
 
     public function broadcastAs(): string

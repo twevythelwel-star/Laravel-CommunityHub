@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\Broadcast;
 |
 */
 
-// Public/Estate-wide channel for verified residents & staff to receive active security alerts
+// Estate-wide security alerts for every active account. A private channel:
+// these rules are only consulted for private and presence channels.
 Broadcast::channel('community-alerts', function (User $user) {
     return $user->isActive();
 });
@@ -31,6 +32,16 @@ Broadcast::channel('users.{id}', function (User $user, $id) {
 // Private channel for security gate personnel
 Broadcast::channel('gate.{gateId}', function (User $user, $gateId) {
     return $user->isActive() && ($user->role->isSecurity() || $user->role->isAdministrative());
+});
+
+// Gate traffic: pass status changes and visitor check-ins, for gate staff.
+Broadcast::channel('gatehouse-stream', function (User $user) {
+    return $user->isActive() && ($user->role->isSecurity() || $user->role->isAdministrative());
+});
+
+// Live dashboard telemetry, for administrators.
+Broadcast::channel('dashboard-telemetry', function (User $user) {
+    return $user->isActive() && $user->role->isAdministrative();
 });
 
 // Private channel for pass-specific real-time status tracking

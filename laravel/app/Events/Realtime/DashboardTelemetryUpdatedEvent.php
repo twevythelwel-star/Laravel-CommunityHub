@@ -2,8 +2,8 @@
 
 namespace App\Events\Realtime;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Contracts\Broadcasting\ShouldRescue;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -22,7 +22,7 @@ class DashboardTelemetryUpdatedEvent implements ShouldBroadcastNow, ShouldRescue
     public function broadcastOn(): array
     {
         return [
-            new Channel('dashboard-telemetry'),
+            new PrivateChannel('dashboard-telemetry'),
         ];
     }
 

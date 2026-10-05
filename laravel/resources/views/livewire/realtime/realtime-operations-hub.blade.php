@@ -237,7 +237,7 @@
             {{-- Alert Dispatcher Form --}}
             <div class="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-sm space-y-4">
                 <h3 class="text-lg font-bold text-slate-900 dark:text-white">Dispatch Command Center Alert</h3>
-                <p class="text-xs text-slate-400">Broadcasts to <code class="text-indigo-400">presence-operations-center</code> & <code class="text-indigo-400">community-alerts</code>.</p>
+                <p class="text-xs text-slate-400">Broadcasts to <code class="text-indigo-400">presence-operations-center</code>.</p>
 
                 <div class="space-y-3">
                     <div>

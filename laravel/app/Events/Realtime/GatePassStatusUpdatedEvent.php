@@ -2,7 +2,6 @@
 
 namespace App\Events\Realtime;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -27,7 +26,8 @@ class GatePassStatusUpdatedEvent implements ShouldBroadcastNow, ShouldRescue
     public function broadcastOn(): array
     {
         $channels = [
-            new Channel('gatehouse-stream'),
+            // Gate staff only: visitor names and pass codes were on a public stream.
+            new PrivateChannel('gatehouse-stream'),
             new PrivateChannel("passes.{$this->passId}"),
         ];
 

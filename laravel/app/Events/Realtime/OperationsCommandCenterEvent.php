@@ -2,7 +2,6 @@
 
 namespace App\Events\Realtime;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -26,9 +25,11 @@ class OperationsCommandCenterEvent implements ShouldBroadcastNow, ShouldRescue
 
     public function broadcastOn(): array
     {
+        // Operations only. It also went to the public community-alerts channel,
+        // which handed anyone listening a resident's phone number and location
+        // from an SOS, and every gate's traffic.
         return [
             new PresenceChannel('operations-center'),
-            new Channel('community-alerts'),
         ];
     }
 

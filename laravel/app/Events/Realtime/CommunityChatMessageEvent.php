@@ -2,7 +2,6 @@
 
 namespace App\Events\Realtime;
 
-use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -29,8 +28,9 @@ class CommunityChatMessageEvent implements ShouldBroadcastNow, ShouldRescue
     public function broadcastOn(): array
     {
         return [
+            // The room's members only. A public all-rooms stream also carried
+            // every message, from every room, to any websocket client.
             new PresenceChannel("chat.room.{$this->roomId}"),
-            new Channel('community-chat-stream'),
         ];
     }
 
