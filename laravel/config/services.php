@@ -72,4 +72,34 @@ return [
         'vapid_private_key' => env('VAPID_PRIVATE_KEY'),
         'fcm_server_key' => env('FCM_SERVER_KEY'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Incoming webhooks (POST /api/v1/webhooks/incoming/{service})
+    |--------------------------------------------------------------------------
+    |
+    | List each sender in INCOMING_WEBHOOK_SERVICES and give it its own
+    | {SERVICE}_WEBHOOK_SECRET, e.g. INCOMING_WEBHOOK_SERVICES=acme with
+    | ACME_WEBHOOK_SECRET=... . A sender not listed here is refused.
+    |
+    | WebhookApiController used to call env() itself for whatever {service}
+    | the URL named. That returns null under `php artisan config:cache`, so
+    | every incoming webhook 404'd in production, and with the cache off any
+    | *_WEBHOOK_SECRET became a valid key — including the outbound
+    | notification secret that every receiver of our webhooks holds.
+    |
+    */
+    'webhooks' => (function (): array {
+        $services = array_filter(array_map(
+            fn (string $service) => strtolower(trim($service)),
+            explode(',', (string) env('INCOMING_WEBHOOK_SERVICES', '')),
+        ));
+
+        $webhooks = [];
+        foreach ($services as $service) {
+            $webhooks[$service] = ['secret' => env(strtoupper($service).'_WEBHOOK_SECRET')];
+        }
+
+        return $webhooks;
+    })(),
 ];

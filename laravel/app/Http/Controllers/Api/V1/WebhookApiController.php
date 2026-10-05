@@ -140,7 +140,8 @@ class WebhookApiController extends Controller
             ?? '');
 
         $payload = $request->getContent();
-        $configuredSecret = (string) config("services.webhooks.{$service}.secret", env(strtoupper($service).'_WEBHOOK_SECRET', ''));
+        // Senders are listed in config/services.php: an env lookup here was null under config:cache.
+        $configuredSecret = (string) config('services.webhooks.'.strtolower($service).'.secret');
 
         // Fail closed: with no secret configured there is nothing to verify
         // against, which used to mean every delivery was accepted unchecked.

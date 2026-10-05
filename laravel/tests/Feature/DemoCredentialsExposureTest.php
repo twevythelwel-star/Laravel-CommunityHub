@@ -63,11 +63,11 @@ class DemoCredentialsExposureTest extends TestCase
         $this->assertTrue(Hash::check(self::SEED_PASSWORD, $admin->password));
     }
 
-    public function test_no_view_or_seeder_reads_env_directly(): void
+    public function test_no_app_code_view_or_seeder_reads_env_directly(): void
     {
         $offenders = [];
 
-        foreach ([resource_path('views'), database_path('seeders')] as $root) {
+        foreach ([app_path(), resource_path('views'), database_path('seeders')] as $root) {
             $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
 
             foreach ($files as $file) {
