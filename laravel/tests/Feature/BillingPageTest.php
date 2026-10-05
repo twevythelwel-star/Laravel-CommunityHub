@@ -19,6 +19,14 @@ class BillingPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     private function resident(array $attributes = []): User
     {
         return User::factory()->role(UserRole::Homeowner)->create($attributes);

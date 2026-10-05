@@ -37,6 +37,14 @@ class PaymentOwnershipTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     /** One administrator logs the payment received; another verifies it in a reconciliation. */
     private function receiveAndVerify(Payment $payment): void
     {

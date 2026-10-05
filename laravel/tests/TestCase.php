@@ -21,4 +21,14 @@ abstract class TestCase extends BaseTestCase
          */
         $this->withoutVite();
     }
+
+    /**
+     * Mark the session's password as just confirmed, for tests of an action
+     * behind `password.confirm` that are about the action, not the prompt
+     * (that is PasswordConfirmationTest).
+     */
+    protected function confirmPassword(): static
+    {
+        return $this->withSession(['auth.password_confirmed_at' => time()]);
+    }
 }

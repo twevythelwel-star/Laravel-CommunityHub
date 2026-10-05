@@ -20,6 +20,9 @@ class RevenueEngineTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
         $this->seed();
     }
 

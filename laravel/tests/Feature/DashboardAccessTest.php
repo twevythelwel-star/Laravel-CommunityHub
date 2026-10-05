@@ -23,6 +23,14 @@ class DashboardAccessTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     // ── Authentication ───────────────────────────────────────────────
 
     public function test_the_dashboard_is_closed_to_guests(): void

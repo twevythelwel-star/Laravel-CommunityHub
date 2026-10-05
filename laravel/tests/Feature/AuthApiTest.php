@@ -18,6 +18,14 @@ class AuthApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     public function test_login_issues_a_bearer_token_for_the_device(): void
     {
         $user = User::factory()->create(['password' => bcrypt('correct-password')]);

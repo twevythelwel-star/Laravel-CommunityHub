@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\ConfirmPasswordController;
 use App\Http\Controllers\Dashboard\AccessLogController;
 use App\Http\Controllers\Dashboard\BillingController;
 use App\Http\Controllers\Dashboard\BlocklistController;
@@ -167,6 +168,18 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
 | resources/js/Pages/Dashboard/.
 */
 
+/*
+| Re-enter your password before a sensitive action. Named `password.confirm`
+| because that is where Laravel's RequirePassword middleware sends a request
+| that needs it; see App\Http\Middleware\RequirePasswordConfirmation.
+*/
+Route::middleware(['auth', 'active'])->prefix('dashboard')->group(function () {
+    Route::get('/confirm-password', [ConfirmPasswordController::class, 'show'])->name('password.confirm');
+    Route::post('/confirm-password', [ConfirmPasswordController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('password.confirm.store');
+});
+
 Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->group(function () {
 
     Route::get('/', OverviewController::class)->name('index');
@@ -244,14 +257,14 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/directory', [DirectoryController::class, 'index'])
         ->middleware('can:manageUsers')
         ->name('directory');
-    Route::post('/directory/staff', [DirectoryController::class, 'storeStaff'])->name('directory.staff.store');
-    Route::patch('/directory/staff/{staff}', [DirectoryController::class, 'updateStaff'])->name('directory.staff.update');
-    Route::delete('/directory/staff/{staff}', [DirectoryController::class, 'destroyStaff'])->name('directory.staff.destroy');
+    Route::post('/directory/staff', [DirectoryController::class, 'storeStaff'])->middleware('password.confirm')->name('directory.staff.store');
+    Route::patch('/directory/staff/{staff}', [DirectoryController::class, 'updateStaff'])->middleware('password.confirm')->name('directory.staff.update');
+    Route::delete('/directory/staff/{staff}', [DirectoryController::class, 'destroyStaff'])->middleware('password.confirm')->name('directory.staff.destroy');
     Route::post('/directory/users', [DirectoryController::class, 'storeUser'])
-        ->middleware('can:manageUsers')
+        ->middleware(['can:manageUsers', 'password.confirm'])
         ->name('directory.users.store');
     Route::patch('/directory/users/{user}', [DirectoryController::class, 'updateUser'])
-        ->middleware('can:manageUsers')
+        ->middleware(['can:manageUsers', 'password.confirm'])
         ->name('directory.users.update');
 
     Route::get('/renters', [RenterController::class, 'index'])->name('renters');
@@ -269,7 +282,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
      */
     Route::middleware('can:manageSecurity')->group(function () {
         Route::get('/access-log', [AccessLogController::class, 'index'])->name('access-log');
-        Route::get('/access-log/export', [AccessLogController::class, 'export'])->name('access-log.export');
+        Route::get('/access-log/export', [AccessLogController::class, 'export'])->middleware('password.confirm')->name('access-log.export');
     });
 
     /*
@@ -467,11 +480,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
          | residents handed the estate's finances to any homeowner.
          */
         Route::middleware('can:manageBilling')->group(function () {
-            Route::get('/billing/export/transactions', [BillingController::class, 'exportTransactions'])->name('billing.transactions.export');
-            Route::get('/billing/export-transactions', [BillingController::class, 'exportTransactions'])->name('billing.transactions.export.alias');
+            Route::get('/billing/export/transactions', [BillingController::class, 'exportTransactions'])->middleware('password.confirm')->name('billing.transactions.export');
+            Route::get('/billing/export-transactions', [BillingController::class, 'exportTransactions'])->middleware('password.confirm')->name('billing.transactions.export.alias');
         });
         Route::patch('/billing/settings', [BillingController::class, 'updateSettings'])
-            ->middleware('can:manageBilling')
+            ->middleware(['can:manageBilling', 'password.confirm'])
             ->name('billing.settings.update');
         Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'markPaid'])
             ->middleware('can:manageBilling')
@@ -499,7 +512,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         });
         Route::get('/billing/transactions/{transaction}/receipt', [BillingController::class, 'downloadReceipt'])->name('billing.transactions.receipt');
         Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])
-            ->middleware('can:manageBilling')
+            ->middleware(['can:manageBilling', 'password.confirm'])
             ->name('billing.transactions.refund');
         Route::get('/billing/gateway-hub', PaymentGatewayHub::class)
             ->middleware('can:manageBilling')
@@ -513,10 +526,10 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
             ->middleware('can:manageFundraisers')
             ->name('fundraising.updates.store');
         Route::post('/fundraising/donations/{donation}/refund', [FundraisingController::class, 'refund'])
-            ->middleware('can:manageFundraisers')
+            ->middleware(['can:manageFundraisers', 'password.confirm'])
             ->name('fundraising.donations.refund');
         Route::get('/fundraising/export/donations', [FundraisingController::class, 'exportDonations'])
-            ->middleware('can:manageFundraisers')
+            ->middleware(['can:manageFundraisers', 'password.confirm'])
             ->name('fundraising.donations.export');
     });
 });

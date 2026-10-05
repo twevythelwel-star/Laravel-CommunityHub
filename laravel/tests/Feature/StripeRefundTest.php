@@ -22,6 +22,14 @@ class StripeRefundTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     private function stripePayment(int $amountMinor = 25000): Transaction
     {
         $resident = User::factory()->role(UserRole::Homeowner)->create();

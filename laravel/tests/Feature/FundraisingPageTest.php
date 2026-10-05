@@ -19,6 +19,14 @@ class FundraisingPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     private function fundraiser(array $overrides = []): Fundraiser
     {
         return Fundraiser::create(array_merge([

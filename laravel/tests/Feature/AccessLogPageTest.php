@@ -18,6 +18,14 @@ class AccessLogPageTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Exercises actions behind password.confirm; the prompt itself is PasswordConfirmationTest's.
+        $this->confirmPassword();
+    }
+
     private function entry(array $overrides = []): AccessLogEntry
     {
         return AccessLogEntry::create(array_merge([
