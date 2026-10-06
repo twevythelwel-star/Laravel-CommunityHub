@@ -64,6 +64,11 @@ class User extends Authenticatable implements HasMedia
         return $this->hasOne(GatePass::class)->active()->latestOfMany();
     }
 
+    public function vehicles(): HasMany
+    {
+        return $this->hasMany(Vehicle::class)->orderBy('id');
+    }
+
     public function visitors(): HasMany
     {
         return $this->hasMany(Visitor::class, 'homeowner_id');
@@ -144,6 +149,21 @@ class User extends Authenticatable implements HasMedia
         return $this->hasOne(AutoPaySetting::class);
     }
 
+    public function delegatedAccessesGranted(): HasMany
+    {
+        return $this->hasMany(DelegatedAccess::class, 'grantor_user_id');
+    }
+
+    public function delegatedAccessesReceived(): HasMany
+    {
+        return $this->hasMany(DelegatedAccess::class, 'delegate_user_id');
+    }
+
+    public function emergencyContinuityPlan(): HasOne
+    {
+        return $this->hasOne(EmergencyContinuityPlan::class, 'user_id');
+    }
+
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
@@ -207,6 +227,12 @@ class User extends Authenticatable implements HasMedia
     public function activeStay(): ?Renter
     {
         return $this->renter()->active()->first();
+    }
+
+    public function isLongTermRenter(): bool
+    {
+        return $this->role === UserRole::TemporaryHomeowner
+            || ($this->relationLoaded('renter') ? ($this->renter !== null) : $this->renter()->exists());
     }
 
     public function passCategory(): PassCategory

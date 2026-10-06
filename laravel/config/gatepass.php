@@ -194,6 +194,32 @@ return [
             'icon_name' => 'HardHat',
             'description' => 'Tradesperson or service provider approved by estate security, admitted during working hours only.',
         ],
+
+        'DELEGATE' => [
+            'display_name' => 'Authorized Delegate',
+            'shape' => 'TICKET',
+            'shape_label' => 'Delegate Ticket Frame',
+            'theme_color' => '#6D28D9',
+            'contrast_bg' => '#2E1065',
+            'accent_color' => '#C4B5FD',
+            'badge_border' => 'border-violet-500/40',
+            'gradient' => 'from-violet-800 via-purple-900 to-slate-950',
+            'icon_name' => 'UserCheck',
+            'description' => 'Someone a homeowner has authorized to act or enter on their behalf, within the limits and dates the homeowner set.',
+        ],
+
+        'LONG_TERM_OCCUPANT' => [
+            'display_name' => 'Long-Term Occupant',
+            'shape' => 'ARCH',
+            'shape_label' => 'Long-Term Occupant Arch Frame',
+            'theme_color' => '#047857',
+            'contrast_bg' => '#022C22',
+            'accent_color' => '#6EE7B7',
+            'badge_border' => 'border-emerald-500/40',
+            'gradient' => 'from-emerald-800 via-teal-900 to-slate-950',
+            'icon_name' => 'Home',
+            'description' => 'A family member or companion living at a homeowner\'s residence for an extended stay.',
+        ],
     ],
 
     /*
@@ -274,6 +300,18 @@ return [
             ['id' => 'con_graphite', 'name' => 'Toolbox Graphite', 'hex' => '#374151', 'accent_hex' => '#D1D5DB', 'contrast_ratio' => 10.3, 'wcag_pass' => true],
             ['id' => 'con_signal',   'name' => 'Signal Red',       'hex' => '#B91C1C', 'accent_hex' => '#FCA5A5', 'contrast_ratio' => 6.5,  'wcag_pass' => true],
             ['id' => 'con_navy',     'name' => 'Utility Navy',     'hex' => '#1E40AF', 'accent_hex' => '#93C5FD', 'contrast_ratio' => 8.7,  'wcag_pass' => true],
+        ],
+
+        'DELEGATE' => [
+            ['id' => 'del_violet', 'name' => 'Trust Violet',    'hex' => '#6D28D9', 'accent_hex' => '#C4B5FD', 'contrast_ratio' => 7.1,  'wcag_pass' => true],
+            ['id' => 'del_plum',   'name' => 'Deputy Plum',     'hex' => '#5B21B6', 'accent_hex' => '#DDD6FE', 'contrast_ratio' => 9.0,  'wcag_pass' => true],
+            ['id' => 'del_orchid', 'name' => 'Proxy Orchid',    'hex' => '#86198F', 'accent_hex' => '#F0ABFC', 'contrast_ratio' => 8.2,  'wcag_pass' => true],
+        ],
+
+        'LONG_TERM_OCCUPANT' => [
+            ['id' => 'lto_emerald', 'name' => 'Household Emerald', 'hex' => '#047857', 'accent_hex' => '#6EE7B7', 'contrast_ratio' => 5.5, 'wcag_pass' => true],
+            ['id' => 'lto_pine',    'name' => 'Homestead Pine',    'hex' => '#065F46', 'accent_hex' => '#A7F3D0', 'contrast_ratio' => 7.7, 'wcag_pass' => true],
+            ['id' => 'lto_teal',    'name' => 'Hearth Teal',       'hex' => '#115E59', 'accent_hex' => '#99F6E4', 'contrast_ratio' => 7.6, 'wcag_pass' => true],
         ],
     ],
 
@@ -475,6 +513,52 @@ return [
             'privileges' => [
                 'can_manage_guests' => false,
                 'can_associate_vehicles' => false,
+                'has_emergency_override' => false,
+                'has_gate_operation_override' => false,
+                'restricted_from_homeowner_functions' => true,
+            ],
+        ],
+
+        // Baselines only: each delegation's own days, hours and gates narrow these.
+        'DELEGATE' => [
+            'title' => 'Authorized Delegate Clearance',
+            'description' => 'Entry on a homeowner\'s behalf to their residence, within the days, hours and dates of the delegation.',
+            'authorized_zones' => [
+                'Host Residence',
+            ],
+            'allowed_gates' => ['GATE-01', 'GATE-02'],
+            'operational_hours' => [
+                'is_24_hours' => true,
+                'start_hour' => 0,
+                'end_hour' => 24,
+                'days_of_week' => [0, 1, 2, 3, 4, 5, 6],
+            ],
+            'privileges' => [
+                'can_manage_guests' => false,
+                'can_associate_vehicles' => false,
+                'has_emergency_override' => false,
+                'has_gate_operation_override' => false,
+                'restricted_from_homeowner_functions' => true,
+            ],
+        ],
+
+        'LONG_TERM_OCCUPANT' => [
+            'title' => 'Long-Term Occupant Clearance',
+            'description' => 'Residential entry for someone living at a homeowner\'s residence for an extended stay.',
+            'authorized_zones' => [
+                'Host Residence',
+                'Residential Common Areas',
+            ],
+            'allowed_gates' => ['GATE-01', 'GATE-02'],
+            'operational_hours' => [
+                'is_24_hours' => true,
+                'start_hour' => 0,
+                'end_hour' => 24,
+                'days_of_week' => [0, 1, 2, 3, 4, 5, 6],
+            ],
+            'privileges' => [
+                'can_manage_guests' => false,
+                'can_associate_vehicles' => true,
                 'has_emergency_override' => false,
                 'has_gate_operation_override' => false,
                 'restricted_from_homeowner_functions' => true,

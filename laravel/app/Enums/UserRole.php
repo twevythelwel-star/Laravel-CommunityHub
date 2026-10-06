@@ -26,6 +26,18 @@ enum UserRole: string
         return $this === self::Security;
     }
 
+    /** Maintenance and operations staff. */
+    public function isStaff(): bool
+    {
+        return $this === self::Staff;
+    }
+
+    /** Operational roles: Security and Staff. */
+    public function isOperational(): bool
+    {
+        return in_array($this, [self::Security, self::Staff], true);
+    }
+
     /** Roles that occupy a property (own or lease). */
     public function isResident(): bool
     {

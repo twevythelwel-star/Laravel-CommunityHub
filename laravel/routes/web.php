@@ -18,6 +18,7 @@ use App\Http\Controllers\Dashboard\GatePassController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
+use App\Http\Controllers\Dashboard\DelegatedAccessController;
 use App\Http\Controllers\Dashboard\OverviewController;
 use App\Http\Controllers\Dashboard\PaymentReturnController;
 use App\Http\Controllers\Dashboard\ProfileController;
@@ -370,6 +371,21 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->name('notifications.broadcast');
     Route::get('/notifications/hub', UniversalNotificationHub::class)
         ->name('notifications.universal-hub');
+
+    // ── Delegated Access Center: My Property → Access & People ──
+    Route::get('/delegation', [DelegatedAccessController::class, 'index'])->name('delegation');
+    Route::get('/access-and-people', [DelegatedAccessController::class, 'index'])->name('access-and-people');
+    Route::post('/delegation', [DelegatedAccessController::class, 'store'])->name('delegation.store');
+    Route::patch('/delegation/{delegation}/rules', [DelegatedAccessController::class, 'updateRules'])->name('delegation.rules.update');
+    Route::post('/delegation/{delegation}/reissue-pass', [DelegatedAccessController::class, 'reissuePass'])->name('delegation.reissue-pass');
+    Route::post('/delegation/{delegation}/emergency/activate', [DelegatedAccessController::class, 'activateEmergency'])->name('delegation.emergency.activate');
+    Route::post('/delegation/{delegation}/emergency/deactivate', [DelegatedAccessController::class, 'deactivateEmergency'])->name('delegation.emergency.deactivate');
+    Route::post('/delegation/{delegation}/revoke', [DelegatedAccessController::class, 'revoke'])->name('delegation.revoke');
+    Route::post('/delegation/{delegation}/approve', [DelegatedAccessController::class, 'approve'])->name('delegation.approve');
+    Route::post('/delegation/{delegation}/reject', [DelegatedAccessController::class, 'reject'])->name('delegation.reject');
+    Route::post('/delegation/accept/{token}', [DelegatedAccessController::class, 'accept'])->middleware('throttle:10,1')->name('delegation.accept');
+    Route::post('/delegation/continuity-plan', [DelegatedAccessController::class, 'saveContinuityPlan'])->name('delegation.continuity-plan');
+    Route::get('/delegation/{delegation}/audit-events', [DelegatedAccessController::class, 'auditEvents'])->name('delegation.audit-events');
 
     Route::get('/updates', [UpdateController::class, 'index'])
         ->middleware('can:accessCommunityLife')

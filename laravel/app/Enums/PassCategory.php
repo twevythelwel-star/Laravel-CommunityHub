@@ -21,6 +21,8 @@ enum PassCategory: string
     case HomeownerStaff = 'HOMEOWNER_STAFF';
     case Visitor = 'VISITOR';
     case Contractor = 'CONTRACTOR';
+    case Delegate = 'DELEGATE';
+    case LongTermOccupant = 'LONG_TERM_OCCUPANT';
 
     public function shape(): QRShape
     {
@@ -34,6 +36,10 @@ enum PassCategory: string
             self::HomeownerStaff => QRShape::HouseHex,
             self::Visitor => QRShape::Circle,
             self::Contractor => QRShape::Pentagon,
+            // Their own frames: Octagon and RoundedSquare are Admin's and Renter's,
+            // and a guard tells a pass apart by its shape.
+            self::Delegate => QRShape::Ticket,
+            self::LongTermOccupant => QRShape::Arch,
         };
     }
 
@@ -49,6 +55,8 @@ enum PassCategory: string
             self::HomeownerStaff => 'Homeowner Staff',
             self::Visitor => 'Visitor',
             self::Contractor => 'Contractor',
+            self::Delegate => 'Authorized Delegate',
+            self::LongTermOccupant => 'Long-Term Occupant',
         };
     }
 
@@ -80,6 +88,8 @@ enum PassCategory: string
             self::HomeownerStaff => 'GP-HST',
             self::Visitor => 'GP-VIS',
             self::Contractor => 'GP-CON',
+            self::Delegate => 'GP-DEL',
+            self::LongTermOccupant => 'GP-LTO',
         };
     }
 
@@ -91,7 +101,7 @@ enum PassCategory: string
             self::Security => 'ZONE-ALL-PERIMETER',
             self::Admin => 'ZONE-ADMIN-COMMON',
             self::Staff, self::Contractor => 'ZONE-FACILITIES-WORKSHOP',
-            self::Visitor => 'ZONE-HOST-RESIDENCE',
+            self::Visitor, self::Delegate => 'ZONE-HOST-RESIDENCE',
             default => 'ZONE-RESIDENTIAL-AMENITIES',
         };
     }

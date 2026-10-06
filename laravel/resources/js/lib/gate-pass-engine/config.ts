@@ -88,6 +88,8 @@ export const CATEGORY_SHAPES: Record<PassCategory, QRShape> = {
     HOMEOWNER_STAFF: 'HOUSE_HEX',
     VISITOR: 'CIRCLE',
     CONTRACTOR: 'PENTAGON',
+    DELEGATE: 'TICKET',
+    LONG_TERM_OCCUPANT: 'ARCH',
 };
 
 /** Neutral styling used only if a component renders before hydration. */
@@ -147,6 +149,8 @@ export function formatPassIdForDisplay(category: PassCategory, rawId: string): s
         HOMEOWNER_STAFF: 'GP-HST',
         VISITOR: 'GP-VIS',
         CONTRACTOR: 'GP-CON',
+        DELEGATE: 'GP-DEL',
+        LONG_TERM_OCCUPANT: 'GP-LTO',
     };
 
     const digits = rawId.replace(/\D/g, '') || '0';

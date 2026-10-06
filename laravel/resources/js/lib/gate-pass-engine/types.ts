@@ -12,7 +12,9 @@ export type PassCategory =
   | 'SECURITY' 
   | 'HOMEOWNER_STAFF'
   | 'VISITOR'
-  | 'CONTRACTOR';
+  | 'CONTRACTOR'
+  | 'DELEGATE'
+  | 'LONG_TERM_OCCUPANT';
 
 export type QRShape = 
   | 'STAR_8'          // ⭐ 8-point / star frame (Highest administrative tier)
@@ -23,7 +25,9 @@ export type QRShape =
   | 'DIAMOND'         // ◆ Diamond frame (Community staff)
   | 'SHIELD'          // 🛡 Shield frame (Security personnel)
   | 'HOUSE_HEX'       // ⬢ Custom hex/house frame (Staff assigned to homeowner)
-  | 'PENTAGON';       // ⬟ Pentagon frame (Approved contractor)
+  | 'PENTAGON'        // ⬟ Pentagon frame (Approved contractor)
+  | 'TICKET'          // 🎟 Notched ticket frame (Authorized delegate)
+  | 'ARCH';           // ⌂ Doorway arch frame (Long-term occupant)
 
 /** Where a pass is in its life. Mirrors App\Enums\PassStatus. */
 export type PassStatus =

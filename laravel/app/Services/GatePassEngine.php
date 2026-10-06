@@ -126,7 +126,7 @@ class GatePassEngine
      */
     public function issuePassFor(User $user): GatePass
     {
-        return $user->gatePasses()->whereNull('visitor_id')->latest('id')->first()
+        return $user->gatePasses()->whereNull('visitor_id')->whereNull('delegated_access_id')->latest('id')->first()
             ?? $this->createAccountPass($user);
     }
 
@@ -136,7 +136,7 @@ class GatePassEngine
      */
     public function reissuePassFor(User $user, User $by): GatePass
     {
-        $current = $user->gatePasses()->whereNull('visitor_id')->latest('id')->first();
+        $current = $user->gatePasses()->whereNull('visitor_id')->whereNull('delegated_access_id')->latest('id')->first();
 
         if ($current && ! $current->status->isTerminal()) {
             throw new RuntimeException("Pass {$current->pass_id} is still {$current->status->label()}; revoke it before reissuing.");
@@ -200,6 +200,18 @@ class GatePassEngine
                 'rotation_seq' => 1,
                 'status' => PassStatus::Requested,
                 'status_changed_at' => now(),
+                'metadata' => [
+                    'visitor_id' => $visitor->id,
+                    'host_name' => $host->display_name,
+                    'property' => $host->propertyLabel(),
+                    'parking_instructions' => $visitor->parkingInstructions(),
+                    'arrival_window' => $visitor->arrivalWindowLabel(),
+                    'arrival_window_start' => $visitor->arrival_window_start,
+                    'arrival_window_end' => $visitor->arrival_window_end,
+                    'community_rules' => $visitor->communityRules(),
+                    'emergency_info' => $visitor->emergencyInfo(),
+                    'notes' => $visitor->notes,
+                ],
             ]);
 
             $pass->recordCreation($host, "Requested by {$host->display_name}");
@@ -238,6 +250,12 @@ class GatePassEngine
             'valid_from' => $validFrom,
             'valid_until' => $validUntil,
             'single_entry' => $visitor->type !== 'Recurring',
+            'metadata' => array_merge($pass->metadata ?? [], [
+                'parking_instructions' => $visitor->parkingInstructions(),
+                'arrival_window' => $visitor->arrivalWindowLabel(),
+                'community_rules' => $visitor->communityRules(),
+                'emergency_info' => $visitor->emergencyInfo(),
+            ]),
         ]);
     }
 
@@ -251,6 +269,25 @@ class GatePassEngine
     {
         $arrival = CarbonImmutable::parse($visitor->expected_at);
         $windows = config('gatepass.guest_windows');
+
+        if (! empty($visitor->arrival_window_start) && ! empty($visitor->arrival_window_end)) {
+            try {
+                [$startH, $startM] = explode(':', $visitor->arrival_window_start);
+                [$endH, $endM] = explode(':', $visitor->arrival_window_end);
+                $from = $arrival->setTime((int) $startH, (int) $startM)->subMinutes((int) ($windows['opens_minutes_before'] ?? 15));
+                $until = $arrival->setTime((int) $endH, (int) $endM)->addHours(2);
+
+                // A window across midnight (22:00-02:00) ends the next day; it
+                // used to end before it began, so the pass was never valid.
+                if ($until->lessThanOrEqualTo($from)) {
+                    $until = $until->addDay();
+                }
+
+                return [$from, $until];
+            } catch (\Throwable) {
+                // fallback below
+            }
+        }
 
         $from = $arrival->subMinutes((int) $windows['opens_minutes_before']);
         $until = $visitor->type === 'Recurring'

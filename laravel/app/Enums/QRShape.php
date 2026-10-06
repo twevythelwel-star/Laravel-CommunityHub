@@ -13,6 +13,8 @@ enum QRShape: string
     case Shield = 'SHIELD';
     case HouseHex = 'HOUSE_HEX';
     case Pentagon = 'PENTAGON';
+    case Ticket = 'TICKET';
+    case Arch = 'ARCH';
 
     public function label(): string
     {
@@ -26,6 +28,8 @@ enum QRShape: string
             self::Shield => 'Heraldic Shield Frame',
             self::HouseHex => 'Custom Hex/House Frame',
             self::Pentagon => 'Contractor Pentagon Frame',
+            self::Ticket => 'Delegate Ticket Frame',
+            self::Arch => 'Long-Term Occupant Arch Frame',
         };
     }
 }

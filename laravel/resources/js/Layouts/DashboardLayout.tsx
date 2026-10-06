@@ -41,6 +41,7 @@ import {
   UserCog,
   UserX,
   Users,
+  UserCheck,
   BadgeCheck,
   ListTree,
   ShieldCheck,
@@ -84,6 +85,7 @@ const allMenuItems = [
   { href: '/dashboard/renters', label: 'Renters', icon: KeyRound, roles: ['Homeowner', 'Admin', 'System Admin'] },
   { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
   { href: '/dashboard/gate-pass', label: 'Gate Pass', icon: BadgeCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
+  { href: '/dashboard/delegation', label: 'Access & People', icon: UserCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   { href: '/dashboard/gate-scanner', label: 'Gate Scanner', icon: Scan, roles: ['System Admin', 'Admin', 'Security'] },
   { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
   // Every role, because a notice can now be addressed to any role. The menu

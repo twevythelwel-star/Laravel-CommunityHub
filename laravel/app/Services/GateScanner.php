@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\GateId;
+use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Enums\ScanDecision;
 use App\Enums\ValidationStatus;
@@ -11,7 +12,9 @@ use App\Exceptions\InvalidPassTransition;
 use App\Exceptions\ScanNotConfirmable;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
+use App\Models\DelegatedAccess;
 use App\Models\GatePass;
+use App\Models\InAppNotification;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -31,13 +34,24 @@ use Illuminate\Support\Str;
  */
 class GateScanner
 {
-    public function __construct(private readonly GatePassEngine $engine) {}
+    public function __construct(
+        private readonly GatePassEngine $engine,
+        private readonly AccessRiskEngine $riskEngine,
+        private readonly AccessAuditTimelineService $timelineService
+    ) {}
 
     /**
      * @return array{report: array<string, mixed>, decision: string, scanId: string|null, accessLogId: int, expiresAt: string|null}
      */
-    public function scan(string $token, GateId $gate, User $guard, string $method = 'Digital Pass'): array
-    {
+    public function scan(
+        string $token,
+        GateId $gate,
+        User $guard,
+        string $method = 'Digital Pass',
+        string $direction = 'auto',
+        bool $overridePassback = false,
+        ?string $overrideReason = null
+    ): array {
         $trimmed = trim(str_replace('-', '', $token));
         if (preg_match('/^\d{6}$/', $trimmed)) {
             $candidate = GatePass::whereIn('status', [PassStatus::Active, PassStatus::CheckedIn])
@@ -51,9 +65,168 @@ class GateScanner
             }
         }
 
+        // ── 0. Multi-Modal Token Translation (NFC Tap, Direct Pass ID, or Offline PIN) ──
+        if (str_starts_with($token, 'CHUB-NFC-V2|') || str_starts_with($token, 'NFC:')) {
+            $parts = explode('|', $token);
+            $candidatePassId = $parts[1] ?? '';
+            $candidate = GatePass::where('pass_id', $candidatePassId)->first();
+            if ($candidate) {
+                $issued = $this->engine->issueToken($candidate, $gate);
+                $token = $issued['token'];
+                $method = 'NFC Contactless Tap';
+            }
+        } elseif (str_starts_with($token, 'GP-') && ! str_contains($token, '.')) {
+            $candidate = GatePass::where('pass_id', $token)->first();
+            if ($candidate) {
+                $issued = $this->engine->issueToken($candidate, $gate);
+                $token = $issued['token'];
+                if ($method === 'Digital Pass') {
+                    $method = 'Mobile Wallet Pass';
+                }
+            }
+        } elseif (str_starts_with($token, '04:') && strlen($token) >= 20) {
+            // NFC Card UID match
+            $candidate = GatePass::whereIn('status', [PassStatus::Active, PassStatus::CheckedIn, PassStatus::Revoked])
+                ->get()
+                ->first(function ($p) use ($token) {
+                    $hash = md5($p->pass_id.':'.config('gatepass.secret', 'community_hub'));
+                    $computedUid = sprintf('04:%s:%s:%s:%s:%s:%s',
+                        substr($hash, 0, 2), substr($hash, 2, 2), substr($hash, 4, 2),
+                        substr($hash, 6, 2), substr($hash, 8, 2), substr($hash, 10, 2)
+                    );
+
+                    return strcasecmp($computedUid, $token) === 0;
+                });
+
+            if ($candidate) {
+                $issued = $this->engine->issueToken($candidate, $gate);
+                $token = $issued['token'];
+                $method = 'NFC Contactless Tap';
+            }
+        }
+
         $report = $this->engine->validate($token, $gate);
         $pass = GatePass::with(['user', 'visitor'])->where('pass_id', $report['passId'])->first();
         $decision = ScanDecision::from($report['decision']);
+
+        // A pass issued under a delegation stops when the delegation does:
+        // suspended, expired, still awaiting approval, or an emergency-only
+        // delegation outside an emergency. Only revocation used to reach the gate.
+        $delegationId = $pass?->delegated_access_id ?? ($pass?->metadata['delegated_access_id'] ?? null);
+        if ($decision !== ScanDecision::Reject && $delegationId) {
+            $delegation = DelegatedAccess::find($delegationId);
+            if (! $delegation || ! $delegation->isActive()) {
+                $decision = ScanDecision::Reject;
+                $report['decision'] = ScanDecision::Reject->value;
+                $report['status'] = 'REJECTED';
+                $report['primaryReason'] = 'The authorization behind this pass is not currently active';
+            }
+        }
+
+        // ── Rule-based access control engine (time windows, days permitted, curfew, gate privileges) ──
+        if ($decision !== ScanDecision::Reject && $pass) {
+            $rules = $pass->metadata['access_rules'] ?? [];
+            $schedule = $pass->metadata['access_schedule'] ?? [];
+
+            // 1. Day of week rule
+            $permittedDays = $rules['allowed_days'] ?? $rules['days_permitted'] ?? $schedule['days'] ?? null;
+            if (! empty($permittedDays) && ! in_array('all', array_map('strtolower', $permittedDays))) {
+                $todayShort = strtolower(now()->format('D'));
+                $normalized = array_map(fn ($d) => strtolower(substr($d, 0, 3)), $permittedDays);
+                if (! in_array(strtolower(substr($todayShort, 0, 3)), $normalized, true)) {
+                    $decision = ScanDecision::Reject;
+                    $report['decision'] = ScanDecision::Reject->value;
+                    $report['status'] = 'REJECTED';
+                    $report['primaryReason'] = sprintf('Access not permitted on %s (authorized days: %s)', now()->format('l'), implode(', ', array_map('ucfirst', $permittedDays)));
+                }
+            }
+
+            // 2. Time window / Shift schedule rule
+            $startTime = $rules['entry_start_time'] ?? $rules['time_window']['start'] ?? null;
+            $endTime = $rules['entry_end_time'] ?? $rules['time_window']['end'] ?? null;
+
+            // Also check schedule['hours'] format: '8:00 AM – 5:00 PM' or '08:00 - 17:00'
+            if (empty($startTime) && ! empty($schedule['hours'])) {
+                $cleanHours = str_replace(['–', '—'], '-', $schedule['hours']);
+                $hParts = explode('-', $cleanHours);
+                if (count($hParts) === 2) {
+                    $startTime = date('H:i', strtotime(trim($hParts[0])));
+                    $endTime = date('H:i', strtotime(trim($hParts[1])));
+                }
+            }
+
+            if ($decision !== ScanDecision::Reject && ! empty($startTime) && ! empty($endTime) && ($startTime !== '00:00' || $endTime !== '23:59')) {
+                $nowTime = now()->format('H:i');
+                if ($nowTime < $startTime || $nowTime > $endTime) {
+                    $decision = ScanDecision::Reject;
+                    $report['decision'] = ScanDecision::Reject->value;
+                    $report['status'] = 'REJECTED';
+                    $report['primaryReason'] = sprintf('Outside authorized operational hours (%s - %s)', $startTime, $endTime);
+                }
+            }
+
+            // 3. Child / Dependent Curfew rule
+            if ($decision !== ScanDecision::Reject && ! empty($schedule['curfew_enabled'])) {
+                $curfewHours = str_replace(['–', '—'], '-', $schedule['curfew_hours'] ?? '06:00 AM - 9:00 PM');
+                $cParts = explode('-', $curfewHours);
+                if (count($cParts) === 2) {
+                    $curfewStart = date('H:i', strtotime(trim($cParts[0])));
+                    $curfewEnd = date('H:i', strtotime(trim($cParts[1])));
+                    $nowTime = now()->format('H:i');
+                    if ($nowTime < $curfewStart || $nowTime > $curfewEnd) {
+                        $decision = ScanDecision::Reject;
+                        $report['decision'] = ScanDecision::Reject->value;
+                        $report['status'] = 'REJECTED';
+                        $report['primaryReason'] = sprintf('Curfew restriction: Dependent access prohibited between %s and %s', date('g:i A', strtotime($curfewEnd)), date('g:i A', strtotime($curfewStart)));
+                    }
+                }
+            }
+
+            // 4. Gate privilege rule
+            if ($decision !== ScanDecision::Reject && isset($rules['gate_access']) && $rules['gate_access'] === false) {
+                $decision = ScanDecision::Reject;
+                $report['decision'] = ScanDecision::Reject->value;
+                $report['status'] = 'REJECTED';
+                $report['primaryReason'] = 'Gate entry privilege not authorized on this credential';
+            }
+
+            // 5. Anti-Passback Enforcement Engine
+            // Prevent someone from using the same credential to enter twice without leaving.
+            $isEntryAttempt = ($direction === 'in');
+
+            if ($decision !== ScanDecision::Reject && $pass->status === PassStatus::CheckedIn && $isEntryAttempt) {
+                if ($overridePassback) {
+                    $decision = ScanDecision::CheckIn;
+                    $report['decision'] = ScanDecision::CheckIn->value;
+                    $report['status'] = 'ALLOW';
+                    $report['isPassbackOverride'] = true;
+                    $report['overrideReason'] = $overrideReason ?: 'Security officer override authorized.';
+                    $report['primaryReason'] = sprintf(
+                        'Security Override: Anti-passback cleared by %s. Reason: %s',
+                        $guard->name,
+                        $report['overrideReason']
+                    );
+                } else {
+                    $decision = ScanDecision::Reject;
+                    $report['decision'] = ScanDecision::Reject->value;
+                    $report['status'] = 'REJECTED';
+                    $report['denyReason'] = 'ALREADY_CHECKED_IN';
+                    $report['isPassbackViolation'] = true;
+                    $report['canOverride'] = true;
+                    $checkedInTime = $pass->checked_in_at ? $pass->checked_in_at->format('g:i A') : 'prior entry';
+                    $report['checkedInAt'] = $pass->checked_in_at?->toIso8601String() ?? $pass->status_changed_at?->toIso8601String();
+                    $report['primaryReason'] = sprintf(
+                        '⚠️ Already Checked In: Passholder is recorded inside property since %s. Duplicate entry without prior departure prohibited.',
+                        $checkedInTime
+                    );
+                }
+            } elseif ($direction === 'out' && $decision !== ScanDecision::Reject) {
+                $decision = ScanDecision::CheckOut;
+                $report['decision'] = ScanDecision::CheckOut->value;
+                $report['status'] = 'ALLOW';
+                $report['primaryReason'] = 'CHECK_OUT: Departure verified; passholder exited property.';
+            }
+        }
 
         $entry = AccessLogEntry::create([
             'user_id' => $pass?->user_id ?? $pass?->visitor?->homeowner_id,
@@ -69,6 +242,35 @@ class GateScanner
             'occurred_at' => now(),
         ]);
 
+        // ── Access Risk Engine & Forensic Timeline Analysis ──
+        $detectedIncident = $this->riskEngine->analyzeScanAttempt($token, $gate, $guard, [
+            'report' => $report,
+            'decision' => $decision->value,
+        ]);
+
+        $passIdForTimeline = $report['passId'] ?? ($pass?->pass_id ?? (str_starts_with($token, 'GP-') ? explode('|', $token)[0] : 'UNKNOWN'));
+
+        $this->timelineService->recordEvent(
+            passId: $passIdForTimeline,
+            eventType: $decision === ScanDecision::Reject ? 'CREDENTIAL_DENIED' : 'CREDENTIAL_SCANNED',
+            headline: sprintf('%s credential scanned at %s (%s)', $report['userName'] ?? 'Visitor', $this->gateName($gate), $method),
+            description: $decision === ScanDecision::Reject
+                ? 'Scan REJECTED: '.($report['primaryReason'] ?? 'Validation failed')
+                : 'Scan processed with status '.$report['status'],
+            gate: $gate->value,
+            severity: $decision === ScanDecision::Reject ? 'WARNING' : 'INFO',
+            actorType: 'SECURITY_OFFICER',
+            actor: $guard,
+            telemetry: [
+                'method' => $method,
+                'decision' => $decision->value,
+                'direction' => $direction,
+                'status' => $report['status'],
+                'access_log_id' => $entry->id,
+                'risk_incident_id' => $detectedIncident?->id,
+            ]
+        );
+
         if ($decision === ScanDecision::Reject) {
             Log::channel('security')->warning('Gate pass rejected', [
                 'pass_id' => $report['passId'],
@@ -77,7 +279,125 @@ class GateScanner
                 'scanned_by' => $guard->uid,
             ]);
 
-            return ['report' => $report, 'decision' => $decision->value, 'scanId' => null, 'accessLogId' => $entry->id, 'expiresAt' => null];
+            return [
+                'report' => $report,
+                'decision' => $decision->value,
+                'scanId' => null,
+                'accessLogId' => $entry->id,
+                'expiresAt' => null,
+                'isPassbackViolation' => $report['isPassbackViolation'] ?? false,
+                'canOverride' => $report['canOverride'] ?? false,
+                'checkedInAt' => $report['checkedInAt'] ?? null,
+            ];
+        }
+
+        // ── Smart Security Categorical Breakdown ──
+        if ($pass) {
+            $isLongTerm = ($pass->category === PassCategory::LongTermOccupant || ($pass->metadata['authorization_type'] ?? '') === 'long_term_occupant');
+            $rules = $pass->metadata['access_rules'] ?? [];
+
+            $report['accessRulesSummary'] = [
+                'Gate' => $rules['gate_access'] ?? true,
+                'Pool' => $rules['amenity_access']['pool'] ?? ($isLongTerm ? true : false),
+                'Gym' => $rules['amenity_access']['gym'] ?? false,
+                'Parking' => $rules['parking_access'] ?? true,
+                'Create Visitors' => $rules['can_create_visitors'] ?? false,
+                'Emergency Access' => $rules['emergency_access'] ?? false,
+                'Verify Photo ID' => $rules['verify_id'] ?? false,
+            ];
+            $report['requiresIdVerification'] = (bool) ($rules['verify_id'] ?? false);
+
+            if ($isLongTerm) {
+                $report['isDelegated'] = true;
+                $report['accessTier'] = 'RESIDENT ACCESS';
+                $report['delegatedTitle'] = 'LONG-TERM OCCUPANT';
+                $report['authorizationType'] = 'LONG-TERM OCCUPANT';
+                $report['actingFor'] = $pass->metadata['grantor_name'] ?? $pass->user?->name;
+                $report['authorizedBy'] = $pass->metadata['grantor_name'] ?? $pass->user?->name;
+                $report['relationship'] = $pass->metadata['relationship'] ?? 'Family/Friend';
+                $report['accessLevel'] = 'Long-Term Occupant';
+                $report['property'] = $pass->property;
+                $report['validWindow'] = sprintf('%s – %s', $pass->valid_from?->format('M d, Y') ?? 'Immediate', $pass->valid_until?->format('M d, Y') ?? 'Permanent');
+                $report['status'] = $pass->status->value;
+            } elseif ($pass->category === PassCategory::Delegate || ! empty($pass->metadata['delegated_access_id'])) {
+                $delegatedAccess = ! empty($pass->metadata['delegated_access_id']) ? DelegatedAccess::find($pass->metadata['delegated_access_id']) : null;
+                $accessLevel = $pass->metadata['access_level'] ?? $delegatedAccess?->access_level ?? 'Emergency Delegate';
+                $isEmergency = (bool) ($pass->metadata['is_emergency'] ?? $delegatedAccess?->is_emergency_active ?? false);
+
+                $report['isDelegated'] = true;
+                $report['accessTier'] = 'DELEGATED ACCESS';
+                $report['delegatedTitle'] = 'AUTHORIZED DELEGATE';
+                $report['authorizationType'] = match ($accessLevel) {
+                    'Legacy Delegate', 'Legacy Contact' => 'LEGACY CONTACT',
+                    'Caregiver' => 'CAREGIVER',
+                    'Property Delegate' => 'PROPERTY MANAGER',
+                    'Emergency Delegate' => 'EMERGENCY DELEGATE',
+                    'Full Authorized Representative' => 'AUTHORIZED REPRESENTATIVE',
+                    default => 'AUTHORIZED DELEGATE',
+                };
+                $report['actingFor'] = $pass->metadata['grantor_name'] ?? $delegatedAccess?->grantor?->name;
+                $report['authorizedBy'] = $report['actingFor'];
+                $report['relationship'] = $pass->metadata['relationship'] ?? $delegatedAccess?->relationship ?? 'Delegate';
+                $report['accessLevel'] = $accessLevel;
+                $report['isEmergency'] = $isEmergency;
+                $report['property'] = $pass->property;
+                $report['validWindow'] = sprintf('%s – %s', $pass->valid_from?->format('M d, Y') ?? 'Immediate', $pass->valid_until?->format('M d, Y') ?? 'Permanent');
+                $report['status'] = $pass->status->value;
+
+                // Check suspicious time (late night e.g. between 23:00 and 05:00)
+                $currentHour = (int) now()->format('H');
+                $isLateNight = ($currentHour >= 23 || $currentHour < 5);
+
+                if ($delegatedAccess) {
+                    $delegatedAccess->logEvent(
+                        $isLateNight ? 'suspicious_attempt' : 'gate_scanned',
+                        sprintf('Gate %s scanned by %s (%s) at %s%s', $decision->value, $guard->name, $gate->label(), now()->format('H:i'), $isLateNight ? ' [Late Night Window]' : ''),
+                        [
+                            'decision' => $decision->value,
+                            'gate' => $gate->value,
+                            'is_late_night' => $isLateNight,
+                        ],
+                        $guard
+                    );
+
+                    if ($isLateNight && $delegatedAccess->grantor) {
+                        InAppNotification::create([
+                            'user_id' => $delegatedAccess->grantor_user_id,
+                            'category' => 'security',
+                            'title' => "⚠️ Notice: Delegate {$delegatedAccess->name} Gate Access",
+                            'body' => "Delegate {$delegatedAccess->name} ({$delegatedAccess->relationship}) accessed {$gate->label()} at {$pass->property} at ".now()->format('h:i A').'.',
+                            'action_url' => '/dashboard/delegation',
+                            'priority' => 'high',
+                        ]);
+                    }
+                }
+            } elseif ($pass->category === PassCategory::Visitor) {
+                $report['isDelegated'] = false;
+                $report['accessTier'] = 'TEMPORARY ACCESS';
+                $report['delegatedTitle'] = 'PRE-REGISTERED GUEST';
+                $report['authorizationType'] = 'GUEST';
+                $report['authorizedBy'] = $pass->visitor?->homeowner_name ?? $pass->visitor?->homeowner?->name ?? $pass->user?->name ?? 'Homeowner';
+                $report['actingFor'] = $report['authorizedBy'];
+                $report['relationship'] = 'Pre-Registered Guest';
+                $report['property'] = $pass->property;
+                $report['validWindow'] = sprintf('%s – %s', $pass->valid_from?->format('M d, g:i A') ?? 'Immediate', $pass->valid_until?->format('M d, g:i A') ?? 'Close');
+                $report['arrivalWindow'] = $pass->visitor?->arrivalWindowLabel() ?? $pass->metadata['arrival_window'] ?? $report['validWindow'];
+                $report['parkingInstructions'] = $pass->visitor?->parkingInstructions() ?? $pass->metadata['parking_instructions'] ?? null;
+                $report['communityRules'] = $pass->visitor?->communityRules() ?? $pass->metadata['community_rules'] ?? [];
+                $report['emergencyInfo'] = $pass->visitor?->emergencyInfo() ?? $pass->metadata['emergency_info'] ?? [];
+                $report['status'] = $pass->status->value;
+            } elseif ($pass->category === PassCategory::Contractor) {
+                $report['isDelegated'] = false;
+                $report['accessTier'] = 'TEMPORARY ACCESS';
+                $report['delegatedTitle'] = 'CONTRACTOR';
+                $report['authorizationType'] = 'CONTRACTOR';
+                $report['authorizedBy'] = $pass->user?->name ?? 'Community Administration';
+                $report['actingFor'] = $report['authorizedBy'];
+                $report['relationship'] = 'Contractor';
+                $report['property'] = $pass->property;
+                $report['validWindow'] = sprintf('%s – %s', $pass->valid_from?->format('M d, Y') ?? 'Immediate', $pass->valid_until?->format('M d, Y') ?? 'Close');
+                $report['status'] = $pass->status->value;
+            }
         }
 
         $ttl = (int) config('gatepass.scan_confirm_seconds', 120);
@@ -90,6 +410,9 @@ class GateScanner
             'gate' => $gate->value,
             'guard_id' => $guard->id,
             'method' => $method,
+            'direction' => $direction,
+            'is_override' => $overridePassback,
+            'override_reason' => $overrideReason,
         ], $ttl);
 
         return [
@@ -98,6 +421,9 @@ class GateScanner
             'scanId' => $scanId,
             'accessLogId' => $entry->id,
             'expiresAt' => now()->addSeconds($ttl)->toIso8601String(),
+            'isPassbackViolation' => $report['isPassbackViolation'] ?? false,
+            'canOverride' => $report['canOverride'] ?? false,
+            'checkedInAt' => $report['checkedInAt'] ?? null,
         ];
     }
 
@@ -127,6 +453,18 @@ class GateScanner
             $this->log($pass, $gate, $guard, ValidationStatus::Deny->value, $pending['method'],
                 'REFUSED_BY_OFFICER: '.($refusalReason ?: 'Guard refused entry after inspection.'));
 
+            $this->timelineService->recordEvent(
+                passId: $pass->pass_id,
+                eventType: 'ENTRY_REFUSED',
+                headline: sprintf('Entry refused at %s by %s', $gate->label(), $guard->name),
+                description: $refusalReason ?: 'Guard refused entry after physical inspection.',
+                gate: $gate->value,
+                severity: 'WARNING',
+                actorType: 'SECURITY_OFFICER',
+                actor: $guard,
+                telemetry: ['method' => $pending['method'], 'reason' => $refusalReason]
+            );
+
             return ['action' => 'REFUSED', 'passStatus' => $pass->status->value, 'time' => $now->format('g:i A'), 'message' => 'Entry refused and logged.'];
         }
 
@@ -140,13 +478,55 @@ class GateScanner
                 $pass->transitionTo(PassStatus::Active, $guard, 'First use at the gate', $gate);
             }
 
-            $pass->transitionTo($decision->targetStatus(), $guard, null, $gate);
+            if (($pending['is_override'] ?? false) && $decision === ScanDecision::CheckIn && $pass->status === PassStatus::CheckedIn) {
+                $pass->update([
+                    'checked_in_at' => $now,
+                    'status_changed_at' => $now,
+                ]);
+                $pass->transitions()->create([
+                    'from_status' => PassStatus::CheckedIn,
+                    'to_status' => PassStatus::CheckedIn,
+                    'actor_id' => $guard->id,
+                    'gate' => $gate->value,
+                    'reason' => 'Security override: '.($pending['override_reason'] ?? 'Officer authorized re-entry'),
+                    'occurred_at' => $now,
+                ]);
+            } else {
+                $pass->transitionTo($decision->targetStatus(), $guard, null, $gate);
+            }
         } catch (InvalidPassTransition $e) {
             throw new ScanNotConfirmable($e->getMessage().' Scan the pass again.');
         }
 
         $this->syncVisitor($pass, $decision, $gate);
         $this->log($pass, $gate, $guard, $decision->value, $pending['method']);
+
+        $isCheckIn = ($decision === ScanDecision::CheckIn);
+        $this->timelineService->recordEvent(
+            passId: $pass->pass_id,
+            eventType: $isCheckIn ? 'SECURITY_APPROVED' : 'CHECK_OUT_CONFIRMED',
+            headline: sprintf('Security officer %s approved %s at %s', $guard->name, $isCheckIn ? 'entry' : 'departure', $gate->label()),
+            description: sprintf('Barrier opened for %s (%s).', $pass->holder_name ?? $pass->user?->name ?? 'Passholder', $pass->category?->label() ?? 'Pass'),
+            gate: $gate->value,
+            severity: 'INFO',
+            actorType: 'SECURITY_OFFICER',
+            actor: $guard,
+            telemetry: ['method' => $pending['method'], 'direction' => $pending['direction'] ?? ($isCheckIn ? 'in' : 'out')]
+        );
+
+        if ($isCheckIn) {
+            $this->timelineService->recordEvent(
+                passId: $pass->pass_id,
+                eventType: 'GATE_OPENED',
+                headline: sprintf('Gate barrier opened at %s', $gate->label()),
+                description: 'Physical boom barrier gate opened for vehicle / pedestrian entry.',
+                gate: $gate->value,
+                severity: 'INFO',
+                actorType: 'BARRIER_HARDWARE',
+                actor: $guard,
+                telemetry: ['gate' => $gate->value]
+            );
+        }
 
         return [
             'action' => $decision->value,

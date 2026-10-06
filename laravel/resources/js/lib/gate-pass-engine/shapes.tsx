@@ -55,6 +55,12 @@ export function getShapeClipPath(shape: QRShape): string {
     case 'PENTAGON':
       // Regular pentagon for approved contractors
       return 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
+    case 'TICKET':
+      // Admission ticket, notched on both sides, for authorized delegates
+      return 'polygon(0% 0%, 100% 0%, 100% 38%, 92% 50%, 100% 62%, 100% 100%, 0% 100%, 0% 62%, 8% 50%, 0% 38%)';
+    case 'ARCH':
+      // Doorway: rounded top, square base, for long-term occupants
+      return 'inset(0% round 50% 50% 8% 8%)';
     default:
       return 'none';
   }
@@ -119,6 +125,18 @@ export function CategoryShapeIcon({ shape, className, color }: { shape: QRShape;
       return (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle}>
           <polygon points="12 2 22 9.5 18 22 6 22 2 9.5 12 2" fill="currentColor" fillOpacity="0.15" />
+        </svg>
+      );
+    case 'TICKET':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle}>
+          <polygon points="2 4 22 4 22 10 20 12 22 14 22 20 2 20 2 14 4 12 2 10 2 4" fill="currentColor" fillOpacity="0.15" />
+        </svg>
+      );
+    case 'ARCH':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={iconStyle}>
+          <path d="M4 22V11a8 8 0 0 1 16 0v11z" fill="currentColor" fillOpacity="0.15" />
         </svg>
       );
     default:

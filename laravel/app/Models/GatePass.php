@@ -28,10 +28,11 @@ class GatePass extends Model
     use Auditable, HasFactory, Searchable;
 
     protected $fillable = [
-        'pass_id', 'user_id', 'visitor_id', 'category', 'holder_name', 'property',
+        'pass_id', 'user_id', 'visitor_id', 'delegated_access_id', 'category', 'holder_name', 'property',
         'access_zone', 'designated_gate', 'valid_from', 'valid_until', 'single_entry',
         'color_variant', 'rotation_seq', 'status', 'checked_in_at', 'checked_out_at',
         'status_changed_at', 'revoked_at', 'revoked_by', 'revocation_reason', 'last_rotated_at',
+        'metadata',
     ];
 
     protected function casts(): array
@@ -49,7 +50,13 @@ class GatePass extends Model
             'revoked_at' => 'datetime',
             'last_rotated_at' => 'datetime',
             'rotation_seq' => 'integer',
+            'metadata' => 'array',
         ];
+    }
+
+    public function delegatedAccess(): BelongsTo
+    {
+        return $this->belongsTo(DelegatedAccess::class);
     }
 
     public function user(): BelongsTo

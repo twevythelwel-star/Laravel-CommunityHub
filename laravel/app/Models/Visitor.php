@@ -7,6 +7,7 @@ use App\Jobs\SendVisitorPassNotification;
 use App\Services\Messaging\PhoneNumber;
 use App\Services\SmsService;
 use App\Services\WhatsAppService;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,7 +20,9 @@ class Visitor extends Model
 
     protected $fillable = [
         'name', 'contact', 'vehicle', 'id_type', 'id_number', 'type', 'share_token', 'status',
-        'expected_at', 'date_range', 'homeowner_id', 'homeowner_name',
+        'expected_at', 'arrival_window_start', 'arrival_window_end', 'date_range',
+        'parking_instructions', 'community_rules', 'emergency_info', 'notes',
+        'homeowner_id', 'homeowner_name',
         'id_image_url', 'is_blocked', 'checked_in_at', 'checked_out_at', 'expired_at',
         'notify_email', 'notify_sms', 'notify_whatsapp', 'qr_code_path',
     ];
@@ -49,8 +52,74 @@ class Visitor extends Model
             'notify_email' => 'boolean',
             'notify_sms' => 'boolean',
             'notify_whatsapp' => 'boolean',
+            'community_rules' => 'array',
+            'emergency_info' => 'array',
             'status' => VisitorStatus::class,
         ];
+    }
+
+    public function arrivalWindowLabel(): string
+    {
+        if (! empty($this->arrival_window_start) && ! empty($this->arrival_window_end)) {
+            $formatTime = function ($timeStr) {
+                try {
+                    return Carbon::createFromFormat('H:i', substr($timeStr, 0, 5))->format('g:i A');
+                } catch (\Throwable) {
+                    return $timeStr;
+                }
+            };
+
+            return sprintf('%s – %s', $formatTime($this->arrival_window_start), $formatTime($this->arrival_window_end));
+        }
+
+        if ($this->expected_at) {
+            $start = $this->expected_at->format('g:i A');
+            $end = $this->expected_at->copy()->addHours(4)->format('g:i A');
+
+            return "{$start} – {$end}";
+        }
+
+        return 'Scheduled Arrival Window';
+    }
+
+    /** The visitor's own instructions, else the estate's (config/visitor_pass.php), else none. */
+    public function parkingInstructions(): string
+    {
+        return (string) ($this->parking_instructions ?: config('visitor_pass.parking_instructions') ?: '');
+    }
+
+    public function communityRules(): array
+    {
+        return ! empty($this->community_rules) ? $this->community_rules : static::defaultCommunityRules();
+    }
+
+    /** Only items actually set, for this visitor or for the estate. */
+    public function emergencyInfo(): array
+    {
+        return array_filter(
+            array_merge(static::defaultEmergencyInfo(), (array) ($this->emergency_info ?? [])),
+            fn ($value) => filled($value),
+        );
+    }
+
+    /**
+     * The estate's rules for visitors, from config/visitor_pass.php. These
+     * were invented (a 15 MPH limit, quiet hours, escort rules) and shown to
+     * every guest as the estate's own.
+     */
+    public static function defaultCommunityRules(): array
+    {
+        return (array) config('visitor_pass.community_rules', []);
+    }
+
+    /**
+     * From config/visitor_pass.php, unset items left out. The fallback was a
+     * 555 gatehouse number, "911" for ambulance and fire, and an invented AED
+     * location and assembly point.
+     */
+    public static function defaultEmergencyInfo(): array
+    {
+        return array_filter((array) config('visitor_pass.emergency_info', []), fn ($value) => filled($value));
     }
 
     public function homeowner(): BelongsTo
