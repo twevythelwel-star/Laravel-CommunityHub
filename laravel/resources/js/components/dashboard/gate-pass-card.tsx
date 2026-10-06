@@ -35,7 +35,6 @@ import {
   Layers,
   AlertTriangle,
   Eye,
-  Shield,
   Palette
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -114,7 +113,6 @@ export function GatePassCard({
   const [copied, setCopied] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(windowSeconds);
   const [isRotating, setIsRotating] = useState(false);
-  const [qrViewMode, setQrViewMode] = useState<'standard' | 'shield_enclosure' | 'matrix_diagnostic'>('standard');
   const [visualSeq, setVisualSeq] = useState(initialRotationSeq);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
@@ -341,34 +339,6 @@ export function GatePassCard({
         </button>
       </div>
 
-      {/* ── Profile QR Geometry View Mode Selector ── */}
-      <div className="px-5 pt-3 flex items-center justify-center gap-1.5 relative z-10">
-        <div className="bg-black/40 p-0.5 rounded-lg border border-white/15 flex items-center gap-1 text-[10px] font-mono">
-          <button
-            type="button"
-            onClick={() => setQrViewMode('standard')}
-            className={cn(
-              "px-2.5 py-0.5 rounded-md transition-all font-semibold flex items-center gap-1",
-              qrViewMode === 'standard' ? "bg-white text-slate-900 shadow-sm" : "text-white/70 hover:text-white"
-            )}
-          >
-            <CategoryShapeIcon shape={config.shape} className="w-3 h-3" />
-            <span>Profile Bezel</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setQrViewMode('shield_enclosure')}
-            className={cn(
-              "px-2.5 py-0.5 rounded-md transition-all font-semibold flex items-center gap-1",
-              qrViewMode === 'shield_enclosure' ? "bg-white text-slate-900 shadow-sm" : "text-white/70 hover:text-white"
-            )}
-          >
-            <Shield className="w-3 h-3" />
-            <span>Shield Enclosure</span>
-          </button>
-        </div>
-      </div>
-
       {/* ── Central QR Code Framed in Profile-Specific Custom Design ── */}
       <div className="py-4 flex flex-col items-center justify-center relative z-10">
         <div className="relative">
@@ -376,7 +346,6 @@ export function GatePassCard({
             value={currentToken}
             category={category}
             size={compact ? 150 : 175}
-            viewMode={qrViewMode}
             themeColor={activeColorVariant.hex}
             accentColor={activeColorVariant.accentHex}
             colorVariantName={activeColorVariant.name}

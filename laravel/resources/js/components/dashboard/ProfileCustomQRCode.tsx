@@ -12,7 +12,7 @@ export interface ProfileCustomQRCodeProps {
   size?: number;
   className?: string;
   showScanGlow?: boolean;
-  viewMode?: 'standard' | 'shield_enclosure' | 'matrix_diagnostic';
+  viewMode?: 'standard' | 'matrix_diagnostic';
   themeColor?: string;
   accentColor?: string;
   colorVariantName?: string;
@@ -315,66 +315,6 @@ export function ProfileCustomQRCode({
       </g>
     </svg>
   );
-
-  // ── VIEW MODE: HERALDIC SHIELD ENCLOSURE (Image 2 style) ──
-  if (viewMode === 'shield_enclosure') {
-    return (
-      <div 
-        className={cn("relative flex items-center justify-center p-3 transition-all", className)}
-        style={{ width: size + 50, height: size + 70 }}
-      >
-        {/* Outer Heraldic Shield Container with Metallic / Gradient Border */}
-        <div 
-          className="absolute inset-0 transition-transform duration-300 shadow-2xl overflow-hidden"
-          style={{
-            clipPath: getShapeClipPath('SHIELD'),
-            background: `linear-gradient(145deg, ${themeColor}, #0F172A 70%, ${accentColor})`,
-            padding: '8px',
-          }}
-        >
-          {/* Inner Heraldic Field Border */}
-          <div 
-            className="w-full h-full relative flex flex-col items-center justify-center bg-white p-3 rounded-b-3xl"
-            style={{
-              clipPath: getShapeClipPath('SHIELD'),
-            }}
-          >
-            {/* Top Heraldic Crest / Insignia Header */}
-            <div className="w-full flex items-center justify-between px-3 pt-1 pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-1.5">
-                <CategoryShapeIcon shape={shape} className="w-3.5 h-3.5" color={themeColor} />
-                <span className="font-mono text-[10px] font-extrabold uppercase tracking-widest text-slate-800">
-                  {category} PASS
-                </span>
-              </div>
-              <span className="w-2 h-2 rounded-full animate-ping" style={{ backgroundColor: accentColor }} />
-            </div>
-
-            {/* Embedded QR Code Canvas */}
-            <div 
-              className="relative flex items-center justify-center my-auto p-1 bg-white rounded-lg"
-              style={{ width: size - 20, height: size - 20 }}
-            >
-              {qrSvgMatrix}
-            </div>
-
-            {/* Bottom Shield Corner Botanical / Security Watermark (Image 2 motif) */}
-            <div className="w-full flex items-center justify-center pb-2 pt-1 text-[9px] font-mono font-bold tracking-wider text-slate-500">
-              DIGITAL GATE ENGINE • VERIFIED
-            </div>
-          </div>
-        </div>
-
-        {/* Animated Radar Scanning Line */}
-        {showScanGlow && (
-          <div 
-            className="absolute inset-x-6 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent z-30 pointer-events-none animate-bounce opacity-80"
-            style={{ boxShadow: `0 0 10px ${accentColor}` }}
-          />
-        )}
-      </div>
-    );
-  }
 
   // ── VIEW MODE: STANDARD PROFILE-SHAPED BEZEL ──
   return (
