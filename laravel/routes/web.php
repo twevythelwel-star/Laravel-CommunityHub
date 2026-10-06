@@ -19,6 +19,7 @@ use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\DelegatedAccessController;
+use App\Http\Controllers\Dashboard\OccupancyController;
 use App\Http\Controllers\Dashboard\OverviewController;
 use App\Http\Controllers\Dashboard\PaymentReturnController;
 use App\Http\Controllers\Dashboard\ProfileController;
@@ -371,6 +372,16 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->name('notifications.broadcast');
     Route::get('/notifications/hub', UniversalNotificationHub::class)
         ->name('notifications.universal-hub');
+
+    // ── Live "Who's On Property?" & Community Occupancy ──
+    Route::get('/occupancy', [OccupancyController::class, 'index'])->name('occupancy');
+    Route::get('/occupancy/unit/{unit}', [OccupancyController::class, 'unit'])->name('occupancy.unit');
+    Route::get('/occupancy/hierarchy', [OccupancyController::class, 'hierarchy'])->name('occupancy.hierarchy');
+    Route::get('/occupancy/export', [OccupancyController::class, 'exportRoster'])->name('occupancy.export');
+    Route::post('/occupancy/muster/start', [OccupancyController::class, 'startMuster'])->name('occupancy.muster.start');
+    Route::post('/occupancy/muster/status', [OccupancyController::class, 'updateMusterStatus'])->name('occupancy.muster.status');
+    Route::post('/occupancy/muster/resolve', [OccupancyController::class, 'resolveMuster'])->name('occupancy.muster.resolve');
+    Route::get('/occupancy/muster/export', [OccupancyController::class, 'exportMusterRoster'])->name('occupancy.muster.export');
 
     // ── Delegated Access Center: My Property → Access & People ──
     Route::get('/delegation', [DelegatedAccessController::class, 'index'])->name('delegation');
