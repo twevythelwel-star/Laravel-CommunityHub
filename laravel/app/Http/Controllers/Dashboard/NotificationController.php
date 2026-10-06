@@ -166,7 +166,9 @@ class NotificationController extends Controller
         $sendSms = (bool) ($validated['send_sms'] ?? false);
 
         $targetRoles = match ($audience) {
-            'residents' => [UserRole::Homeowner->value, UserRole::Renter->value],
+            // Renters are Temporary Homeowners; UserRole has no Renter case, so this
+            // was an "undefined constant" error for every residents-only broadcast.
+            'residents' => [UserRole::Homeowner->value, UserRole::TemporaryHomeowner->value],
             'security' => [UserRole::Security->value],
             default => null,
         };
@@ -194,7 +196,7 @@ class NotificationController extends Controller
                 $residentPhones = User::query()
                     ->whereNotNull('phone')
                     ->whereNull('deactivated_at')
-                    ->when($audience === 'residents', fn ($q) => $q->whereIn('role', [UserRole::Homeowner->value, UserRole::Renter->value]))
+                    ->when($audience === 'residents', fn ($q) => $q->whereIn('role', [UserRole::Homeowner->value, UserRole::TemporaryHomeowner->value]))
                     ->pluck('phone');
                 $recipients = $recipients->merge($residentPhones);
             }
