@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
-import { useMessaging } from '@/lib/messaging';
+import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import {
   Card,
@@ -25,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, MoreHorizontal, PlusCircle, Camera, ShieldOff, Share2, FileDown, Copy, Edit, ShieldAlert, MessageSquare, Users, Car, Search, Send, Clock, Link as LinkIcon, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, MoreHorizontal, Camera, ShieldOff, Share2, FileDown, Copy, Edit, ShieldAlert, MessageSquare, Users, Car, Search, Send, Clock, Link as LinkIcon, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
@@ -34,14 +33,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
-import type { DateRange } from 'react-day-picker';
-import { add, format, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -49,6 +45,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { VisitorIdModal } from '@/components/dashboard/visitor-id-modal';
 import { EditVisitorForm } from '@/components/dashboard/edit-visitor-form';
+import { RegisterVisitorDialog, toIsoDateTime } from '@/components/dashboard/register-visitor-dialog';
 import { GateQrCameraScanner } from '@/components/dashboard/gate-qr-camera-scanner';
 import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
 import { CATEGORY_SHAPES } from '@/lib/gate-pass-engine/config';
@@ -152,19 +149,6 @@ function statusVariant(status: VisitorStatus) {
   }
 }
 
-/** Combines a calendar date and a 12-hour time selection into an ISO string. */
-function toIsoDateTime(date: Date | undefined, hour: string, minute: string, meridiem: string): string {
-  if (!date) return '';
-
-  let h = parseInt(hour, 10) % 12;
-  if (meridiem === 'PM') h += 12;
-
-  const composed = new Date(date);
-  composed.setHours(h, parseInt(minute, 10), 0, 0);
-
-  return composed.toISOString();
-}
-
 export default function VisitorsPage({
   visitors,
   filters,
@@ -179,18 +163,9 @@ export default function VisitorsPage({
   const { toast } = useToast();
 
   const [scannerOpen, setScannerOpen] = useState(activeTab === 'scan');
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVisitor, setSelectedVisitor] = useState<VisitorRow | null>(null);
   const [editingVisitor, setEditingVisitor] = useState<VisitorRow | null>(null);
   const [sharePassVisitor, setSharePassVisitor] = useState<VisitorRow | null>(null);
-  const [expectedDate, setExpectedDate] = useState<Date | undefined>(new Date());
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: add(new Date(), { days: 7 }),
-  });
-  const [hour, setHour] = useState('10');
-  const [minute, setMinute] = useState('00');
-  const [meridiem, setMeridiem] = useState('AM');
 
   // Bulk Event Passes & Plate Search State
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
@@ -264,69 +239,6 @@ export default function VisitorsPage({
     });
   };
 
-  /*
-   * The registration form previously had no state at all: every input was
-   * uncontrolled and "Save visitor" had no onClick, so nothing was ever saved.
-   * useForm gives it controlled values, server-side validation errors and a
-   * submitting state.
-   */
-  const messaging = useMessaging();
-  const form = useForm({
-    name: '',
-    contact: '',
-    vehicle: '',
-    id_type: '',
-    id_number: '',
-    type: 'One-time' as 'One-time' | 'Recurring',
-    expected_at: '',
-    date_range: '',
-    notify_email: true,
-    notify_sms: false,
-    notify_whatsapp: false,
-    pass_category: 'VISITOR' as 'VISITOR' | 'CONTRACTOR',
-  });
-
-  const submitRegistration = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const isRecurring = form.data.type === 'Recurring';
-
-    // Recurring clearances start at the beginning of the range.
-    const expectedAt = isRecurring
-      ? toIsoDateTime(dateRange?.from, hour, minute, meridiem)
-      : toIsoDateTime(expectedDate, hour, minute, meridiem);
-
-    const rangeLabel =
-      isRecurring && dateRange?.from && dateRange?.to
-        ? `${format(dateRange.from, 'yyyy-MM-dd')} - ${format(dateRange.to, 'yyyy-MM-dd')}`
-        : expectedDate
-          ? format(expectedDate, 'yyyy-MM-dd')
-          : '';
-
-    form.transform((data) => ({
-      ...data,
-      expected_at: expectedAt,
-      date_range: rangeLabel,
-    }));
-
-    form.post('/dashboard/visitors', {
-      preserveScroll: true,
-      onSuccess: () => {
-        const isContractor = form.data.pass_category === 'CONTRACTOR';
-        form.reset();
-        setDialogOpen(false);
-        toast({
-          title: isContractor ? 'Contractor Registered' : 'Visitor Registered',
-          description: isContractor
-            ? 'Their pass is waiting for security approval. It will be sent once approved.'
-            : 'Their pass has been issued. The gatehouse will scan it on arrival.',
-        });
-      },
-      // A blocklist hit comes back as a validation error on `name`, so it is
-      // surfaced inline by the field rather than swallowed.
-    });
-  };
-
   const handleBulkSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkText.trim()) {
@@ -360,9 +272,11 @@ export default function VisitorsPage({
       expected_at: expectedAt,
       pass_category: bulkCategory,
       visitors: parsedVisitors,
-      notify_email: form.data.notify_email,
-      notify_sms: form.data.notify_sms,
-      notify_whatsapp: form.data.notify_whatsapp,
+      // Email only: this dialog has no channel choice. It used to borrow the
+      // single-visitor form's checkboxes, which were never shown here.
+      notify_email: true,
+      notify_sms: false,
+      notify_whatsapp: false,
     }, {
       preserveScroll: true,
       onSuccess: () => {
@@ -617,7 +531,7 @@ export default function VisitorsPage({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {/* High-Visibility Security Operator SCAN QR CODE Button */}
             {canManage && (
               <Button
@@ -636,310 +550,7 @@ export default function VisitorsPage({
             )}
 
             {canRegister && (
-              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant={canManage ? "outline" : "default"} className="gap-1.5 h-11 rounded-xl">
-                    <PlusCircle className="h-4 w-4" />
-                    <span>Register Visitor</span>
-                  </Button>
-                </DialogTrigger>
-
-                <DialogContent className="sm:max-w-[480px]">
-                  <form onSubmit={submitRegistration}>
-                    <DialogHeader>
-                      <DialogTitle>Register New Visitor</DialogTitle>
-                      <DialogDescription>
-                        Fill in the details for the new visitor. Clearances expire {graceHours} hours
-                        after the expected time if the visitor never arrives.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="name" className="text-right">Name</Label>
-                        <div className="col-span-3">
-                          <Input
-                            id="name"
-                            placeholder="John Doe"
-                            value={form.data.name}
-                            onChange={(e) => form.setData('name', e.target.value)}
-                            aria-invalid={!!form.errors.name}
-                            required
-                          />
-                          {form.errors.name && (
-                            <p className="mt-1 text-xs text-destructive">{form.errors.name}</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="contact" className="text-right">Contact</Label>
-                        <Input
-                          id="contact"
-                          placeholder="Phone or Email"
-                          className="col-span-3"
-                          value={form.data.contact}
-                          onChange={(e) => form.setData('contact', e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="vehicle" className="text-right">Vehicle</Label>
-                        <Input
-                          id="vehicle"
-                          placeholder="Details (optional)"
-                          className="col-span-3"
-                          value={form.data.vehicle}
-                          onChange={(e) => form.setData('vehicle', e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="id-type" className="text-right">ID Type</Label>
-                        <Select
-                          value={form.data.id_type}
-                          onValueChange={(value) => form.setData('id_type', value)}
-                        >
-                          <SelectTrigger id="id-type" className="col-span-3">
-                            <SelectValue placeholder="Select ID Type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Driver&apos;s License">Driver&apos;s License</SelectItem>
-                            <SelectItem value="Passport">Passport</SelectItem>
-                            <SelectItem value="National ID">National ID</SelectItem>
-                            <SelectItem value="School ID">School ID</SelectItem>
-                            <SelectItem value="Work ID">Work ID</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="id-number" className="text-right">ID #</Label>
-                        <Input
-                          id="id-number"
-                          placeholder="Identification Number"
-                          className="col-span-3"
-                          value={form.data.id_number}
-                          onChange={(e) => form.setData('id_number', e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label className="text-right">Entry Type</Label>
-                        <RadioGroup
-                          value={form.data.type}
-                          onValueChange={(value: string) =>
-                            form.setData('type', value as 'One-time' | 'Recurring')
-                          }
-                          className="col-span-3 flex gap-4"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="One-time" id="r1" />
-                            <Label htmlFor="r1">One-time</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="Recurring" id="r2" />
-                            <Label htmlFor="r2">Recurring</Label>
-                          </div>
-                        </RadioGroup>
-                      </div>
-
-                      <div className="grid grid-cols-4 items-start gap-4">
-                        <Label className="text-right pt-0.5">Pass Profile</Label>
-                        <div className="col-span-3 space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="is_contractor"
-                              checked={form.data.pass_category === 'CONTRACTOR'}
-                              onChange={(e) => form.setData('pass_category', e.target.checked ? 'CONTRACTOR' : 'VISITOR')}
-                              className="h-4 w-4 rounded border-gray-300"
-                            />
-                            <Label htmlFor="is_contractor" className="text-sm font-normal cursor-pointer">
-                              Contractor or tradesperson
-                            </Label>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Contractors need security approval before their pass is sent, and are admitted during working hours only.
-                          </p>
-                        </div>
-                      </div>
-
-                      {form.data.type === 'One-time' && (
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label className="text-right">Date &amp; Time</Label>
-                          <div className="col-span-3 flex gap-2">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className={cn(
-                                    'w-[150px] justify-start text-left font-normal',
-                                    !expectedDate && 'text-muted-foreground',
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {expectedDate ? format(expectedDate, 'PPP') : <span>Pick a date</span>}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={expectedDate}
-                                  onSelect={setExpectedDate}
-                                  disabled={(date) => {
-                                    if (userStay?.leaseStart && userStay?.leaseEnd) {
-                                      const s = parseISO(userStay.leaseStart);
-                                      s.setHours(0, 0, 0, 0);
-                                      const e = parseISO(userStay.leaseEnd);
-                                      e.setHours(23, 59, 59, 999);
-                                      return date < s || date > e;
-                                    }
-                                    return false;
-                                  }}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-
-                            <Select value={hour} onValueChange={setHour}>
-                              <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                                  <SelectItem key={h} value={`${h}`}>{h}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            <Select value={minute} onValueChange={setMinute}>
-                              <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {['00', '15', '30', '45'].map((m) => (
-                                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-
-                            <Select value={meridiem} onValueChange={setMeridiem}>
-                              <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="AM">AM</SelectItem>
-                                <SelectItem value="PM">PM</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                      )}
-
-                      {form.data.type === 'Recurring' && (
-                        <div className="grid grid-cols-4 items-center gap-4">
-                          <Label className="text-right">Date Range</Label>
-                          <div className="col-span-3">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  type="button"
-                                  id="date"
-                                  variant="outline"
-                                  className={cn(
-                                    'w-full justify-start text-left font-normal',
-                                    !dateRange && 'text-muted-foreground',
-                                  )}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {dateRange?.from ? (
-                                    dateRange.to ? (
-                                      <>
-                                        {format(dateRange.from, 'LLL dd, y')} –{' '}
-                                        {format(dateRange.to, 'LLL dd, y')}
-                                      </>
-                                    ) : (
-                                      format(dateRange.from, 'LLL dd, y')
-                                    )
-                                  ) : (
-                                    <span>Pick a date range</span>
-                                  )}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  initialFocus
-                                  mode="range"
-                                  defaultMonth={dateRange?.from}
-                                  selected={dateRange}
-                                  onSelect={setDateRange}
-                                  numberOfMonths={2}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                        </div>
-                      )}
-
-                      {form.errors.expected_at && (
-                        <p className="text-xs text-destructive">{form.errors.expected_at}</p>
-                      )}
-
-                      {/* Notification Preferences */}
-                      <div className="grid grid-cols-4 items-start gap-4">
-                        <Label className="text-right pt-2">Send Pass Via</Label>
-                        <div className="col-span-3 space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="notify_email"
-                              checked={form.data.notify_email}
-                              onChange={(e) => form.setData('notify_email', e.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                            />
-                            <Label htmlFor="notify_email" className="text-sm font-normal cursor-pointer">
-                              Email (QR code attached)
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="notify_sms"
-                              checked={messaging.sms && form.data.notify_sms}
-                              disabled={!messaging.sms}
-                              onChange={(e) => form.setData('notify_sms', e.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
-                            />
-                            <Label htmlFor="notify_sms" className="text-sm font-normal cursor-pointer">
-                              SMS Text Message
-                              {!messaging.sms && <span className="text-muted-foreground"> (not set up)</span>}
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id="notify_whatsapp"
-                              checked={messaging.whatsapp && form.data.notify_whatsapp}
-                              disabled={!messaging.whatsapp}
-                              onChange={(e) => form.setData('notify_whatsapp', e.target.checked)}
-                              className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-50"
-                            />
-                            <Label htmlFor="notify_whatsapp" className="text-sm font-normal cursor-pointer">
-                              WhatsApp
-                              {!messaging.whatsapp && <span className="text-muted-foreground"> (not set up)</span>}
-                            </Label>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Email needs an email address as the contact; SMS and WhatsApp need a phone number.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <DialogFooter>
-                      <Button type="submit" disabled={form.processing}>
-                        {form.processing ? 'Saving…' : 'Save visitor'}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <RegisterVisitorDialog graceHours={graceHours} userStay={userStay} secondary={canManage} />
             )}
 
             {canRegister && (
