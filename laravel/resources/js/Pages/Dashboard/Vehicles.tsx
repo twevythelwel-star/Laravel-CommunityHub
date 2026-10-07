@@ -160,6 +160,16 @@ export default function VehiclesDashboard({
         });
       }
     } catch (err: any) {
+      // An unregistered plate is a 404 with its own message, not a failure.
+      if (err.response?.status === 404 && err.response.data) {
+        setAnprResult(err.response.data);
+        toast({
+          variant: 'destructive',
+          title: 'ANPR Clearance: HOLD VEHICLE',
+          description: err.response.data.message || 'Plate not registered for automatic boom gate entry.',
+        });
+        return;
+      }
       setAnprResult({
         found: false,
         authorized: false,
@@ -220,21 +230,6 @@ export default function VehiclesDashboard({
     );
   };
 
-  const handleSeedSmithFamily = () => {
-    router.post(
-      '/dashboard/vehicles/seed',
-      {},
-      {
-        onSuccess: () => {
-          toast({
-            title: 'Smith Household Vehicles Seeded',
-            description: 'Registered John Smith (Land Cruiser XXX-1234), Mary Smith (Lexus RX EV 9821-JA), and Alex Smith (Honda Civic 4412-JA).',
-          });
-        },
-      }
-    );
-  };
-
   const handleDeleteVehicle = (vehicle: VehicleData) => {
     if (!confirm(`Are you sure you want to remove vehicle ${vehicle.license_plate} (${vehicle.make} ${vehicle.model})?`)) {
       return;
@@ -284,15 +279,6 @@ export default function VehiclesDashboard({
             >
               <Camera className="h-4 w-4" />
               ANPR Camera Simulator
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSeedSmithFamily}
-              className="gap-2 text-muted-foreground"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Load Smith Family Vehicles
             </Button>
             <Button
               size="sm"
@@ -395,11 +381,11 @@ export default function VehiclesDashboard({
               </div>
               <h3 className="text-base font-semibold">No Vehicles Found</h3>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                No vehicles registered. Register your personal car or click the button below to load John Smith's sample vehicles.
+                No vehicles registered yet. Register your car to use ANPR fast-lane entry at the gate.
               </p>
               <div className="pt-2 flex justify-center gap-2">
-                <Button size="sm" onClick={handleSeedSmithFamily} className="bg-blue-600 hover:bg-blue-500 text-white">
-                  Load Smith Family Vehicles
+                <Button size="sm" onClick={() => setIsRegisterOpen(true)} className="bg-blue-600 hover:bg-blue-500 text-white">
+                  Register Vehicle
                 </Button>
               </div>
             </CardContent>
@@ -576,7 +562,7 @@ export default function VehiclesDashboard({
                 </Button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Try: <code>XXX-1234</code> (John Smith), <code>9821-JA</code> (Mary Smith EV), or enter an unregistered plate.
+                Enter a registered plate, or an unregistered one to see a refusal.
               </p>
             </div>
 

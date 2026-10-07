@@ -409,14 +409,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/household/members', [HouseholdController::class, 'store'])->name('household.members.store');
     Route::match(['put', 'patch'], '/household/members/{member}', [HouseholdController::class, 'update'])->name('household.members.update');
     Route::delete('/household/members/{member}', [HouseholdController::class, 'destroy'])->name('household.members.destroy');
-    Route::post('/household/seed-example', [HouseholdController::class, 'seedExample'])->name('household.seed-example');
 
     // ── Vehicle Management & ANPR Plate Recognition ──
     Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles');
     Route::get('/vehicles/anpr/lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr.lookup');
     Route::get('/vehicles/anpr-lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr-lookup');
-    Route::post('/vehicles/seed', [VehicleController::class, 'seedSmith'])->name('vehicles.seed');
-    Route::post('/vehicles/seed-smith', [VehicleController::class, 'seedSmith'])->name('vehicles.seed-smith');
     Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
     Route::match(['put', 'patch'], '/vehicles/{vehicle}', [VehicleController::class, 'update'])
         ->whereNumber('vehicle')
@@ -428,7 +425,6 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     // ── Parking Passes (Resident, Visitor, Contractor, Temporary, Accessible, Loading Zone) ──
     Route::get('/parking', [ParkingPassController::class, 'index'])->name('parking');
     Route::post('/parking', [ParkingPassController::class, 'store'])->name('parking.store');
-    Route::post('/parking/seed', [ParkingPassController::class, 'seed'])->name('parking.seed');
     Route::match(['get', 'post'], '/parking/verify', [ParkingPassController::class, 'verify'])->middleware('can:scanPasses')->name('parking.verify');
 
     // ── Digital Access Wallet (QR + NFC + Mobile Wallet Integrations) ──

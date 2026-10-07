@@ -33,7 +33,6 @@ import {
   Users,
   AlertTriangle,
   CheckCircle2,
-  Sparkles,
   Phone,
   Mail,
   Calendar,
@@ -289,23 +288,6 @@ export default function HouseholdPage({
     });
   };
 
-  // Seed Example Smith Household
-  const handleSeedExample = () => {
-    router.post(
-      '/dashboard/household/seed-example',
-      {},
-      {
-        preserveScroll: true,
-        onSuccess: () => {
-          toast({
-            title: '✨ Smith Household Loaded',
-            description: 'John Smith (Homeowner), Mary (Spouse), Alex (Child), James (Long-term occupant), and Maria (Caregiver) configured.',
-          });
-        },
-      }
-    );
-  };
-
   // Copy token helper
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
@@ -319,7 +301,7 @@ export default function HouseholdPage({
 
   return (
     <DashboardLayout>
-      <Head title="Family & Household Management — Community Hub" />
+      <Head title="Family & Household Management" />
 
       <div className="flex flex-col gap-6">
         {/* ════════════════════════════════════════════════════════════════
@@ -341,17 +323,6 @@ export default function HouseholdPage({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSeedExample}
-              className="gap-1.5 h-9 text-xs border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
-              title="Preload the complete Smith Family roster (John, Mary, Alex, James, Maria)"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>Load Smith Family Roster</span>
-            </Button>
-
             <Link href="/dashboard/wallet">
               <Button
                 variant="outline"

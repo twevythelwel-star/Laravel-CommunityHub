@@ -168,25 +168,6 @@ class HouseholdController extends Controller
     }
 
     /**
-     * 1-Click action to seed the exact Smith Family Household.
-     */
-    public function seedExample(Request $request): RedirectResponse|JsonResponse
-    {
-        $user = $request->user();
-        $this->ensureResident($user);
-        $household = $this->householdService->seedExampleSmithHousehold($user);
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'message' => 'Smith Household successfully loaded.',
-                'household' => $household,
-            ]);
-        }
-
-        return back()->with('success', 'Example Smith Household loaded: John Smith (Homeowner), Mary Smith (Spouse), Alex Smith (Child), James Smith (Long-term occupant), and Maria Smith (Caregiver).');
-    }
-
-    /**
      * Households are residents' (and administrators'): each member gets a gate
      * pass, and any role could create a household and fill it.
      */

@@ -12,6 +12,7 @@ use App\Models\Vehicle;
 use App\Services\HouseholdManagementService;
 use App\Services\VehicleManagementService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -31,12 +32,12 @@ class OwnershipChecksTest extends TestCase
 
     private function vehicleFor(User $owner, array $attributes = []): Vehicle
     {
-        return app(VehicleManagementService::class)->registerVehicle($owner, [
+        return app(VehicleManagementService::class)->registerVehicle($owner, $attributes + [
             'license_plate' => 'AB '.fake()->unique()->numerify('####'),
             'make' => 'Toyota',
             'model' => 'Corolla',
             'color' => 'Silver',
-        ] + $attributes);
+        ]);
     }
 
     // ── Vehicles ─────────────────────────────────────────────────────────
@@ -97,6 +98,30 @@ class OwnershipChecksTest extends TestCase
         $this->post('/dashboard/vehicles', $vehicle + ['household_member_id' => $mine->id])->assertRedirect();
 
         $this->assertDatabaseHas('vehicles', ['license_plate' => 'CD 1234', 'household_member_id' => $mine->id]);
+    }
+
+    public function test_a_resident_looks_up_only_their_own_plates(): void
+    {
+        $neighboursCar = $this->vehicleFor($this->homeowner(['lot' => '10']), ['license_plate' => 'NB 7777']);
+        $owner = $this->homeowner();
+        $this->vehicleFor($owner, ['license_plate' => 'MY 1111']);
+
+        $this->actingAs($owner)->getJson('/dashboard/vehicles/anpr/lookup?plate=MY1111')
+            ->assertOk()->assertJsonPath('found', true);
+
+        // Another resident's plate reads exactly like an unregistered one: no
+        // owner, property or parking spot, and no hint that it exists.
+        $theirs = $this->getJson('/dashboard/vehicles/anpr/lookup?plate=NB7777')->assertNotFound();
+        $unknown = $this->getJson('/dashboard/vehicles/anpr/lookup?plate=NB7777X')->assertNotFound();
+        $this->assertSame(
+            str_replace('NB7777', '', json_encode($theirs->json())),
+            str_replace('NB7777X', '', json_encode($unknown->json())),
+        );
+        $this->assertStringNotContainsString($neighboursCar->property, $theirs->getContent());
+
+        $this->actingAs(User::factory()->role(UserRole::Security)->create())
+            ->getJson('/dashboard/vehicles/anpr/lookup?plate=NB7777')
+            ->assertOk()->assertJsonPath('found', true);
     }
 
     public function test_a_gate_officer_cannot_register_vehicles(): void
@@ -173,7 +198,40 @@ class OwnershipChecksTest extends TestCase
         $this->assertSame(0, HouseholdMember::count());
     }
 
-    public function test_staff_roles_cannot_remove_members_or_load_the_example_household(): void
+    /** @return array<string, array{string}> */
+    public static function removedSeedRoutes(): array
+    {
+        return [
+            'example household' => ['/dashboard/household/seed-example'],
+            'example vehicles' => ['/dashboard/vehicles/seed'],
+            'example vehicles (alias)' => ['/dashboard/vehicles/seed-smith'],
+            'example parking passes' => ['/dashboard/parking/seed'],
+        ];
+    }
+
+    /**
+     * Each created invented records (gate passes, ANPR-enabled plates and
+     * parking permits) for whoever called it, in any environment.
+     */
+    #[DataProvider('removedSeedRoutes')]
+    public function test_example_data_cannot_be_loaded_over_http(string $uri): void
+    {
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())->postJson($uri)->assertNotFound();
+
+        $this->assertSame(0, HouseholdMember::count());
+        $this->assertSame(0, Vehicle::count());
+        $this->assertSame(0, ParkingPass::count());
+    }
+
+    public function test_viewing_vehicles_does_not_invent_any(): void
+    {
+        $smith = $this->homeowner(['name' => 'John Smith', 'email' => 'john.smith@example.com']);
+
+        $this->actingAs($smith)->get('/dashboard/vehicles')->assertOk();
+        $this->assertSame(0, Vehicle::count());
+    }
+
+    public function test_staff_roles_cannot_remove_members(): void
     {
         $owner = $this->homeowner();
         $service = app(HouseholdManagementService::class);
@@ -182,7 +240,6 @@ class OwnershipChecksTest extends TestCase
 
         $this->actingAs(User::factory()->role(UserRole::Security)->create());
         $this->deleteJson("/dashboard/household/members/{$member->id}")->assertForbidden();
-        $this->postJson('/dashboard/household/seed-example')->assertForbidden();
 
         $this->assertModelExists($member);
         $this->assertSame($members, HouseholdMember::count());

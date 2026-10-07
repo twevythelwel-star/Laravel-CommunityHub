@@ -51,9 +51,8 @@ class FamilyHouseholdManagementTest extends TestCase
             'phone' => '+18765550101',
         ]);
 
-        // Seed the exact prompt example
-        $response = $this->actingAs($homeowner)->postJson('/dashboard/household/seed-example');
-        $response->assertOk();
+        app(HouseholdManagementService::class)->seedExampleSmithHousehold($homeowner);
+        $this->actingAs($homeowner);
 
         $household = Household::where('primary_homeowner_id', $homeowner->id)->first();
         $this->assertNotNull($household);

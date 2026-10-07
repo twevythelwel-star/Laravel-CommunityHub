@@ -315,17 +315,6 @@ export default function ParkingDashboard({
     }
   };
 
-  const handleSeedExamples = () => {
-    router.post('/dashboard/parking/seed', {}, {
-      onSuccess: () => {
-        toast({
-          title: 'Passes Generated',
-          description: 'Standard 6 parking credential types (Resident, Visitor, Contractor, Temporary, Accessible, Loading Zone) have been seeded.',
-        });
-      }
-    });
-  };
-
   return (
     <DashboardLayout>
       <Head title="Parking Passes & QR Credentials" />
@@ -357,15 +346,6 @@ export default function ParkingDashboard({
             >
               <Search className="h-4 w-4" />
               Verify Permit / Plate
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSeedExamples}
-              className="gap-2 text-muted-foreground"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Reset 6 Demo Credentials
             </Button>
             <Button
               size="sm"
@@ -466,14 +446,14 @@ export default function ParkingDashboard({
               </div>
               <h3 className="text-base font-semibold">No Parking Passes Found</h3>
               <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                No active permits match your current category or search filter. Issue a new permit or generate demo passes.
+                No active permits match your current category or search filter.
               </p>
               <div className="pt-2 flex justify-center gap-2">
                 <Button size="sm" onClick={() => setSelectedCategory('all')} variant="outline">
                   Show All Categories
                 </Button>
-                <Button size="sm" onClick={handleSeedExamples} className="bg-emerald-600 hover:bg-emerald-500 text-white">
-                  Reset 6 Demo Credentials
+                <Button size="sm" onClick={() => setIsCreateModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-500 text-white">
+                  Issue Parking Pass
                 </Button>
               </div>
             </CardContent>

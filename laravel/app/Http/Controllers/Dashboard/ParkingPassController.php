@@ -76,13 +76,6 @@ class ParkingPassController extends Controller
         return back()->with('success', 'Parking QR credential issued successfully.');
     }
 
-    public function seed(Request $request): RedirectResponse
-    {
-        $this->parkingService->seedExampleParkingPasses($request->user());
-
-        return back()->with('success', 'All 6 parking pass categories (Resident, Visitor, Contractor, Temporary, Accessible, Loading Zone) seeded.');
-    }
-
     public function verify(Request $request): JsonResponse
     {
         $token = $request->input('token') ?? $request->query('token', '');

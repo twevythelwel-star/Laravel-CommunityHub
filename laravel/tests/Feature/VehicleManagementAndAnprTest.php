@@ -7,6 +7,7 @@ use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\HouseholdManagementService;
 use App\Services\VehicleManagementService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -65,9 +66,8 @@ class VehicleManagementAndAnprTest extends TestCase
 
     public function test_seeds_smith_family_vehicles_connected_to_members(): void
     {
-        // Seed Smith household via endpoint
-        $seedRes = $this->actingAs($this->homeowner)->postJson('/dashboard/household/seed-example');
-        $seedRes->assertOk();
+        app(HouseholdManagementService::class)->seedExampleSmithHousehold($this->homeowner);
+        $this->actingAs($this->homeowner);
 
         $household = Household::where('primary_homeowner_id', $this->homeowner->id)->first();
         $this->assertNotNull($household);

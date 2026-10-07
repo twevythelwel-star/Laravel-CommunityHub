@@ -24,11 +24,6 @@ class VehicleController extends Controller
     {
         $user = $request->user();
 
-        // Ensure Smith household example vehicles are seeded if user is John Smith
-        if ($user->vehicles()->count() === 0 && (str_contains(strtolower($user->name), 'smith') || str_contains(strtolower($user->email), 'smith'))) {
-            $this->vehicleService->seedSmithHouseholdVehicles($user);
-        }
-
         $myVehicles = $this->vehicleService->getVehiclesForUser($user);
         $isSecurityOrAdmin = $user->role->isAdministrative() || $user->role->isOperational();
         $allEstateVehicles = $isSecurityOrAdmin ? $this->vehicleService->getAllVehicles() : [];
@@ -134,6 +129,15 @@ class VehicleController extends Controller
         $plate = $request->query('plate', '');
         $result = $this->vehicleService->lookupPlate($plate);
 
+        // The result names the owner, their property and where the car parks.
+        // Gate staff look up any plate; anyone else only their own household's,
+        // and someone else's is answered exactly like an unregistered one.
+        $user = $request->user();
+        if (($result['found'] ?? false) && ! $user->can('scanPasses')
+            && ! Vehicle::whereKey($result['id'])->where('user_id', $user->id)->exists()) {
+            $result = null;
+        }
+
         if (! $result || ! ($result['found'] ?? false)) {
             return response()->json([
                 'found' => false,
@@ -150,13 +154,6 @@ class VehicleController extends Controller
             'message' => 'Vehicle recognized by ANPR registry.',
             'vehicle' => $result,
         ]);
-    }
-
-    public function seedSmith(Request $request): RedirectResponse
-    {
-        $this->vehicleService->seedSmithHouseholdVehicles($request->user());
-
-        return back()->with('success', 'Smith family vehicles (Land Cruiser, Lexus EV, Honda Civic) seeded.');
     }
 
     /**

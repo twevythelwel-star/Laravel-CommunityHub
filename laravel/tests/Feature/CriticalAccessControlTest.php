@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\AccessApprovalRequest;
+use App\Models\AccessAuditTimelineEvent;
+use App\Models\AccessRiskIncident;
+use App\Models\AuthorizationDocument;
 use App\Models\GatePass;
 use App\Models\User;
 use App\Services\AccessApprovalWorkflowService;
@@ -56,6 +59,21 @@ class CriticalAccessControlTest extends TestCase
         $this->actingAs($officer)->getJson('/dashboard/gate-sensor/recent')->assertOk();
         $this->postJson('/dashboard/access-governance/approvals/1/approve')->assertForbidden();
         $this->postJson('/dashboard/access-governance/passes/expire-sweep')->assertForbidden();
+    }
+
+    public function test_opening_governance_invents_nothing(): void
+    {
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->get('/dashboard/access-governance')
+            ->assertOk();
+
+        // It used to fill empty tables with demo requests (one issuing a live
+        // gate pass), documents, critical incidents and a sample timeline.
+        $this->assertSame(0, AccessApprovalRequest::count());
+        $this->assertSame(0, GatePass::count());
+        $this->assertSame(0, AuthorizationDocument::count());
+        $this->assertSame(0, AccessRiskIncident::count());
+        $this->assertSame(0, AccessAuditTimelineEvent::count());
     }
 
     private function pendingRequest(User $homeowner, ?string $property = null): AccessApprovalRequest

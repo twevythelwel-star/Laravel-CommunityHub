@@ -260,7 +260,7 @@ export default function AccessGovernance({
 
   return (
     <DashboardLayout>
-      <Head title="Access Governance & Risk Engine — Community Hub" />
+      <Head title="Access Governance & Risk Engine" />
 
       <div className="space-y-6 pb-12">
         {/* Header Section */}
@@ -681,6 +681,16 @@ export default function AccessGovernance({
                 </span>
               </h3>
 
+              {approvalRequests.length === 0 && (
+                <Card className="border-dashed text-center py-8">
+                  <CardContent className="space-y-1">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                    <h4 className="text-sm font-semibold">No authorization requests</h4>
+                    <p className="text-xs text-muted-foreground">Requests from homeowners for occupants and contractors appear here for review.</p>
+                  </CardContent>
+                </Card>
+              )}
+
               {approvalRequests.map(req => (
                 <Card key={req.id} className="border border-border/60 hover:border-border transition-all">
                   <CardContent className="p-4 sm:p-5">
@@ -1084,6 +1094,16 @@ export default function AccessGovernance({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {documents.length === 0 && (
+                <Card className="md:col-span-3 border-dashed text-center py-8">
+                  <CardContent className="space-y-1">
+                    <FileText className="w-8 h-8 text-muted-foreground mx-auto" />
+                    <h4 className="text-sm font-semibold">No compliance documents</h4>
+                    <p className="text-xs text-muted-foreground">Upload leases, insurance and contractor certificates to track their expiry.</p>
+                  </CardContent>
+                </Card>
+              )}
+
               {documents.map(doc => {
                 const daysRemaining = Math.ceil(
                   (new Date(doc.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
@@ -1172,7 +1192,7 @@ export default function AccessGovernance({
                   <div className="w-full sm:w-72 relative">
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
                     <Input
-                      placeholder="Search pass ID (e.g. GP-MARY-1004)..."
+                      placeholder="Search pass ID, holder or gate..."
                       value={searchTimelinePassId}
                       onChange={e => handleTimelineSearch(e.target.value)}
                       className="pl-9 h-9 text-xs"
@@ -1181,6 +1201,18 @@ export default function AccessGovernance({
                 </div>
               </CardContent>
             </Card>
+
+            {filteredTimelineEvents.length === 0 && (
+              <Card className="border-dashed text-center py-8">
+                <CardContent className="space-y-1">
+                  <History className="w-8 h-8 text-muted-foreground mx-auto" />
+                  <h4 className="text-sm font-semibold">
+                    {searchTimelinePassId.trim() ? 'No matching events' : 'No access events yet'}
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Gate scans, approvals and revocations are recorded here as they happen.</p>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Timeline Stream */}
             <div className="relative pl-6 space-y-4 before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-border/60">

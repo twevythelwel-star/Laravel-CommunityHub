@@ -7,7 +7,6 @@ use App\Models\AccessApprovalRequest;
 use App\Models\AccessAuditTimelineEvent;
 use App\Models\AccessRiskIncident;
 use App\Models\AuthorizationDocument;
-use App\Models\User;
 use App\Services\AccessApprovalWorkflowService;
 use App\Services\AccessAuditTimelineService;
 use App\Services\AccessExpirationPolicyService;
@@ -37,14 +36,6 @@ class AccessGovernanceController extends Controller
      */
     public function index(Request $request): Response
     {
-        // Auto-seed Mary Smith timeline demo if not present
-        if (AccessAuditTimelineEvent::where('pass_id', 'GP-MARY-1004')->count() === 0) {
-            $this->timelineService->seedExampleMarySmithTimeline();
-        }
-
-        // Auto-seed some realistic demo documents & requests if completely empty
-        $this->ensureDemoDataExists($request->user());
-
         $incidents = AccessRiskIncident::query()
             ->with(['user', 'resolver'])
             ->latest('occurred_at')
@@ -220,110 +211,5 @@ class AccessGovernanceController extends Controller
         $this->documentService->attachDocument($validated, $request->user());
 
         return back()->with('success', 'Digital compliance document attached and verified.');
-    }
-
-    /**
-     * Seed baseline demo entries if empty to showcase enterprise visual standards immediately.
-     */
-    private function ensureDemoDataExists(?User $user): void
-    {
-        if (AccessApprovalRequest::count() === 0 && $user) {
-            // 1. Long-term occupant request
-            $this->approvalWorkflowService->submitRequest([
-                'category' => 'long_term_occupant',
-                'applicant_name' => 'Marcus Vance',
-                'applicant_email' => 'marcus.vance@example.com',
-                'applicant_phone' => '+1 (876) 555-0192',
-                'property_number' => 'Villa 42B',
-                'lease_expires_at' => now()->addMonths(11)->format('Y-m-d'),
-                'notes' => '12-month residential lease endorsement',
-            ], $user);
-
-            // 2. Contractor request
-            $this->approvalWorkflowService->submitRequest([
-                'category' => 'contractor',
-                'applicant_name' => 'Apex Solar Innovations (Carlos Ruiz)',
-                'applicant_email' => 'carlos@apexsolar.com',
-                'applicant_phone' => '+1 (876) 555-0288',
-                'property_number' => 'Lot 19',
-                'notes' => 'Solar battery installation and commercial inverter maintenance',
-            ], $user);
-
-            // 3. Visitor request (instant)
-            $this->approvalWorkflowService->submitRequest([
-                'category' => 'visitor',
-                'applicant_name' => 'Sophia Campbell',
-                'applicant_email' => 'sophia.c@example.com',
-                'applicant_phone' => '+1 (876) 555-0371',
-                'property_number' => 'Unit 14',
-                'notes' => 'Dinner guest, arrival estimated 19:30',
-            ], $user);
-        }
-
-        if (AuthorizationDocument::count() === 0) {
-            $this->documentService->attachDocument([
-                'title' => 'Residential Lease Agreement (Marcus Vance)',
-                'document_type' => 'lease',
-                'holder_name' => 'Marcus Vance',
-                'expires_at' => now()->addMonths(11)->toIso8601String(),
-                'status' => 'valid',
-            ], $user);
-
-            $this->documentService->attachDocument([
-                'title' => 'Commercial Contractor Liability Insurance (Apex Solar)',
-                'document_type' => 'insurance',
-                'holder_name' => 'Apex Solar Innovations',
-                'expires_at' => now()->addDays(8)->toIso8601String(), // expiring soon
-                'status' => 'expiring_soon',
-            ], $user);
-
-            $this->documentService->attachDocument([
-                'title' => 'Electrical Contractor License #EL-8841',
-                'document_type' => 'contractor_certificate',
-                'holder_name' => 'Apex Solar Innovations',
-                'expires_at' => now()->subDays(3)->toIso8601String(), // expired
-                'status' => 'expired',
-            ], $user);
-        }
-
-        if (AccessRiskIncident::count() === 0) {
-            AccessRiskIncident::create([
-                'pass_id' => 'GP-VIS-LEAK-9921',
-                'gate' => 'MAIN_GATE',
-                'flag_type' => 'REVOKED_ATTEMPT',
-                'risk_level' => 'CRITICAL',
-                'title' => '⚠️ Suspicious Credential Activity: Revoked QR Presented',
-                'description' => 'Unauthorized entry attempt using revoked pass #GP-VIS-LEAK-9921 at Main Vehicle Barrier Gate. Decommissioned screenshot or cloned credential presented.',
-                'evidence' => [
-                    'pass_id' => 'GP-VIS-LEAK-9921',
-                    'holder_name' => 'Unknown Presentation',
-                    'revoked_at' => now()->subHours(4)->toIso8601String(),
-                    'revocation_reason' => 'Reported Lost/Stolen by Resident',
-                    'gate' => 'MAIN_GATE',
-                    'scan_decision' => 'REJECT',
-                    'scanned_by' => 'Guard Officer Davis',
-                ],
-                'status' => 'NEW',
-                'occurred_at' => now()->subMinutes(18),
-            ]);
-
-            AccessRiskIncident::create([
-                'pass_id' => 'GP-CON-APEX-4102',
-                'gate' => 'SERVICE_NORTH',
-                'flag_type' => 'SIMULTANEOUS_MULTI_GATE',
-                'risk_level' => 'CRITICAL',
-                'title' => '🚨 Credential Cloning Detected: Simultaneous Multi-Gate Presentation',
-                'description' => 'Pass #GP-CON-APEX-4102 was presented at Service North Gate only 42 seconds after presentation at Main Gate (impossible transit). Active credential sharing detected.',
-                'evidence' => [
-                    'primary_gate' => 'MAIN_GATE',
-                    'secondary_gate' => 'SERVICE_NORTH',
-                    'seconds_delta' => 42,
-                    'first_scan_at' => now()->subMinutes(35)->subSeconds(42)->toIso8601String(),
-                    'second_scan_at' => now()->subMinutes(35)->toIso8601String(),
-                ],
-                'status' => 'NEW',
-                'occurred_at' => now()->subMinutes(35),
-            ]);
-        }
     }
 }
