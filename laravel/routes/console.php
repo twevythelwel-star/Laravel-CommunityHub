@@ -192,3 +192,13 @@ Schedule::command('horizon:snapshot')
     ->onOneServer()
     ->when(fn () => config('queue.default') === 'redis')
     ->description('horizon:snapshot');
+
+/*
+ | Generate the month's HOA assessments: one invoice per owned property,
+ | with payment links and owner notifications. Runs on the 1st at 00:05.
+ */
+Schedule::command('billing:generate-assessments')
+    ->monthlyOn(1, '00:05')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('billing:generate-assessments');

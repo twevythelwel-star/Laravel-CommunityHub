@@ -9,6 +9,7 @@ use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
 use App\Models\DelegatedAccess;
 use App\Models\GatePass;
+use App\Models\Property;
 use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
@@ -229,7 +230,8 @@ class PropertyOccupancyService
         }
 
         $trimmed = trim($raw);
-        if (preg_match('/^(?:Unit|Lot|#)\s*([A-Za-z0-9\-_]+)/i', $trimmed, $m)) {
+        // Repeated prefixes too: passes were stored as "Unit Lot 42".
+        if (preg_match('/^(?:(?:Unit|Lot|#)\s*)+([A-Za-z0-9\-_]+)/i', $trimmed, $m)) {
             return 'Unit '.$m[1];
         }
 
@@ -331,7 +333,7 @@ class PropertyOccupancyService
 
         foreach ($passes as $pass) {
             $catKey = $this->resolveCategory($pass);
-            $property = $pass->property ?: ($pass->user?->lot ? 'Unit '.$pass->user->lot : ($pass->visitor?->homeowner?->lot ? 'Unit '.$pass->visitor->homeowner->lot : null));
+            $property = $pass->property ?: ($pass->user?->lot ?: $pass->visitor?->homeowner?->lot);
             $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
 
             $hostName = $pass->metadata['host_name'] ?? $pass->metadata['authorized_by'] ?? $pass->metadata['grantor_name'] ?? ($pass->visitor?->homeowner_name ?? $pass->visitor?->homeowner?->name);
@@ -400,7 +402,7 @@ class PropertyOccupancyService
 
         foreach ($visitors as $v) {
             $catKey = 'visitors';
-            $property = $v->homeowner?->lot ? 'Unit '.$v->homeowner->lot : ($v->homeowner_name ?: null);
+            $property = $v->homeowner?->lot ?: null;
             $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
             $host = $v->homeowner_name ?? $v->homeowner?->name;
 
@@ -447,7 +449,7 @@ class PropertyOccupancyService
 
         foreach ($residentUsers as $resUser) {
             $pass = $resUser->gatePasses()->whereIn('status', [PassStatus::CheckedIn, PassStatus::Active])->first();
-            $property = $resUser->lot ? 'Unit '.$resUser->lot : 'Lot Unassigned';
+            $property = $resUser->lot ?: 'Lot Unassigned';
             $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
             $isRenter = $resUser->role === UserRole::TemporaryHomeowner;
             $catKey = $isRenter ? 'long_term_guests' : 'residents';
@@ -537,7 +539,7 @@ class PropertyOccupancyService
 
         foreach ($expectedVisitors as $v) {
             $catKey = 'visitors';
-            $property = $v->homeowner?->lot ? 'Unit '.$v->homeowner->lot : ($v->homeowner_name ?: null);
+            $property = $v->homeowner?->lot ?: null;
             $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
             $host = $v->homeowner_name ?? $v->homeowner?->name;
 
@@ -578,7 +580,7 @@ class PropertyOccupancyService
 
         foreach ($activePasses as $pass) {
             $catKey = $this->resolveCategory($pass);
-            $property = $pass->property ?: ($pass->user?->lot ? 'Unit '.$pass->user->lot : ($pass->visitor?->homeowner?->lot ? 'Unit '.$pass->visitor->homeowner->lot : null));
+            $property = $pass->property ?: ($pass->user?->lot ?: $pass->visitor?->homeowner?->lot);
             $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
 
             $hostName = $pass->metadata['host_name'] ?? $pass->metadata['authorized_by'] ?? ($pass->visitor?->homeowner_name ?? $pass->visitor?->homeowner?->name);
@@ -616,12 +618,16 @@ class PropertyOccupancyService
         // 3. Active Renters (Lease or Short-Term) not already checked in
         $activeRenters = Renter::where('lease_end', '>=', now())
             ->where('lease_start', '<=', now())
+            ->with('homeowner')
             ->get();
 
         foreach ($activeRenters as $r) {
             $catKey = $this->resolveCategory($r);
-            $property = $r->lot ? 'Unit '.$r->lot : 'Unit 14';
-            $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
+            // Their own lot, else their homeowner's. It defaulted to "Unit 14",
+            // and "Lot 42" became "Unit Lot 42", which normalised to "Unit Lot".
+            $lot = $r->lot ?: $r->homeowner?->lot;
+            $normalizedUnit = $this->normalizeUnit($lot) ?: 'Common Grounds';
+            $property = $lot ? $normalizedUnit : 'Unassigned';
 
             $record = [
                 'id' => 'exp_renter_'.$r->id,
@@ -734,7 +740,7 @@ class PropertyOccupancyService
             ->get()
             ->filter(function ($v) use ($normalized) {
                 if ($v->homeowner?->lot) {
-                    return strtolower((string) $this->normalizeUnit('Unit '.$v->homeowner->lot)) === strtolower($normalized);
+                    return strtolower((string) $this->normalizeUnit($v->homeowner->lot)) === strtolower($normalized);
                 }
                 $prop = $v->homeowner_name ?: null;
                 if ($prop && strtolower((string) $this->normalizeUnit($prop)) === strtolower($normalized)) {
@@ -849,144 +855,25 @@ class PropertyOccupancyService
 
         $distinctUnits = $allInside->pluck('unit')->merge($allExpected->pluck('unit'))->unique()->filter()->values();
 
+        // Counts come from the occupants found, for every unit. Units 14 and 15
+        // used to report fixed numbers ("5 inside, 8 expected") whatever was
+        // true, and an empty estate showed three invented units.
         if ($scopedUnit) {
             $norm = $this->normalizeUnit($scopedUnit) ?: $scopedUnit;
             $distinctUnits = collect([$norm]);
-        } elseif ($distinctUnits->isEmpty()) {
-            $distinctUnits = collect(['Unit 14', 'Unit 15', 'Unit 42']);
         }
+
+        // Addresses from the property records; every one used to be
+        // "{lot}, Royal Palm Way".
+        $addresses = Property::query()
+            ->get(['lot_number', 'street_address'])
+            ->mapWithKeys(fn (Property $p) => [$this->normalizeUnit($p->lot_number) => $p->label()]);
 
         $propertyNodes = [];
 
         foreach ($distinctUnits as $unitName) {
             $insideForUnit = $allInside->where('unit', $unitName)->values();
             $expectedForUnit = $allExpected->where('unit', $unitName)->values();
-
-            if ($unitName === 'Unit 14') {
-                $breakdown = [
-                    [
-                        'key' => 'residents',
-                        'label' => 'Residents',
-                        'shortLabel' => 'Residents',
-                        'branchLabel' => '2 Residents',
-                        'inside' => 2,
-                        'expected' => 2,
-                    ],
-                    [
-                        'key' => 'long_term_guests',
-                        'label' => 'Long-Term Guests / Renters',
-                        'shortLabel' => 'Renter',
-                        'branchLabel' => '1 Renter',
-                        'inside' => 1,
-                        'expected' => 1,
-                    ],
-                    [
-                        'key' => 'visitors',
-                        'label' => 'Visitors',
-                        'shortLabel' => 'Visitor',
-                        'branchLabel' => '1 Visitor',
-                        'inside' => 1,
-                        'expected' => 2,
-                    ],
-                    [
-                        'key' => 'legacy_contacts',
-                        'label' => 'Legacy Contacts',
-                        'shortLabel' => 'Legacy Contact',
-                        'branchLabel' => '1 Legacy Contact',
-                        'inside' => 1,
-                        'expected' => 1,
-                    ],
-                ];
-
-                $propertyNodes[] = [
-                    'id' => 'prop_unit_14',
-                    'unit' => 'Unit 14',
-                    'lot' => '14',
-                    'address' => '14, Royal Palm Way',
-                    'insideCount' => 5,
-                    'expectedCount' => 8,
-                    'categoriesInside' => [
-                        'residents' => 2,
-                        'long_term_guests' => 1,
-                        'short_term_guests' => 0,
-                        'visitors' => 1,
-                        'staff' => 0,
-                        'contractors' => 0,
-                        'legacy_contacts' => 1,
-                    ],
-                    'categoriesExpected' => [
-                        'residents' => 2,
-                        'long_term_guests' => 1,
-                        'short_term_guests' => 0,
-                        'visitors' => 2,
-                        'staff' => 0,
-                        'contractors' => 0,
-                        'legacy_contacts' => 1,
-                    ],
-                    'breakdown' => $breakdown,
-                    'occupants' => $insideForUnit->take(5)->map(fn ($o) => [
-                        'name' => $o['name'],
-                        'category' => $o['categoryLabel'],
-                        'status' => 'IN',
-                    ])->all(),
-                ];
-                continue;
-            }
-
-            if ($unitName === 'Unit 15') {
-                $breakdown = [
-                    [
-                        'key' => 'residents',
-                        'label' => 'Residents',
-                        'shortLabel' => 'Residents',
-                        'branchLabel' => '2 Residents',
-                        'inside' => 2,
-                        'expected' => 2,
-                    ],
-                    [
-                        'key' => 'visitors',
-                        'label' => 'Visitors',
-                        'shortLabel' => 'Visitor',
-                        'branchLabel' => '1 Visitor',
-                        'inside' => 1,
-                        'expected' => 2,
-                    ],
-                ];
-
-                $propertyNodes[] = [
-                    'id' => 'prop_unit_15',
-                    'unit' => 'Unit 15',
-                    'lot' => '15',
-                    'address' => '15, Royal Palm Way',
-                    'insideCount' => 3,
-                    'expectedCount' => 4,
-                    'categoriesInside' => [
-                        'residents' => 2,
-                        'long_term_guests' => 0,
-                        'short_term_guests' => 0,
-                        'visitors' => 1,
-                        'staff' => 0,
-                        'contractors' => 0,
-                        'legacy_contacts' => 0,
-                    ],
-                    'categoriesExpected' => [
-                        'residents' => 2,
-                        'long_term_guests' => 0,
-                        'short_term_guests' => 0,
-                        'visitors' => 2,
-                        'staff' => 0,
-                        'contractors' => 0,
-                        'legacy_contacts' => 0,
-                    ],
-                    'breakdown' => $breakdown,
-                    'occupants' => $insideForUnit->take(5)->map(fn ($o) => [
-                        'name' => $o['name'],
-                        'category' => $o['categoryLabel'],
-                        'status' => 'IN',
-                    ])->all(),
-                ];
-                continue;
-            }
 
             $insideCounts = [
                 'residents' => $insideForUnit->where('categoryKey', 'residents')->count(),
@@ -1040,7 +927,7 @@ class PropertyOccupancyService
                 'id' => 'prop_'.strtolower(str_replace(' ', '_', $unitName)),
                 'unit' => $unitName,
                 'lot' => $lotNumber,
-                'address' => "{$lotNumber}, Royal Palm Way",
+                'address' => $addresses[$unitName] ?? $unitName,
                 'insideCount' => $insideForUnit->count(),
                 'expectedCount' => $expectedForUnit->count() + $insideForUnit->count(),
                 'categoriesInside' => $insideCounts,

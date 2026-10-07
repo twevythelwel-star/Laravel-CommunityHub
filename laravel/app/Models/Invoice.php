@@ -13,7 +13,7 @@ class Invoice extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id', 'reference', 'stripe_session_id', 'stripe_payment_intent',
+        'user_id', 'property_id', 'reference', 'stripe_session_id', 'stripe_payment_intent',
         'amount_minor', 'currency', 'period_start', 'period_end', 'due_on', 'status', 'paid_at',
     ];
 
@@ -31,6 +31,12 @@ class Invoice extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** The property an HOA assessment is for; dues are charged per property. */
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
     }
 
     public function items(): HasMany

@@ -274,6 +274,13 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::patch('/directory/users/{user}', [DirectoryController::class, 'updateUser'])
         ->middleware(['can:manageUsers', 'password.confirm'])
         ->name('directory.users.update');
+    // What each homeowner owns; HOA dues are charged per property.
+    Route::post('/directory/users/{user}/properties', [DirectoryController::class, 'storeProperty'])
+        ->middleware(['can:manageUsers', 'password.confirm'])
+        ->name('directory.properties.store');
+    Route::delete('/directory/properties/{property}', [DirectoryController::class, 'destroyProperty'])
+        ->middleware(['can:manageUsers', 'password.confirm'])
+        ->name('directory.properties.destroy');
 
     Route::get('/renters', [RenterController::class, 'index'])->name('renters');
     Route::post('/renters', [RenterController::class, 'store'])->name('renters.store');

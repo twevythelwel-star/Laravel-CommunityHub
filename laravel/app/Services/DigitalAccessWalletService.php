@@ -112,7 +112,7 @@ class DigitalAccessWalletService
             'category_label' => $category->label(),
             'shape' => $shape,
             'variant' => $variant,
-            'property' => $pass->property ?? 'Unit 14',
+            'property' => $pass->property ?: 'Unassigned',
             'status' => $pass->status->value,
             'status_label' => $pass->status->label(),
             'is_active' => $pass->isActive(),
@@ -220,7 +220,7 @@ class DigitalAccessWalletService
                     [
                         'key' => 'property',
                         'label' => 'ESTATE RESIDENCE',
-                        'value' => $pass->property ?: 'Unit 14',
+                        'value' => $pass->property ?: 'Unassigned',
                     ],
                 ],
                 'auxiliaryFields' => [
@@ -327,7 +327,7 @@ class DigitalAccessWalletService
                     'defaultValue' => ['language' => 'en-US', 'value' => 'Community Hub — Estate Access Pass'],
                 ],
                 'subheader' => [
-                    'defaultValue' => ['language' => 'en-US', 'value' => $pass->property ?: 'Unit 14'],
+                    'defaultValue' => ['language' => 'en-US', 'value' => $pass->property ?: 'Unassigned'],
                 ],
                 'header' => [
                     'defaultValue' => ['language' => 'en-US', 'value' => $pass->holder_name],
@@ -373,7 +373,7 @@ class DigitalAccessWalletService
                 'cardId' => $pass->pass_id,
                 'title' => 'Community Hub Estate Pass',
                 'holderName' => $pass->holder_name,
-                'property' => $pass->property ?: 'Unit 14',
+                'property' => $pass->property ?: 'Unassigned',
                 'category' => $pass->category->label(),
                 'nfcUid' => $this->generateNfcUid($pass),
                 'nfcPayload' => sprintf('CHUB-NFC-V2|%s|%s', $pass->pass_id, $this->generateNfcUid($pass)),

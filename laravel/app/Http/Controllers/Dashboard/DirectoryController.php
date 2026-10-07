@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Property;
 use App\Models\Staff;
 use App\Models\User;
+use App\Services\PropertyOwnershipService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -32,6 +34,8 @@ use Inertia\Response;
  */
 class DirectoryController extends Controller
 {
+    public function __construct(private readonly PropertyOwnershipService $ownership) {}
+
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -52,6 +56,7 @@ class DirectoryController extends Controller
                         UserRole::TemporaryHomeowner->value,
                     ]))
                 ->orderBy('display_name')
+                ->with('properties')
                 ->get()
                 ->map(fn (User $u) => [
                     'id' => $u->id,
@@ -59,6 +64,11 @@ class DirectoryController extends Controller
                     'role' => $u->role->value,
                     'lot' => $u->lot,
                     'street' => $u->street,
+                    // What they own: HOA dues are charged per property.
+                    'properties' => $u->properties
+                        ->sortBy('id')
+                        ->map(fn (Property $p) => ['id' => $p->id, 'label' => $p->label(), 'code' => $p->property_code])
+                        ->values(),
                     'title' => $u->title,
                     'avatarUrl' => $u->avatar_url,
                     // Contact details are only exposed to administrators.
@@ -179,6 +189,8 @@ class DirectoryController extends Controller
             'status' => 'Active',
         ]);
 
+        $this->recordAccountProperty($created);
+
         $request->user()->recordActivity("Created user {$created->email}");
 
         return back()->with('success', 'User created.');
@@ -223,9 +235,77 @@ class DirectoryController extends Controller
             $user->tokens()->delete();
         }
 
+        $this->recordAccountProperty($user);
+
         $actor->recordActivity("Updated user {$user->email}");
 
         return back()->with('success', 'User updated.');
+    }
+
+    /**
+     * Records that a homeowner owns another property, which is then billed HOA
+     * dues of its own.
+     */
+    public function storeProperty(Request $request, User $user): RedirectResponse
+    {
+        // Homeowners, and administrators who live on the estate.
+        if ($user->role !== UserRole::Homeowner && ! $user->role->isAdministrative()) {
+            return back()->withErrors(['lot_number' => 'Only a Homeowner or an administrator can own a property.']);
+        }
+
+        // As for the account itself: an administrator's is a System Admin's to manage.
+        if ($user->role->isAdministrative() && $request->user()->role !== UserRole::SystemAdmin) {
+            return back()->withErrors(['lot_number' => "Only a System Admin can manage an administrator's properties."]);
+        }
+
+        $validated = $request->validate([
+            'lot_number' => ['required', 'string', 'max:50'],
+            'street_address' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        try {
+            $property = $this->ownership->assign($user, $validated['lot_number'], $validated['street_address'] ?? null);
+        } catch (\DomainException $e) {
+            return back()->withErrors(['lot_number' => $e->getMessage()]);
+        }
+
+        $request->user()->recordActivity("Recorded {$property->label()} as owned by {$user->email}");
+
+        return back()->with('success', "{$property->label()} added to {$user->display_name}'s properties.");
+    }
+
+    /**
+     * The owner no longer holds the property: it stays on record, unowned, and
+     * stops being billed to them. Invoices already issued are untouched.
+     */
+    public function destroyProperty(Request $request, Property $property): RedirectResponse
+    {
+        $owner = $property->owner;
+
+        if ($owner?->role->isAdministrative() && $request->user()->role !== UserRole::SystemAdmin) {
+            return back()->withErrors(['lot_number' => "Only a System Admin can manage an administrator's properties."]);
+        }
+
+        $this->ownership->release($property);
+
+        $request->user()->recordActivity("Released {$property->label()}".($owner ? " from {$owner->email}" : ''));
+
+        return back()->with('success', "{$property->label()} removed from ".($owner?->display_name ?? 'its owner')."'s properties.");
+    }
+
+    /**
+     * A new homeowner's lot becomes their first recorded property. After
+     * that, properties are managed explicitly: changing the lot on the
+     * account does not move or add one.
+     */
+    private function recordAccountProperty(User $user): void
+    {
+        try {
+            $this->ownership->recordAccountProperty($user);
+        } catch (\DomainException) {
+            // The lot is someone else's on record; the office resolves that in
+            // the Properties dialog rather than the account form failing.
+        }
     }
 
     private function authorizeStaff(Request $request, Staff $staff): void

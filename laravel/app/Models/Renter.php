@@ -12,6 +12,7 @@ class Renter extends Model
 
     protected $fillable = [
         'homeowner_id',
+        'property_id',
         'user_id',
         'name',
         'stay_type',
@@ -40,6 +41,12 @@ class Renter extends Model
     public function homeowner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'homeowner_id');
+    }
+
+    /** The property the stay is for; an owner may hold several. */
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
     }
 
     public function leaseHasExpired(): bool

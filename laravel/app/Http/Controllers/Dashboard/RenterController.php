@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Models\Property;
 use App\Models\Renter;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -43,16 +46,29 @@ class RenterController extends Controller
                     'homeownerName' => $r->homeowner?->display_name ?? $r->homeowner?->name,
                 ]),
             'isHomeowner' => $isHomeowner,
-            'propertyLot' => $user->lot,
-            'propertyStreet' => $user->street,
+            'canRegister' => $user->can('manageUsers'),
+            // Whose property a new stay is for; only the estate office registers one.
+            'homeowners' => $user->can('manageUsers')
+                ? User::where('role', UserRole::Homeowner)
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'display_name', 'lot', 'street'])
+                    ->map(fn (User $h) => ['id' => $h->id, 'name' => $h->display_name ?: $h->name, 'property' => $h->propertyLabel()])
+                    ->values()
+                : [],
         ]);
     }
 
+    /**
+     * Registering a resident is the estate office's: a temporary homeowner's
+     * stay is what lets their account sign in and register visitors. The
+     * administrator says whose property it is; the address is that homeowner's.
+     */
     public function store(Request $request): RedirectResponse
     {
-        $this->authorize('accessHomeownerFunctions');
+        $this->authorize('manageUsers');
 
         $validated = $request->validate([
+            'homeowner_id' => ['required', Rule::exists('users', 'id')->where('role', UserRole::Homeowner->value)],
             'name' => ['required', 'string', 'max:120'],
             'stay_type' => ['required', 'in:Long-term (Renter),Short-term (Airbnb)'],
             'contact' => ['nullable', 'string', 'max:120'],
@@ -61,26 +77,45 @@ class RenterController extends Controller
             'lease_end' => ['required', 'date', 'after_or_equal:lease_start'],
             'lot' => ['nullable', 'string', 'max:60'],
             'street' => ['nullable', 'string', 'max:120'],
-            'user_id' => ['nullable', 'exists:users,id'],
+            // Only a Temporary Homeowner account can hold a stay.
+            'user_id' => ['nullable', Rule::exists('users', 'id')->where('role', UserRole::TemporaryHomeowner->value)],
+        ], [
+            'homeowner_id.required' => 'Choose the homeowner whose property this is.',
+            'homeowner_id.exists' => 'Choose a homeowner account.',
+            'user_id.exists' => 'Only a Temporary Homeowner account can be linked to a stay.',
         ]);
 
-        $user = $request->user();
-
-        $lot = $validated['lot'] ?? ($user->lot ?: 'Lot 14');
-        $street = $validated['street'] ?? ($user->street ?: 'Hibiscus Way');
-        $homeownerId = $user->role === UserRole::Homeowner ? $user->id : ($user->id);
+        $homeowner = User::findOrFail($validated['homeowner_id']);
+        $lot = $validated['lot'] ?? $homeowner->lot;
 
         Renter::create([
             ...$validated,
-            'homeowner_id' => $homeownerId,
+            'property_id' => $this->rentedProperty($homeowner, $validated['lot'] ?? null)?->id,
             'lot' => $lot,
-            'street' => $street,
+            'street' => $validated['street'] ?? $homeowner->street,
             'status' => 'Active',
         ]);
 
-        $user->recordActivity("Registered temporary homeowner {$validated['name']} ({$validated['stay_type']})");
+        $request->user()->recordActivity("Registered temporary homeowner {$validated['name']} ({$validated['stay_type']}) for {$homeowner->propertyLabel()}");
 
         return back()->with('success', 'Temporary homeowner registered.');
+    }
+
+    /**
+     * Which of the homeowner's properties the stay is for: the one at the
+     * lot given, or their only one. An owner of several with no lot given
+     * gets none recorded rather than a guess.
+     */
+    private function rentedProperty(User $homeowner, ?string $lot): ?Property
+    {
+        $owned = $homeowner->properties()->orderBy('id')->get();
+        $bare = fn (?string $value) => strtolower(preg_replace('/^(unit|lot|#)\s*/i', '', trim((string) $value)));
+
+        if (filled($lot)) {
+            return $owned->first(fn (Property $p) => $bare($p->lot_number) === $bare($lot));
+        }
+
+        return $owned->count() === 1 ? $owned->first() : null;
     }
 
     public function update(Request $request, Renter $renter): RedirectResponse

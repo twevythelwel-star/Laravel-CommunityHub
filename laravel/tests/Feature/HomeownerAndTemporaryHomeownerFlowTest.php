@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\Property;
 use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
@@ -49,7 +50,7 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
         );
     }
 
-    public function test_homeowner_can_register_manage_and_remove_temporary_homeowner(): void
+    public function test_the_estate_office_registers_temporary_homeowners_that_the_homeowner_then_manages(): void
     {
         $homeowner = User::factory()->create([
             'role' => UserRole::Homeowner,
@@ -57,13 +58,29 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
             'street' => 'Hibiscus Way',
             'status' => 'Active',
         ]);
+        $admin = User::factory()->create(['role' => UserRole::Admin, 'status' => 'Active']);
 
-        // 1. Homeowner views renters page
-        $response = $this->actingAs($homeowner)->get('/dashboard/renters');
-        $response->assertOk();
+        // 1. Homeowner views renters page, without the option to register one
+        $this->actingAs($homeowner)->get('/dashboard/renters')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('canRegister', false)->where('homeowners', []));
 
-        // 2. Homeowner registers a long-term renter
-        $registerLongTerm = $this->actingAs($homeowner)->post('/dashboard/renters', [
+        // Only System Admins and Admins add residents.
+        $this->actingAs($homeowner)->post('/dashboard/renters', [
+            'homeowner_id' => $homeowner->id,
+            'name' => 'Self-Registered Guest',
+            'stay_type' => 'Short-term (Airbnb)',
+            'lease_start' => now()->toDateString(),
+            'lease_end' => now()->addDays(3)->toDateString(),
+        ])->assertForbidden();
+        $this->assertDatabaseMissing('renters', ['name' => 'Self-Registered Guest']);
+
+        // 2. The estate office registers a long-term renter at the homeowner's property
+        $this->actingAs($admin)->get('/dashboard/renters')
+            ->assertInertia(fn ($page) => $page->where('canRegister', true)->where('homeowners.0.id', $homeowner->id));
+
+        $registerLongTerm = $this->actingAs($admin)->post('/dashboard/renters', [
+            'homeowner_id' => $homeowner->id,
             'name' => 'Sophia Taylor',
             'stay_type' => 'Long-term (Renter)',
             'contact' => 'sophia@example.com',
@@ -74,15 +91,19 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
         $registerLongTerm->assertSessionHasNoErrors();
         $registerLongTerm->assertRedirect();
 
+        // Filed under the homeowner and at their address, not the admin's.
         $this->assertDatabaseHas('renters', [
             'homeowner_id' => $homeowner->id,
             'name' => 'Sophia Taylor',
             'stay_type' => 'Long-term (Renter)',
             'status' => 'Active',
+            'lot' => 'Lot 14',
+            'street' => 'Hibiscus Way',
         ]);
 
-        // 3. Homeowner registers a short-term Airbnb guest
-        $registerShortTerm = $this->actingAs($homeowner)->post('/dashboard/renters', [
+        // 3. The estate office registers a short-term Airbnb guest
+        $registerShortTerm = $this->actingAs($admin)->post('/dashboard/renters', [
+            'homeowner_id' => $homeowner->id,
             'name' => 'Elena Rostova',
             'stay_type' => 'Short-term (Airbnb)',
             'contact' => '+1 (555) 392-1084',
@@ -170,6 +191,80 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
             'lease_start' => now()->toDateString(),
             'lease_end' => now()->addDays(3)->toDateString(),
         ])->assertForbidden();
+    }
+
+    public function test_only_system_admins_and_admins_register_temporary_homeowners(): void
+    {
+        $homeowner = User::factory()->create(['role' => UserRole::Homeowner, 'lot' => 'Lot 9', 'status' => 'Active']);
+        $stay = fn (string $name) => [
+            'homeowner_id' => $homeowner->id,
+            'name' => $name,
+            'stay_type' => 'Long-term (Renter)',
+            'lease_start' => now()->toDateString(),
+            'lease_end' => now()->addMonths(6)->toDateString(),
+        ];
+
+        foreach ([UserRole::Security, UserRole::Staff] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role, 'status' => 'Active']))
+                ->post('/dashboard/renters', $stay("Via {$role->value}"))
+                ->assertForbidden();
+        }
+
+        foreach ([UserRole::SystemAdmin, UserRole::Admin] as $role) {
+            $this->actingAs(User::factory()->create(['role' => $role, 'status' => 'Active']))
+                ->post('/dashboard/renters', $stay("Via {$role->value}"))
+                ->assertSessionHasNoErrors();
+        }
+
+        $this->assertSame(
+            [UserRole::SystemAdmin->value, UserRole::Admin->value],
+            Renter::orderBy('id')->pluck('name')->map(fn ($n) => substr($n, 4))->all(),
+        );
+    }
+
+    public function test_a_stay_records_the_property_it_is_for(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin, 'status' => 'Active']);
+        $owner = User::factory()->create(['role' => UserRole::Homeowner, 'lot' => 'Lot 1', 'status' => 'Active']);
+        $first = Property::create(['owner_user_id' => $owner->id, 'property_code' => 'PROP-1', 'lot_number' => 'Lot 1']);
+        $second = Property::create(['owner_user_id' => $owner->id, 'property_code' => 'PROP-2', 'lot_number' => 'Lot 2']);
+        $stay = fn (string $name, array $extra = []) => $extra + [
+            'homeowner_id' => $owner->id,
+            'name' => $name,
+            'stay_type' => 'Long-term (Renter)',
+            'lease_start' => now()->toDateString(),
+            'lease_end' => now()->addMonths(6)->toDateString(),
+        ];
+
+        $this->actingAs($admin)->post('/dashboard/renters', $stay('At Lot 2', ['lot' => 'Unit 2']))->assertSessionHasNoErrors();
+        // An owner of several, with no lot given: none recorded rather than a guess at the first.
+        $this->post('/dashboard/renters', $stay('Unplaced'))->assertSessionHasNoErrors();
+
+        $this->assertSame($second->id, Renter::where('name', 'At Lot 2')->value('property_id'));
+        $this->assertNull(Renter::where('name', 'Unplaced')->value('property_id'));
+        $this->assertNotSame($first->id, Renter::where('name', 'At Lot 2')->value('property_id'));
+    }
+
+    public function test_a_stay_needs_a_homeowner_and_only_links_a_temporary_homeowner_account(): void
+    {
+        $admin = User::factory()->create(['role' => UserRole::Admin, 'status' => 'Active']);
+        $homeowner = User::factory()->create(['role' => UserRole::Homeowner, 'status' => 'Active']);
+        $security = User::factory()->create(['role' => UserRole::Security, 'status' => 'Active']);
+        $stay = [
+            'name' => 'Linked Renter',
+            'stay_type' => 'Long-term (Renter)',
+            'lease_start' => now()->toDateString(),
+            'lease_end' => now()->addMonths(6)->toDateString(),
+        ];
+
+        $this->actingAs($admin)->post('/dashboard/renters', $stay)->assertSessionHasErrors('homeowner_id');
+        // A stay belongs to a homeowner, not to the admin or any other account.
+        $this->post('/dashboard/renters', $stay + ['homeowner_id' => $admin->id])->assertSessionHasErrors('homeowner_id');
+        // Linking a stay to a security officer's account would make it theirs.
+        $this->post('/dashboard/renters', $stay + ['homeowner_id' => $homeowner->id, 'user_id' => $security->id])
+            ->assertSessionHasErrors('user_id');
+
+        $this->assertSame(0, Renter::count());
     }
 
     public function test_temporary_homeowner_visitor_management_within_allowed_timeframe(): void

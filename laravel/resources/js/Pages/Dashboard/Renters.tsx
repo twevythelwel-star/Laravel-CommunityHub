@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { RegisterRenterForm } from '@/components/dashboard/register-renter-form';
+import { RegisterRenterForm, type HomeownerOption } from '@/components/dashboard/register-renter-form';
 import { EditRenterForm } from '@/components/dashboard/edit-renter-form';
 import { useAuth } from '@/context/auth-context';
 import {
@@ -66,11 +66,12 @@ type Paginated<T> = {
 type Props = {
   renters: Paginated<Renter>;
   isHomeowner: boolean;
-  propertyLot?: string | null;
-  propertyStreet?: string | null;
+  /** Only System Admins and Admins register residents. */
+  canRegister: boolean;
+  homeowners: HomeownerOption[];
 };
 
-export default function RentersPage({ renters, isHomeowner, propertyLot, propertyStreet }: Props) {
+export default function RentersPage({ renters, isHomeowner, canRegister, homeowners }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isCreateOpen, setCreateOpen] = useState(false);
@@ -111,19 +112,16 @@ export default function RentersPage({ renters, isHomeowner, propertyLot, propert
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <RegisterRenterForm
-              open={isCreateOpen}
-              onOpenChange={setCreateOpen}
-              defaultLot={propertyLot}
-              defaultStreet={propertyStreet}
-            >
-              <Button className="gap-2 shadow-sm">
-                <PlusCircle className="h-4 w-4" />
-                Register Renter / Temporary Homeowner
-              </Button>
-            </RegisterRenterForm>
-          </div>
+          {canRegister && (
+            <div className="flex items-center gap-3">
+              <RegisterRenterForm open={isCreateOpen} onOpenChange={setCreateOpen} homeowners={homeowners}>
+                <Button className="gap-2 shadow-sm">
+                  <PlusCircle className="h-4 w-4" />
+                  Register Renter / Temporary Homeowner
+                </Button>
+              </RegisterRenterForm>
+            </div>
+          )}
         </div>
 
         {/* Security and Auto-Expiration Banner */}
@@ -170,7 +168,9 @@ export default function RentersPage({ renters, isHomeowner, propertyLot, propert
                       <Home className="h-10 w-10 mx-auto text-muted-foreground/40 mb-3" />
                       <p className="font-medium text-foreground">No temporary homeowners registered</p>
                       <p className="text-sm mt-1">
-                        Click &quot;Register Temporary Homeowner&quot; above to add a long-term renter or short-term Airbnb guest.
+                        {canRegister
+                          ? 'Click "Register Renter / Temporary Homeowner" above to add a long-term renter or short-term Airbnb guest.'
+                          : 'Renters and short-term guests are registered by the estate office. Contact them to add one to your property.'}
                       </p>
                     </TableCell>
                   </TableRow>
@@ -187,7 +187,8 @@ export default function RentersPage({ renters, isHomeowner, propertyLot, propert
                           <div className="font-semibold text-foreground">{renter.name}</div>
                           <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                             <Home className="h-3 w-3" />
-                            {renter.lot || propertyLot || 'Residence'}, {renter.street || propertyStreet || 'Community'}
+                            {[renter.lot, renter.street].filter(Boolean).join(', ') || 'Address not recorded'}
+                            {!isHomeowner && renter.homeownerName && <span>· {renter.homeownerName}</span>}
                           </div>
                         </TableCell>
 

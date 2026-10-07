@@ -52,14 +52,14 @@ class HouseholdManagementService
      */
     public function getOrCreateHousehold(User $homeowner): Household
     {
-        $propertyNumber = $homeowner->lot ? 'Unit '.$homeowner->lot : $homeowner->propertyLabel();
+        $propertyNumber = $this->unitOf($homeowner);
 
         $household = Household::firstOrCreate(
             ['primary_homeowner_id' => $homeowner->id],
             [
                 'property_number' => $propertyNumber,
                 'name' => ($homeowner->name ? $homeowner->name.' Household' : 'Resident Household'),
-                'address' => trim(($homeowner->lot ? 'Unit '.$homeowner->lot.', ' : '').($homeowner->street ?? '')),
+                'address' => $homeowner->propertyLabel(),
                 'notes' => 'Primary residential household account.',
             ]
         );
@@ -259,7 +259,7 @@ class HouseholdManagementService
         $household = Household::firstOrCreate(
             ['primary_homeowner_id' => $homeowner->id],
             [
-                'property_number' => $homeowner->lot ? 'Unit '.$homeowner->lot : 'Unit 14',
+                'property_number' => $this->unitOf($homeowner),
                 'name' => 'Smith Household',
                 'address' => '14 Royal Palm Way, Oceanview Estates',
                 'notes' => 'Primary family residence.',
@@ -386,5 +386,21 @@ class HouseholdManagementService
             ],
             default => null,
         };
+    }
+
+    /**
+     * "14" is "Unit 14"; a lot already named ("Lot 42", "Unit 15B") stays as it is.
+     * Prefixing every lot made "Lot 42" into "Unit Lot 42", which the occupancy
+     * count filed under a unit called "Unit Lot".
+     */
+    private function unitOf(User $homeowner): string
+    {
+        $lot = trim((string) $homeowner->lot);
+
+        if ($lot === '') {
+            return $homeowner->propertyLabel();
+        }
+
+        return preg_match('/^\d/', $lot) ? 'Unit '.$lot : $lot;
     }
 }

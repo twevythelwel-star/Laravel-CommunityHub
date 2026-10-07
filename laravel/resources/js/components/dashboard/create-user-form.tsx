@@ -54,6 +54,8 @@ export type DirectoryUser = {
   status: 'Active' | 'Inactive';
   lot: string | null;
   street: string | null;
+  /** What they own; HOA dues are charged per property. */
+  properties?: { id: number; label: string; code: string }[];
   isSelf: boolean;
 };
 

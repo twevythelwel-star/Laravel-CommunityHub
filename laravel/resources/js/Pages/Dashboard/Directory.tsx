@@ -19,7 +19,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
-import { MoreHorizontal, PlusCircle, Edit, Search, MapPin, Mail, ShieldAlert, UserMinus, UserCheck } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, Edit, Search, MapPin, Mail, ShieldAlert, UserMinus, UserCheck, Home } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +44,7 @@ import {
   type UserFormValues,
 } from '@/components/dashboard/create-user-form';
 import { useToast } from '@/hooks/use-toast';
+import { ManagePropertiesDialog } from '@/components/dashboard/manage-properties-dialog';
 
 /**
  * Community Directory.
@@ -114,6 +115,8 @@ export default function DirectoryPage({ residents, canManageUsers }: Props) {
   const [isFormOpen, setFormOpen] = useState(false);
   const [selected, setSelected] = useState<DirectoryUser | undefined>();
   const [statusTarget, setStatusTarget] = useState<DirectoryUser | null>(null);
+  // An id, not the person: looked up in `residents` so the list refreshes after each change.
+  const [propertiesFor, setPropertiesFor] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -379,6 +382,11 @@ export default function DirectoryPage({ residents, canManageUsers }: Props) {
                                 <span className="truncate">
                                   {[person.lot, person.street].filter(Boolean).join(', ')}
                                 </span>
+                                {(person.properties?.length ?? 0) > 1 && (
+                                  <Badge variant="secondary" className="ml-auto shrink-0 text-[10px] py-0 h-4">
+                                    {person.properties!.length} properties
+                                  </Badge>
+                                )}
                               </div>
                             )}
 
@@ -404,6 +412,14 @@ export default function DirectoryPage({ residents, canManageUsers }: Props) {
                                   >
                                     <Edit className="mr-2 h-3.5 w-3.5" /> Edit Details
                                   </DropdownMenuItem>
+                                  {['Homeowner', 'Admin', 'System Admin'].includes(person.role) && (
+                                    <DropdownMenuItem
+                                      onClick={() => setPropertiesFor(person.id)}
+                                      className="text-xs"
+                                    >
+                                      <Home className="mr-2 h-3.5 w-3.5" /> Manage Properties
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuSeparator />
                                   {person.status === 'Active' ? (
                                     <DropdownMenuItem
@@ -448,6 +464,11 @@ export default function DirectoryPage({ residents, canManageUsers }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      <ManagePropertiesDialog
+        person={residents.find((p) => p.id === propertiesFor) ?? null}
+        onOpenChange={(open) => !open && setPropertiesFor(null)}
+      />
 
       <AlertDialog
         open={statusTarget !== null}

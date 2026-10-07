@@ -40,6 +40,8 @@ class PasswordConfirmationTest extends TestCase
             'dashboard.billing.transactions.export',
             'dashboard.billing.transactions.export.alias',
             'dashboard.billing.transactions.refund',
+            'dashboard.directory.properties.destroy',
+            'dashboard.directory.properties.store',
             'dashboard.directory.staff.destroy',
             'dashboard.directory.staff.store',
             'dashboard.directory.staff.update',

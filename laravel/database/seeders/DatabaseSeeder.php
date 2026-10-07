@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             CommunitySeeder::class,   // must precede boundary/branding/landmarks
             UserSeeder::class,        // must precede anything with an author or owner
+            SecurityAndAdminRosterSeeder::class, // 10 Security officers, 11 Admins who own homes
             SecuritySeeder::class,
             DirectorySeeder::class,
             CommunicationsSeeder::class,

@@ -20,26 +20,29 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+export type HomeownerOption = { id: number; name: string; property: string };
 
 type RegisterRenterFormProps = {
   children: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultLot?: string | null;
-  defaultStreet?: string | null;
+  /** Whose property the stay is for; the address comes from them. */
+  homeowners: HomeownerOption[];
 };
 
 export function RegisterRenterForm({
   children,
   open,
   onOpenChange,
-  defaultLot,
-  defaultStreet,
+  homeowners,
 }: RegisterRenterFormProps) {
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [homeownerId, setHomeownerId] = useState('');
   const [name, setName] = useState('');
   const [stayType, setStayType] = useState<'Long-term (Renter)' | 'Short-term (Airbnb)'>('Long-term (Renter)');
   const [contact, setContact] = useState('');
@@ -48,6 +51,7 @@ export function RegisterRenterForm({
   const [notes, setNotes] = useState('');
 
   const resetForm = () => {
+    setHomeownerId('');
     setName('');
     setStayType('Long-term (Renter)');
     setContact('');
@@ -59,6 +63,10 @@ export function RegisterRenterForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!homeownerId) {
+      setErrors({ homeowner_id: 'Choose the homeowner whose property this is.' });
+      return;
+    }
     if (!name.trim()) {
       setErrors({ name: 'Full name is required.' });
       return;
@@ -82,21 +90,21 @@ export function RegisterRenterForm({
     router.post(
       '/dashboard/renters',
       {
+        homeowner_id: Number(homeownerId),
         name,
         stay_type: stayType,
         contact,
         notes,
         lease_start: format(leaseStart, 'yyyy-MM-dd'),
         lease_end: format(leaseEnd, 'yyyy-MM-dd'),
-        lot: defaultLot || undefined,
-        street: defaultStreet || undefined,
       },
       {
         preserveScroll: true,
         onSuccess: () => {
+          const property = homeowners.find((h) => String(h.id) === homeownerId)?.property;
           toast({
             title: 'Temporary Homeowner Registered',
-            description: `${name} has been added as a ${stayType}.`,
+            description: `${name} has been added as a ${stayType}${property ? ` at ${property}` : ''}.`,
           });
           resetForm();
           onOpenChange(false);
@@ -129,11 +137,29 @@ export function RegisterRenterForm({
               Register Temporary Homeowner
             </DialogTitle>
             <DialogDescription>
-              Grant temporary access to a renter or short-term guest under your property profile. Access automatically expires once the end date is reached.
+              Grant temporary access to a renter or short-term guest at a homeowner&apos;s property. Access automatically expires once the end date is reached.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Property */}
+            <div className="space-y-1.5">
+              <Label htmlFor="renter-homeowner">Homeowner &amp; property</Label>
+              <Select value={homeownerId} onValueChange={setHomeownerId}>
+                <SelectTrigger id="renter-homeowner" aria-invalid={!!errors.homeowner_id}>
+                  <SelectValue placeholder={homeowners.length ? 'Choose a homeowner' : 'No homeowner accounts yet'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {homeowners.map((h) => (
+                    <SelectItem key={h.id} value={String(h.id)}>
+                      {h.name} — {h.property}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.homeowner_id && <p className="text-xs text-destructive">{errors.homeowner_id}</p>}
+            </div>
+
             {/* Stay Type */}
             <div className="space-y-2">
               <Label className="font-medium">Type of Stay</Label>
