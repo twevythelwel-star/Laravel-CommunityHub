@@ -93,6 +93,32 @@ class OccupancyAndRenterScopeAccuracyTest extends TestCase
         $this->assertSame('Lot 42', app(HouseholdManagementService::class)->getOrCreateHousehold($owner)->property_number);
     }
 
+    public function test_staff_posts_are_one_estate_operations_group_not_units(): void
+    {
+        $officer = User::factory()->role(UserRole::Security)->create(['lot' => 'Gatehouse 1', 'street' => 'Main Perimeter Entrance']);
+        $this->checkedIn($officer, 'Gatehouse 1, Main Perimeter Entrance');
+        $manager = User::factory()->role(UserRole::Admin)->create(['lot' => 'Admin Suite']);
+        $this->checkedIn($manager, 'Admin Suite');
+
+        // An administrator who lives here is counted at their home.
+        $resident = User::factory()->role(UserRole::Admin)->create(['lot' => 'Lot 101', 'street' => 'Royal Palm Drive']);
+        Property::create(['owner_user_id' => $resident->id, 'property_code' => 'PROP-101', 'lot_number' => 'Lot 101', 'street_address' => 'Royal Palm Drive']);
+        $this->checkedIn($resident, 'Lot 101');
+
+        $units = collect($this->hierarchy()['properties'])->keyBy('unit');
+
+        $this->assertEqualsCanonicalizing([PropertyOccupancyService::ESTATE_OPERATIONS, 'Unit 101'], $units->keys()->all());
+        $this->assertSame(2, $units[PropertyOccupancyService::ESTATE_OPERATIONS]['insideCount']);
+        $this->assertSame(1, $units['Unit 101']['insideCount']);
+    }
+
+    public function test_a_resident_without_a_lot_is_unassigned_not_a_unit_called_unassigned(): void
+    {
+        $this->checkedIn(User::factory()->role(UserRole::Homeowner)->create(['lot' => null]));
+
+        $this->assertSame(['Unassigned'], collect($this->hierarchy()['properties'])->pluck('unit')->all());
+    }
+
     public function test_a_unit_without_a_property_record_is_not_given_an_invented_street(): void
     {
         $this->checkedIn(User::factory()->role(UserRole::Homeowner)->create(['lot' => '9']), 'Unit 9');

@@ -223,6 +223,26 @@ class PropertyOccupancyService
     /**
      * Normalize property / unit string (e.g. "Unit 14", "Lot 14", "#14", "14" -> normalized identifier).
      */
+    /**
+     * One group for the estate's own people: Security, Staff, and
+     * administrators who do not live here. Their accounts carry their post
+     * ("Gatehouse 1", "Control Room", "HQ-01") where a resident has a lot, so
+     * each post was counted as a unit. An administrator who owns a home here
+     * is counted at it, like any owner.
+     */
+    public const ESTATE_OPERATIONS = 'Estate Operations';
+
+    private function isEstatePersonnel(GatePass $pass): bool
+    {
+        $user = $pass->user;
+
+        return $user !== null
+            && $pass->visitor_id === null
+            && $pass->delegated_access_id === null
+            && ($user->role->isAdministrative() || $user->role->isOperational())
+            && $user->properties->isEmpty();
+    }
+
     public function normalizeUnit(?string $raw): ?string
     {
         if (empty($raw)) {
@@ -327,14 +347,17 @@ class PropertyOccupancyService
         $seenUserIds = [];
 
         // 1. GatePass records that are CheckedIn
-        $passes = GatePass::with(['user', 'visitor', 'delegatedAccess'])
+        $passes = GatePass::with(['user.properties', 'visitor', 'delegatedAccess'])
             ->where('status', PassStatus::CheckedIn)
             ->get();
 
         foreach ($passes as $pass) {
             $catKey = $this->resolveCategory($pass);
             $property = $pass->property ?: ($pass->user?->lot ?: $pass->visitor?->homeowner?->lot);
-            $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
+            $normalizedUnit = $this->normalizeUnit($property) ?: ($pass->user?->role->isResident() && ! $pass->visitor_id ? 'Unassigned' : 'Common Grounds');
+            if ($this->isEstatePersonnel($pass)) {
+                $property = $normalizedUnit = self::ESTATE_OPERATIONS;
+            }
 
             $hostName = $pass->metadata['host_name'] ?? $pass->metadata['authorized_by'] ?? $pass->metadata['grantor_name'] ?? ($pass->visitor?->homeowner_name ?? $pass->visitor?->homeowner?->name);
 
@@ -449,8 +472,9 @@ class PropertyOccupancyService
 
         foreach ($residentUsers as $resUser) {
             $pass = $resUser->gatePasses()->whereIn('status', [PassStatus::CheckedIn, PassStatus::Active])->first();
-            $property = $resUser->lot ?: 'Lot Unassigned';
-            $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
+            // "Lot Unassigned" normalised to a unit called "Unit Unassigned".
+            $property = $resUser->lot ?: 'Unassigned';
+            $normalizedUnit = $resUser->lot ? $this->normalizeUnit($resUser->lot) : 'Unassigned';
             $isRenter = $resUser->role === UserRole::TemporaryHomeowner;
             $catKey = $isRenter ? 'long_term_guests' : 'residents';
 
@@ -574,14 +598,17 @@ class PropertyOccupancyService
         }
 
         // 2. Active gate passes not currently checked in
-        $activePasses = GatePass::with(['user', 'visitor', 'delegatedAccess'])
+        $activePasses = GatePass::with(['user.properties', 'visitor', 'delegatedAccess'])
             ->whereIn('status', [PassStatus::Active, PassStatus::Issued, PassStatus::Approved])
             ->get();
 
         foreach ($activePasses as $pass) {
             $catKey = $this->resolveCategory($pass);
             $property = $pass->property ?: ($pass->user?->lot ?: $pass->visitor?->homeowner?->lot);
-            $normalizedUnit = $this->normalizeUnit($property) ?: 'Common Grounds';
+            $normalizedUnit = $this->normalizeUnit($property) ?: ($pass->user?->role->isResident() && ! $pass->visitor_id ? 'Unassigned' : 'Common Grounds');
+            if ($this->isEstatePersonnel($pass)) {
+                $property = $normalizedUnit = self::ESTATE_OPERATIONS;
+            }
 
             $hostName = $pass->metadata['host_name'] ?? $pass->metadata['authorized_by'] ?? ($pass->visitor?->homeowner_name ?? $pass->visitor?->homeowner?->name);
 
