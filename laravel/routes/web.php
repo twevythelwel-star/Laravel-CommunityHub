@@ -23,6 +23,9 @@ use App\Http\Controllers\Dashboard\OccupancyController;
 use App\Http\Controllers\Dashboard\HouseholdController;
 use App\Http\Controllers\Dashboard\ParkingPassController;
 use App\Http\Controllers\Dashboard\VehicleController;
+use App\Http\Controllers\Dashboard\AccessGovernanceController;
+use App\Http\Controllers\Dashboard\DigitalAccessWalletController;
+use App\Http\Controllers\Dashboard\GateSensorEventController;
 use App\Http\Controllers\Dashboard\OverviewController;
 use App\Http\Controllers\Dashboard\PaymentReturnController;
 use App\Http\Controllers\Dashboard\ProfileController;
@@ -427,6 +430,31 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/parking', [ParkingPassController::class, 'store'])->name('parking.store');
     Route::post('/parking/seed', [ParkingPassController::class, 'seed'])->name('parking.seed');
     Route::match(['get', 'post'], '/parking/verify', [ParkingPassController::class, 'verify'])->middleware('can:scanPasses')->name('parking.verify');
+
+    // ── Digital Access Wallet (QR + NFC + Mobile Wallet Integrations) ──
+    Route::get('/wallet', [DigitalAccessWalletController::class, 'index'])->name('wallet');
+    Route::get('/wallet/credentials', [DigitalAccessWalletController::class, 'credentials'])->name('wallet.credentials');
+    Route::get('/wallet/apple-pass/{pass}', [DigitalAccessWalletController::class, 'downloadApplePass'])->name('wallet.apple-pass');
+    Route::get('/wallet/google-pass/{pass}', [DigitalAccessWalletController::class, 'googlePassPayload'])->name('wallet.google-pass');
+    Route::get('/wallet/samsung-pass/{pass}', [DigitalAccessWalletController::class, 'samsungPassPayload'])->name('wallet.samsung-pass');
+    Route::post('/wallet/simulate-nfc-tap', [DigitalAccessWalletController::class, 'simulateNfcTap'])->middleware('can:scanPasses')->name('wallet.simulate-nfc-tap');
+    Route::post('/wallet/report-lost', [DigitalAccessWalletController::class, 'reportLost'])->name('wallet.report-lost');
+
+    // ── Access Risk Engine & Governance (Suspicious Detection, Expirations, Workflows, Leases, Timelines) ──
+    Route::get('/access-governance', [AccessGovernanceController::class, 'index'])->middleware('can:manageSecurity')->name('access-governance');
+    Route::post('/access-governance/approvals/{id}/approve', [AccessGovernanceController::class, 'approveRequest'])->middleware('can:manageUsers')->name('access-governance.approve');
+    Route::post('/access-governance/approvals/{id}/reject', [AccessGovernanceController::class, 'rejectRequest'])->middleware('can:manageUsers')->name('access-governance.reject');
+    Route::post('/access-governance/incidents/{id}/lockdown', [AccessGovernanceController::class, 'lockdownIncident'])->middleware('can:manageSecurity')->name('access-governance.lockdown');
+    Route::post('/access-governance/incidents/{id}/resolve', [AccessGovernanceController::class, 'resolveIncident'])->middleware('can:manageSecurity')->name('access-governance.resolve');
+    Route::get('/access-governance/timeline/{pass_id}', [AccessGovernanceController::class, 'getPassTimeline'])->middleware('can:manageSecurity')->name('access-governance.timeline');
+    Route::post('/access-governance/passes/expire-sweep', [AccessGovernanceController::class, 'sweepExpiredPasses'])->middleware('can:manageUsers')->name('access-governance.sweep');
+    Route::post('/access-governance/documents/audit', [AccessGovernanceController::class, 'auditDocuments'])->middleware('can:manageUsers')->name('access-governance.audit-docs');
+    Route::post('/access-governance/documents/attach', [AccessGovernanceController::class, 'attachDocument'])->middleware('can:manageUsers')->name('access-governance.attach-doc');
+
+    // ── Gate Sensor & Tailgating Detection ──
+    Route::post('/gate-sensor/sequence', [GateSensorEventController::class, 'sequence'])->middleware('can:manageSecurity')->name('gate-sensor.sequence');
+    Route::post('/gate-sensor/resolve', [GateSensorEventController::class, 'resolve'])->middleware('can:manageSecurity')->name('gate-sensor.resolve');
+    Route::get('/gate-sensor/recent', [GateSensorEventController::class, 'recent'])->middleware('can:manageSecurity')->name('gate-sensor.recent');
 
     Route::get('/updates', [UpdateController::class, 'index'])
         ->middleware('can:accessCommunityLife')
