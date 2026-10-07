@@ -10,6 +10,7 @@ use App\Models\InvoiceItem;
 use App\Models\Property;
 use App\Models\Renter;
 use App\Models\User;
+use App\Models\Visitor;
 use App\Services\Billing\AssessmentBillingService;
 use App\Services\Billing\AssessmentGenerationResult;
 use App\Services\PropertyOwnershipService;
@@ -176,6 +177,70 @@ class PerPropertyHoaDuesTest extends TestCase
 
         $this->assertSame(1, $result->invoicesGenerated);
         $this->assertSame($inside->id, Invoice::sole()->property_id);
+    }
+
+    public function test_the_billing_page_says_which_property_each_invoice_is_for(): void
+    {
+        $owner = $this->homeowner();
+        $ownership = app(PropertyOwnershipService::class);
+        $ownership->recordAccountProperty($owner);
+        $ownership->assign($owner, 'Lot 22', 'Royal Palm Drive');
+        $this->bill();
+
+        $this->actingAs($owner)->get('/dashboard/billing')->assertInertia(fn ($page) => $page
+            ->where('myInvoices.data', fn ($rows) => collect($rows)->pluck('property')->sort()->values()->all()
+                === ['Lot 14, Hibiscus Way', 'Lot 22, Royal Palm Drive']));
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())->get('/dashboard/billing')->assertInertia(fn ($page) => $page
+            ->where('invoices.data', fn ($rows) => collect($rows)->pluck('property')->filter()->count() === 2));
+    }
+
+    // ── Visitors: which property they are coming to ──────────────────────
+
+    private function visitorFor(array $extra = []): array
+    {
+        return $extra + [
+            'name' => 'Weekend Guest',
+            'type' => 'One-time',
+            'expected_at' => now()->addDay()->toIso8601String(),
+        ];
+    }
+
+    public function test_an_owner_of_two_properties_registers_a_visitor_for_the_second(): void
+    {
+        $owner = $this->homeowner();
+        $ownership = app(PropertyOwnershipService::class);
+        $ownership->recordAccountProperty($owner);
+        $second = $ownership->assign($owner, 'Lot 22', 'Royal Palm Drive');
+
+        $this->actingAs($owner)->get('/dashboard/visitors')
+            ->assertInertia(fn ($page) => $page->has('hostProperties', 2));
+
+        $this->post('/dashboard/visitors', $this->visitorFor(['property_id' => $second->id]))->assertSessionHasNoErrors();
+
+        $visitor = Visitor::sole();
+        $this->assertSame($second->id, $visitor->property_id);
+        // The pass names the property visited, not the host's account address.
+        $this->assertSame('Lot 22, Royal Palm Drive', $visitor->gatePass->property);
+    }
+
+    public function test_a_visitor_cannot_be_registered_to_someone_elses_property(): void
+    {
+        $neighbour = $this->homeowner(['lot' => 'Lot 30']);
+        $theirs = app(PropertyOwnershipService::class)->recordAccountProperty($neighbour);
+
+        $this->actingAs($this->homeowner())
+            ->post('/dashboard/visitors', $this->visitorFor(['property_id' => $theirs->id]))
+            ->assertSessionHasErrors('property_id');
+
+        $this->assertSame(0, Visitor::count());
+    }
+
+    public function test_without_a_choice_the_pass_takes_the_hosts_address(): void
+    {
+        $this->actingAs($this->homeowner())->post('/dashboard/visitors', $this->visitorFor())->assertSessionHasNoErrors();
+
+        $this->assertSame('Lot 14, Hibiscus Way', Visitor::sole()->gatePass->property);
     }
 
     // ── Directory: recording what each owner holds ───────────────────────

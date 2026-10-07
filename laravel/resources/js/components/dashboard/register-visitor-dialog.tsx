@@ -63,14 +63,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+export type HostProperty = { id: number; label: string };
+
 type Props = {
   graceHours: number;
   userStay?: Stay;
+  /** The host's properties; with more than one, the form asks which is being visited. */
+  hostProperties?: HostProperty[];
   /** Security's page leads with the scanner, so registering is the secondary action there. */
   secondary?: boolean;
 };
 
-export function RegisterVisitorDialog({ graceHours, userStay, secondary = false }: Props) {
+export function RegisterVisitorDialog({ graceHours, userStay, hostProperties = [], secondary = false }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -84,13 +88,13 @@ export function RegisterVisitorDialog({ graceHours, userStay, secondary = false 
 
       <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         {/* Mounted only while open, so every visit to the form starts clean. */}
-        <RegisterVisitorForm graceHours={graceHours} userStay={userStay} onDone={() => setOpen(false)} />
+        <RegisterVisitorForm graceHours={graceHours} userStay={userStay} hostProperties={hostProperties} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function RegisterVisitorForm({ graceHours, userStay, onDone }: Omit<Props, 'secondary'> & { onDone: () => void }) {
+function RegisterVisitorForm({ graceHours, userStay, hostProperties = [], onDone }: Omit<Props, 'secondary'> & { onDone: () => void }) {
   const { toast } = useToast();
   const messaging = useMessaging();
 
@@ -113,6 +117,8 @@ function RegisterVisitorForm({ graceHours, userStay, onDone }: Omit<Props, 'seco
     notify_sms: false,
     notify_whatsapp: false,
     pass_category: 'VISITOR' as 'VISITOR' | 'CONTRACTOR',
+    // Only sent when there is a choice to make; otherwise the pass takes the host's address.
+    property_id: hostProperties.length > 1 ? String(hostProperties[0].id) : '',
   });
 
   const isRecurring = form.data.type === 'Recurring';
@@ -132,6 +138,7 @@ function RegisterVisitorForm({ graceHours, userStay, onDone }: Omit<Props, 'seco
 
     form.transform((data) => ({
       ...data,
+      property_id: data.property_id ? Number(data.property_id) : null,
       expected_at: toIsoDateTime(start, hour, minute, meridiem),
       date_range: rangeLabel,
     }));
@@ -238,6 +245,23 @@ function RegisterVisitorForm({ graceHours, userStay, onDone }: Omit<Props, 'seco
       </Section>
 
       <Section title="Visit">
+        {hostProperties.length > 1 && (
+          <div className="space-y-1.5">
+            <Label htmlFor="visit-property">Visiting</Label>
+            <Select value={form.data.property_id} onValueChange={(value) => form.setData('property_id', value)}>
+              <SelectTrigger id="visit-property" aria-invalid={!!errors.property_id}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {hostProperties.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError message={errors.property_id} />
+          </div>
+        )}
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <RadioGroup
             value={form.data.type}

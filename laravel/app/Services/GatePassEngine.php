@@ -190,7 +190,7 @@ class GatePassEngine
                 'visitor_id' => $visitor->id,
                 'category' => $category,
                 'holder_name' => $visitor->name,
-                'property' => $host->propertyLabel(),
+                'property' => $visitor->property?->label() ?? $host->propertyLabel(),
                 'access_zone' => $category->defaultZone(),
                 'designated_gate' => GateId::Any,
                 'valid_from' => $validFrom,
@@ -203,7 +203,7 @@ class GatePassEngine
                 'metadata' => [
                     'visitor_id' => $visitor->id,
                     'host_name' => $host->display_name,
-                    'property' => $host->propertyLabel(),
+                    'property' => $visitor->property?->label() ?? $host->propertyLabel(),
                     'parking_instructions' => $visitor->parkingInstructions(),
                     'arrival_window' => $visitor->arrivalWindowLabel(),
                     'arrival_window_start' => $visitor->arrival_window_start,

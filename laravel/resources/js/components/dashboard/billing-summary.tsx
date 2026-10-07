@@ -38,6 +38,8 @@ import { PaymentMethodSelectorModal } from './payment-method-selector-modal';
 export type InvoiceRow = {
   id: number;
   reference: string;
+  /** The property an HOA assessment is for; dues are charged per property. */
+  property?: string | null;
   amount: number;
   currency: string;
   periodStart: string;
@@ -217,7 +219,12 @@ export function BillingSummary({
                   key={invoice.id}
                   className={invoice.status === 'Overdue' ? 'bg-destructive/5' : undefined}
                 >
-                  <TableCell className="font-medium">{invoice.reference}</TableCell>
+                  <TableCell className="font-medium">
+                    {invoice.reference}
+                    {invoice.property && (
+                      <span className="block text-[11px] text-muted-foreground font-normal">{invoice.property}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     <ClientFormattedDate date={invoice.periodStart} formatString="MMM yyyy" />
                   </TableCell>

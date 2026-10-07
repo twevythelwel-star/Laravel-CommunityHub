@@ -45,7 +45,7 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { VisitorIdModal } from '@/components/dashboard/visitor-id-modal';
 import { EditVisitorForm } from '@/components/dashboard/edit-visitor-form';
-import { RegisterVisitorDialog, toIsoDateTime } from '@/components/dashboard/register-visitor-dialog';
+import { RegisterVisitorDialog, toIsoDateTime, type HostProperty } from '@/components/dashboard/register-visitor-dialog';
 import { GateQrCameraScanner } from '@/components/dashboard/gate-qr-camera-scanner';
 import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
 import { CATEGORY_SHAPES } from '@/lib/gate-pass-engine/config';
@@ -130,6 +130,8 @@ type Props = {
   canManage: boolean;
   canRegister: boolean;
   graceHours: number;
+  /** The host's properties; with several, registering asks which is visited. */
+  hostProperties?: HostProperty[];
   userStay?: {
     stayType: string;
     leaseStart: string;
@@ -159,6 +161,7 @@ export default function VisitorsPage({
   canRegister,
   graceHours,
   userStay,
+  hostProperties = [],
 }: Props) {
   const { toast } = useToast();
 
@@ -550,7 +553,7 @@ export default function VisitorsPage({
             )}
 
             {canRegister && (
-              <RegisterVisitorDialog graceHours={graceHours} userStay={userStay} secondary={canManage} />
+              <RegisterVisitorDialog graceHours={graceHours} userStay={userStay} hostProperties={hostProperties} secondary={canManage} />
             )}
 
             {canRegister && (

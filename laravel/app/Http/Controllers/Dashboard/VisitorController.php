@@ -22,6 +22,7 @@ use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -214,6 +215,10 @@ class VisitorController extends Controller
             'canRegister' => $user->can('registerVisitors'),
             'userStay' => $userStay,
             'graceHours' => 12,
+            // An owner of several properties says which one a visitor is coming to.
+            'hostProperties' => $user->properties()->orderBy('id')->get()
+                ->map(fn ($p) => ['id' => $p->id, 'label' => $p->label()])
+                ->values(),
         ]);
     }
 
@@ -238,6 +243,10 @@ class VisitorController extends Controller
             'notify_whatsapp' => ['nullable', 'boolean'],
             // A contractor's pass waits for security to approve it.
             'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
+            // One of the host's own properties; no one else's address goes on the pass.
+            'property_id' => ['nullable', Rule::exists('properties', 'id')->where('owner_user_id', $request->user()->id)],
+        ], [
+            'property_id.exists' => 'Choose one of your own properties.',
         ]);
 
         $user = $request->user();

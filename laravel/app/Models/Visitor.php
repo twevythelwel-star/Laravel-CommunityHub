@@ -22,7 +22,7 @@ class Visitor extends Model
         'name', 'contact', 'vehicle', 'id_type', 'id_number', 'type', 'share_token', 'status',
         'expected_at', 'arrival_window_start', 'arrival_window_end', 'date_range',
         'parking_instructions', 'community_rules', 'emergency_info', 'notes',
-        'homeowner_id', 'homeowner_name',
+        'homeowner_id', 'homeowner_name', 'property_id',
         'id_image_url', 'is_blocked', 'checked_in_at', 'checked_out_at', 'expired_at',
         'notify_email', 'notify_sms', 'notify_whatsapp', 'qr_code_path',
     ];
@@ -125,6 +125,12 @@ class Visitor extends Model
     public function homeowner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'homeowner_id');
+    }
+
+    /** Which of the host's properties they are visiting; null means the host's address. */
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
     }
 
     public function scopeExpected($query)

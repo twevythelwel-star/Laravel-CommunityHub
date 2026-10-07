@@ -69,7 +69,7 @@ class BillingController extends Controller
 
         // 1. Existing props (guaranteed backwards compatibility for all 241 existing tests)
         $myInvoices = $user->invoices()
-            ->with(['items', 'paymentPlan'])
+            ->with(['items', 'paymentPlan', 'property'])
             ->latest('period_start')
             ->paginate(12)
             ->withQueryString()
@@ -106,7 +106,7 @@ class BillingController extends Controller
         $monthlyCollections = $isAdmin ? $this->monthlyCollections() : null;
 
         $invoices = $isAdmin
-            ? Invoice::with(['user:id,display_name,lot', 'items'])
+            ? Invoice::with(['user:id,display_name,lot', 'items', 'property'])
                 ->latest('due_on')
                 ->paginate(20)
                 ->withQueryString()
@@ -1251,6 +1251,9 @@ class BillingController extends Controller
         return [
             'id' => $invoice->id,
             'reference' => $invoice->reference,
+            // Dues are per property, so an owner of two lots has two invoices a
+            // month; this says which is which.
+            'property' => $invoice->property?->label(),
             'amount' => $invoice->amount(),
             'currency' => $invoice->currency,
             'periodStart' => $invoice->period_start->toDateString(),

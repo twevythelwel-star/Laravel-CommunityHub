@@ -337,9 +337,11 @@ export function AdminBilling({ settings, adminSummary, monthlyCollections, invoi
                 >
                   <TableCell className="font-medium">
                     {invoice.homeowner ?? '—'}
-                    {invoice.lot && (
+                    {/* The invoice's own property: an owner of two lots has two
+                        invoices, and "Lot {lot}" printed "Lot Lot 42". */}
+                    {(invoice.property || invoice.lot) && (
                       <span className="block text-[11px] text-muted-foreground font-normal">
-                        Lot {invoice.lot}
+                        {invoice.property ?? (/^\d/.test(invoice.lot ?? '') ? `Lot ${invoice.lot}` : invoice.lot)}
                       </span>
                     )}
                   </TableCell>
