@@ -20,6 +20,9 @@ use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\DelegatedAccessController;
 use App\Http\Controllers\Dashboard\OccupancyController;
+use App\Http\Controllers\Dashboard\HouseholdController;
+use App\Http\Controllers\Dashboard\ParkingPassController;
+use App\Http\Controllers\Dashboard\VehicleController;
 use App\Http\Controllers\Dashboard\OverviewController;
 use App\Http\Controllers\Dashboard\PaymentReturnController;
 use App\Http\Controllers\Dashboard\ProfileController;
@@ -397,6 +400,33 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/delegation/accept/{token}', [DelegatedAccessController::class, 'accept'])->middleware('throttle:10,1')->name('delegation.accept');
     Route::post('/delegation/continuity-plan', [DelegatedAccessController::class, 'saveContinuityPlan'])->name('delegation.continuity-plan');
     Route::get('/delegation/{delegation}/audit-events', [DelegatedAccessController::class, 'auditEvents'])->name('delegation.audit-events');
+
+    // ── Family & Household Management ──
+    Route::get('/household', [HouseholdController::class, 'index'])->name('household');
+    Route::post('/household/members', [HouseholdController::class, 'store'])->name('household.members.store');
+    Route::match(['put', 'patch'], '/household/members/{member}', [HouseholdController::class, 'update'])->name('household.members.update');
+    Route::delete('/household/members/{member}', [HouseholdController::class, 'destroy'])->name('household.members.destroy');
+    Route::post('/household/seed-example', [HouseholdController::class, 'seedExample'])->name('household.seed-example');
+
+    // ── Vehicle Management & ANPR Plate Recognition ──
+    Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles');
+    Route::get('/vehicles/anpr/lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr.lookup');
+    Route::get('/vehicles/anpr-lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr-lookup');
+    Route::post('/vehicles/seed', [VehicleController::class, 'seedSmith'])->name('vehicles.seed');
+    Route::post('/vehicles/seed-smith', [VehicleController::class, 'seedSmith'])->name('vehicles.seed-smith');
+    Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+    Route::match(['put', 'patch'], '/vehicles/{vehicle}', [VehicleController::class, 'update'])
+        ->whereNumber('vehicle')
+        ->name('vehicles.update');
+    Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
+        ->whereNumber('vehicle')
+        ->name('vehicles.destroy');
+
+    // ── Parking Passes (Resident, Visitor, Contractor, Temporary, Accessible, Loading Zone) ──
+    Route::get('/parking', [ParkingPassController::class, 'index'])->name('parking');
+    Route::post('/parking', [ParkingPassController::class, 'store'])->name('parking.store');
+    Route::post('/parking/seed', [ParkingPassController::class, 'seed'])->name('parking.seed');
+    Route::match(['get', 'post'], '/parking/verify', [ParkingPassController::class, 'verify'])->middleware('can:scanPasses')->name('parking.verify');
 
     Route::get('/updates', [UpdateController::class, 'index'])
         ->middleware('can:accessCommunityLife')
