@@ -11,11 +11,12 @@ use Tests\TestCase;
 
 /**
  * The showcase hubs (queues, Octane, observability, feature flags, generic
- * PDFs, the query-builder playground, the "Filament" role simulator and the
- * universal notification engine) were removed: none backed an estate
- * screen, and several could queue jobs, write audit entries, message
- * residents or issue documents in the estate's name. Even a System Admin
- * must find nothing at their old addresses.
+ * PDFs, the query-builder playground, the "Filament" role simulator, the
+ * universal notification engine and the modular payment gateways) were
+ * removed: none backed an estate screen, and several could queue jobs,
+ * write audit entries, message residents, open checkout sessions or issue
+ * documents in the estate's name. Even a System Admin must find nothing at
+ * their old addresses.
  */
 class RemovedShowcaseModulesTest extends TestCase
 {
@@ -35,6 +36,7 @@ class RemovedShowcaseModulesTest extends TestCase
             'portal' => ['/portal'],
             'filament' => ['/filament'],
             'notification hub' => ['/dashboard/notifications/hub'],
+            'payment gateway hub' => ['/dashboard/billing/gateway-hub'],
         ];
     }
 
@@ -65,6 +67,12 @@ class RemovedShowcaseModulesTest extends TestCase
             'notification inbox' => ['GET', '/api/v1/notifications/inbox'],
             'notification deliveries' => ['GET', '/api/v1/notifications/deliveries'],
             'notification channels' => ['GET', '/api/v1/notifications/channels'],
+            'checkout session' => ['POST', '/api/v1/payments/checkout-session'],
+            'billing portal' => ['POST', '/api/v1/payments/billing-portal'],
+            'subscriptions' => ['POST', '/api/v1/payments/subscriptions'],
+            'cancel subscription' => ['DELETE', '/api/v1/payments/subscriptions/sub_1'],
+            'coupons' => ['POST', '/api/v1/payments/coupons/validate'],
+            'payment modules' => ['GET', '/api/v1/payments/modules'],
         ];
     }
 

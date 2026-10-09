@@ -6,7 +6,6 @@ use App\Http\Controllers\Api\GatePassApiController;
 use App\Http\Controllers\Api\MapApiController;
 use App\Http\Controllers\Api\QueryApiController;
 use App\Http\Controllers\Api\V1\DocsApiController;
-use App\Http\Controllers\Api\V1\ModularPaymentApiController;
 use App\Http\Controllers\Api\V1\MonitoringApiController;
 use App\Http\Controllers\Api\V1\RealtimeApiController;
 use App\Http\Controllers\Api\V1\SpreadsheetApiController;
@@ -170,12 +169,6 @@ Route::prefix('v1')->group(function () {
             Route::post('/webhooks/subscriptions/{subscription}/test', [WebhookApiController::class, 'test'])->name('api.v1.webhooks.subscriptions.test');
         });
 
-        // Optional Modular Payments & Subscriptions (Cashier, Stripe, PayPal, Square, Adyen, Braintree, Flutterwave, Paystack, Mollie, Authorize.Net)
-        Route::post('/payments/checkout-session', [ModularPaymentApiController::class, 'createCheckoutSession'])->name('api.v1.payments.checkout-session');
-        Route::post('/payments/billing-portal', [ModularPaymentApiController::class, 'createBillingPortalSession'])->name('api.v1.payments.billing-portal');
-        Route::post('/payments/subscriptions', [ModularPaymentApiController::class, 'createSubscription'])->name('api.v1.payments.subscriptions');
-        Route::delete('/payments/subscriptions/{id}', [ModularPaymentApiController::class, 'cancelSubscription'])->name('api.v1.payments.subscriptions.cancel');
-        Route::post('/payments/coupons/validate', [ModularPaymentApiController::class, 'validateCoupon'])->name('api.v1.payments.coupons.validate');
         // Real-Time WebSockets (Laravel Reverb & Echo)
         Route::post('/realtime/broadcast', [RealtimeApiController::class, 'broadcast'])->name('api.v1.realtime.broadcast');
     });
@@ -204,9 +197,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/spreadsheets/import/{blueprint}', [SpreadsheetApiController::class, 'import'])->name('api.v1.spreadsheets.import');
         Route::get('/spreadsheets/sample-template/{blueprint}', [SpreadsheetApiController::class, 'sampleTemplate'])->name('api.v1.spreadsheets.sample-template');
     });
-
-    // Public payment module catalog
-    Route::get('/payments/modules', [ModularPaymentApiController::class, 'modules'])->name('api.v1.payments.modules');
 });
 
 // ── API v2 (Next Gen Architecture Preview) ──

@@ -6,12 +6,8 @@ use App\Enums\TokenAbility;
 use App\Enums\UserRole;
 use App\Models\User;
 use App\Models\WebhookSubscription;
-use App\Services\Payments\Modular\Drivers\CashierModuleDriver;
-use App\Services\Payments\Modular\DTOs\CustomerPortalRequest;
-use App\Services\Payments\Modular\PaymentGatewayManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
-use Mockery;
 use Tests\TestCase;
 
 /**
@@ -92,33 +88,6 @@ class RouteAuditFollowUpTest extends TestCase
         $this->call('POST', '/api/v1/webhooks/incoming/acme', [], [], [], [
             'CONTENT_TYPE' => 'application/json', 'HTTP_X_WEBHOOK_SIGNATURE' => 'sha256='.hash_hmac('sha256', $body, 'acme_secret'),
         ], $body)->assertOk();
-    }
-
-    // ── Modular payments ────────────────────────────────────────────
-
-    public function test_the_billing_portal_is_always_the_callers_own(): void
-    {
-        $resident = $this->as(UserRole::Homeowner);
-        $neighbour = $this->as(UserRole::Homeowner);
-
-        $driver = Mockery::mock(CashierModuleDriver::class)->makePartial();
-        $driver->shouldReceive('createBillingPortalSession')
-            ->once()
-            ->withArgs(fn (CustomerPortalRequest $request) => $request->customerId === (string) $resident->id)
-            ->passthru();
-
-        $this->mock(PaymentGatewayManager::class, fn ($manager) => $manager->shouldReceive('subscriptionDriver')->andReturn($driver));
-
-        $this->postJson('/api/v1/payments/billing-portal', [
-            'return_url' => 'https://hub.example/billing',
-            'customer_id' => (string) $neighbour->id,
-        ], $this->bearer($resident))->assertOk();
-    }
-
-    public function test_a_resident_cannot_cancel_an_arbitrary_subscription(): void
-    {
-        $this->deleteJson('/api/v1/payments/subscriptions/sub_someone_else', [], $this->bearer($this->as(UserRole::Homeowner)))
-            ->assertForbidden();
     }
 
     // ── Horizon and API docs ────────────────────────────────────────

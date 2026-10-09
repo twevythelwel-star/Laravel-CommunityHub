@@ -45,7 +45,6 @@ use App\Http\Controllers\UniversalSearchController;
 use App\Livewire\CommunityOperationsHub;
 use App\Livewire\Components\UiShowcase;
 use App\Livewire\GatePasses\PassManager;
-use App\Livewire\Payments\PaymentGatewayHub;
 use App\Livewire\Realtime\RealtimeOperationsHub;
 use App\Livewire\Residents\ResidentDirectory;
 use App\Livewire\Spreadsheets\SpreadsheetOperationsHub;
@@ -562,9 +561,6 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/billing/transactions/{transaction}/refund', [StripeCheckoutController::class, 'refund'])
             ->middleware(['can:manageBilling', 'password.confirm'])
             ->name('billing.transactions.refund');
-        Route::get('/billing/gateway-hub', PaymentGatewayHub::class)
-            ->middleware('can:manageBilling')
-            ->name('billing.gateway-hub');
     });
 
     Route::middleware('can:accessCommunityLife')->group(function () {
