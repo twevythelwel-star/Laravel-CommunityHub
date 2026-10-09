@@ -143,6 +143,11 @@ class PlatformOperationsAccessTest extends TestCase
         $this->getJson('/api/v1/observability/logs', $this->bearer($this->as(UserRole::SystemAdmin)))->assertOk();
     }
 
+    public function test_a_system_admins_token_can_read_metrics(): void
+    {
+        $this->getJson('/api/v1/metrics', $this->bearer($this->as(UserRole::SystemAdmin)))->assertOk();
+    }
+
     public function test_the_liveness_probe_stays_public(): void
     {
         $this->getJson('/api/v1/health')->assertSuccessful();

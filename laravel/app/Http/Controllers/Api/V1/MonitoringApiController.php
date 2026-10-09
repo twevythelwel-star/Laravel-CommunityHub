@@ -113,9 +113,9 @@ class MonitoringApiController extends Controller
 
         $statusCounts = ApiRequestLog::where('created_at', '>=', $since)
             ->selectRaw('
-                COUNT(CASE WHEN response_code >= 200 AND response_code < 300 THEN 1 END) as success_2xx,
-                COUNT(CASE WHEN response_code >= 400 AND response_code < 500 THEN 1 END) as client_error_4xx,
-                COUNT(CASE WHEN response_code >= 500 THEN 1 END) as server_error_5xx
+                COUNT(CASE WHEN status_code >= 200 AND status_code < 300 THEN 1 END) as success_2xx,
+                COUNT(CASE WHEN status_code >= 400 AND status_code < 500 THEN 1 END) as client_error_4xx,
+                COUNT(CASE WHEN status_code >= 500 THEN 1 END) as server_error_5xx
             ')
             ->first();
 
