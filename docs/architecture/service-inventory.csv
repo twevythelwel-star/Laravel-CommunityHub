@@ -1,0 +1,157 @@
+Service,Kind,Path,Domain,LOC,Public methods,App references,Test references,Flags,Recommendation
+AccessApprovalWorkflowService,Service,app/Services/AccessApprovalWorkflowService.php,Administration,251,4,2,5,,KEEP
+AccessAuditTimelineService,Service,app/Services/AccessAuditTimelineService.php,Administration,166,4,3,3,,KEEP
+AccessExpirationPolicyService,Service,app/Services/AccessExpirationPolicyService.php,Administration,92,2,4,3,,KEEP
+AccessRelationshipEngine,Service,app/Services/AccessRelationshipEngine.php,Administration,602,1,1,0,Large,SPLIT
+AccessRiskEngine,Service,app/Services/AccessRiskEngine.php,Administration,291,2,3,3,,KEEP
+AccessVisibilityService,Service,app/Services/AccessVisibilityService.php,Administration,561,6,3,6,,KEEP
+ApiRateLimiter,Service,app/Services/Api/RateLimiting/ApiRateLimiter.php,Administration,62,0,2,0,Thin,MERGE into domain service
+ApiVersionManager,Service,app/Services/Api/Versioning/ApiVersionManager.php,Administration,99,7,5,0,,KEEP
+EnterpriseLogActivityAction,Service,app/Services/Audit/EnterpriseLogActivityAction.php,Administration,38,1,1,0,Thin,MERGE into domain service
+BackupManagerService,Service,app/Services/Backup/BackupManagerService.php,Administration,143,5,1,2,,KEEP
+AssessmentBillingService,Service,app/Services/Billing/AssessmentBillingService.php,Billing,289,1,2,10,,KEEP
+AssessmentGenerationResult,Data object,app/Services/Billing/AssessmentGenerationResult.php,Billing,56,2,3,2,,MOVE out of Services
+DelegatedAccessService,Service,app/Services/Delegation/DelegatedAccessService.php,People,333,8,2,0,,KEEP
+DigitalAccessWalletService,Service,app/Services/DigitalAccessWalletService.php,Credentials,571,9,2,10,,KEEP
+DigitalAuthorizationDocumentService,Service,app/Services/DigitalAuthorizationDocumentService.php,Access,132,2,3,3,,KEEP
+EmergencyMusterService,Service,app/Services/EmergencyMusterService.php,Safety,226,6,2,0,,KEEP
+FeatureFlagService,Service,app/Services/Features/FeatureFlagService.php,Administration,388,9,4,8,,KEEP
+GeofenceService,Service,app/Services/GIS/GeofenceService.php,Properties,524,9,9,4,,KEEP
+LocationService,Service,app/Services/GIS/LocationService.php,Administration,443,14,3,0,,KEEP
+MapService,Service,app/Services/GIS/MapService.php,Properties,247,0,1,0,,KEEP
+GatePassEngine,Service,app/Services/GatePassEngine.php,Credentials,1045,17,32,89,Large,SPLIT
+GateScanner,Service,app/Services/GateScanner.php,Security,684,4,10,34,Large,SPLIT
+GateTailgatingDetectionService,Service,app/Services/GateTailgatingDetectionService.php,Administration,167,3,2,3,,KEEP
+GeofenceService,Service,app/Services/GeofenceService.php,Properties,349,7,9,4,,KEEP
+HouseholdManagementService,Service,app/Services/HouseholdManagementService.php,People,407,7,3,21,,KEEP
+LedgerService,Service,app/Services/Ledger/LedgerService.php,Administration,354,3,8,10,,KEEP
+ImageService,Service,app/Services/Media/ImageService.php,Administration,201,7,1,5,,KEEP
+MediaManagementService,Service,app/Services/Media/MediaManagementService.php,Administration,111,5,1,6,,KEEP
+MessageNotSent,Data object,app/Services/Messaging/MessageNotSent.php,Communications,42,0,9,5,,MOVE out of Services
+PhoneNumber,Data object,app/Services/Messaging/PhoneNumber.php,Administration,71,0,10,12,,MOVE out of Services
+TwilioClient,Service,app/Services/Messaging/TwilioClient.php,Communications,93,2,5,0,,KEEP
+ChannelDispatchResult,Service,app/Services/NotificationEngine/ChannelDispatchResult.php,Communications,61,4,8,0,,KEEP
+EmailChannel,Driver/Channel,app/Services/NotificationEngine/Channels/EmailChannel.php,Communications,85,5,2,0,,KEEP
+InAppChannel,Driver/Channel,app/Services/NotificationEngine/Channels/InAppChannel.php,Communications,58,5,2,0,,KEEP
+PushChannel,Driver/Channel,app/Services/NotificationEngine/Channels/PushChannel.php,Communications,90,5,2,0,,KEEP
+SmsChannel,Driver/Channel,app/Services/NotificationEngine/Channels/SmsChannel.php,Communications,76,5,2,0,,KEEP
+WhatsAppChannel,Driver/Channel,app/Services/NotificationEngine/Channels/WhatsAppChannel.php,Communications,91,5,2,0,,KEEP
+NotificationChannelInterface,Contract,app/Services/NotificationEngine/Contracts/NotificationChannelInterface.php,Communications,25,5,12,0,,MOVE out of Services
+NotificationEngine,Service,app/Services/NotificationEngine/NotificationEngine.php,Communications,267,8,13,14,,KEEP
+NotificationPayload,Data object,app/Services/NotificationEngine/NotificationPayload.php,Communications,37,2,9,7,,MOVE out of Services
+PrivacyMasker,Service,app/Services/NotificationEngine/PrivacyMasker.php,Communications,148,0,2,21,,KEEP
+NotificationTargetingService,Service,app/Services/NotificationTargetingService.php,Communications,117,1,2,0,,KEEP
+NotificationService,Service,app/Services/Notifications/NotificationService.php,Communications,91,6,2,3,,KEEP
+AbstractNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/AbstractNotificationChannel.php,Communications,23,2,11,0,,KEEP
+DatabaseNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/DatabaseNotificationChannel.php,Communications,54,4,2,0,,KEEP
+EmailNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/EmailNotificationChannel.php,Communications,70,5,2,0,,KEEP
+InAppNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/InAppNotificationChannel.php,Communications,107,5,2,0,,KEEP
+PushNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/PushNotificationChannel.php,Communications,61,5,2,0,,KEEP
+SlackNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/SlackNotificationChannel.php,Communications,34,4,2,0,,KEEP
+SmsNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/SmsNotificationChannel.php,Communications,57,5,2,0,,KEEP
+TeamsNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/TeamsNotificationChannel.php,Communications,34,4,2,0,,KEEP
+WebhookNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/WebhookNotificationChannel.php,Communications,34,4,2,0,,KEEP
+WhatsAppNotificationChannel,Driver/Channel,app/Services/Notifications/Universal/Channels/WhatsAppNotificationChannel.php,Communications,57,5,2,0,,KEEP
+EmailProviderInterface,Contract,app/Services/Notifications/Universal/Contracts/EmailProviderInterface.php,Communications,17,3,7,0,,MOVE out of Services
+NotificationChannelInterface,Contract,app/Services/Notifications/Universal/Contracts/NotificationChannelInterface.php,Communications,26,5,12,0,,MOVE out of Services
+NotificationServiceInterface,Contract,app/Services/Notifications/Universal/Contracts/NotificationServiceInterface.php,Communications,45,5,4,0,,MOVE out of Services
+PushProviderInterface,Contract,app/Services/Notifications/Universal/Contracts/PushProviderInterface.php,Communications,17,3,4,0,,MOVE out of Services
+RealtimeProviderInterface,Contract,app/Services/Notifications/Universal/Contracts/RealtimeProviderInterface.php,Communications,15,3,4,0,,MOVE out of Services
+SmsProviderInterface,Contract,app/Services/Notifications/Universal/Contracts/SmsProviderInterface.php,Communications,17,3,3,0,,MOVE out of Services
+WhatsAppProviderInterface,Contract,app/Services/Notifications/Universal/Contracts/WhatsAppProviderInterface.php,Communications,17,3,3,0,,MOVE out of Services
+ChannelDeliveryReport,Data object,app/Services/Notifications/Universal/DTOs/ChannelDeliveryReport.php,Communications,99,2,32,0,,MOVE out of Services
+NotificationDispatchSummary,Data object,app/Services/Notifications/Universal/DTOs/NotificationDispatchSummary.php,Communications,73,5,4,0,,MOVE out of Services
+NotificationMessage,Data object,app/Services/Notifications/Universal/DTOs/NotificationMessage.php,Communications,52,1,33,5,,MOVE out of Services
+NotificationRecipient,Data object,app/Services/Notifications/Universal/DTOs/NotificationRecipient.php,Communications,86,2,33,5,,MOVE out of Services
+SignedHttpWebhookProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/ChatOps/SignedHttpWebhookProvider.php,Communications,108,3,2,2,,KEEP
+SlackWebhookProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/ChatOps/SlackWebhookProvider.php,Communications,109,3,2,0,,KEEP
+TeamsWebhookProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/ChatOps/TeamsWebhookProvider.php,Communications,100,3,2,0,,KEEP
+LaravelMailerEmailProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Email/LaravelMailerEmailProvider.php,Communications,51,3,2,0,,KEEP
+MailgunEmailProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Email/MailgunEmailProvider.php,Communications,92,3,2,0,,KEEP
+PostmarkEmailProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Email/PostmarkEmailProvider.php,Communications,88,3,2,0,,KEEP
+SendGridEmailProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Email/SendGridEmailProvider.php,Communications,93,3,2,0,,KEEP
+SesEmailProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Email/SesEmailProvider.php,Communications,68,3,2,0,,KEEP
+TwilioSmsProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Messaging/TwilioSmsProvider.php,Communications,84,3,2,0,,KEEP
+TwilioWhatsAppProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Messaging/TwilioWhatsAppProvider.php,Communications,88,3,2,0,,KEEP
+FirebasePushProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Push/FirebasePushProvider.php,Communications,92,3,2,0,,KEEP
+OneSignalPushProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Push/OneSignalPushProvider.php,Communications,93,3,2,0,,KEEP
+AblyRealtimeProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Realtime/AblyRealtimeProvider.php,Communications,50,3,2,0,,KEEP
+PusherRealtimeProvider,Driver/Channel,app/Services/Notifications/Universal/Providers/Realtime/PusherRealtimeProvider.php,Communications,59,3,2,0,,KEEP
+UniversalNotificationService,Service,app/Services/Notifications/Universal/UniversalNotificationService.php,Communications,207,5,5,4,,KEEP
+ObservabilityService,Service,app/Services/Observability/ObservabilityService.php,Administration,619,12,3,6,Large,SPLIT
+ParkingPassService,Service,app/Services/ParkingPassService.php,Credentials,304,6,2,3,,KEEP
+BankTransferDriver,Driver/Channel,app/Services/Payments/Drivers/BankTransferDriver.php,Billing,48,4,2,0,,KEEP
+CashDeskDriver,Driver/Channel,app/Services/Payments/Drivers/CashDeskDriver.php,Billing,56,4,2,0,,KEEP
+CommunityWalletDriver,Driver/Channel,app/Services/Payments/Drivers/CommunityWalletDriver.php,Credentials,64,4,2,0,,KEEP
+DigitalWalletDriver,Driver/Channel,app/Services/Payments/Drivers/DigitalWalletDriver.php,Credentials,51,4,2,0,,KEEP
+NfcTerminalDriver,Driver/Channel,app/Services/Payments/Drivers/NfcTerminalDriver.php,Credentials,51,4,2,0,,KEEP
+PaymentDriverInterface,Contract,app/Services/Payments/Drivers/PaymentDriverInterface.php,Billing,23,4,10,0,,MOVE out of Services
+PeerPaymentDriver,Driver/Channel,app/Services/Payments/Drivers/PeerPaymentDriver.php,Billing,60,4,2,0,,KEEP
+QrPaymentDriver,Driver/Channel,app/Services/Payments/Drivers/QrPaymentDriver.php,Billing,73,4,2,5,,KEEP
+StripeCardDriver,Driver/Channel,app/Services/Payments/Drivers/StripeCardDriver.php,Billing,46,4,2,0,,KEEP
+EnterpriseReconciliationService,Service,app/Services/Payments/EnterpriseReconciliationService.php,Billing,616,2,1,34,Large,SPLIT
+DirectSdkGatewayContract,Contract,app/Services/Payments/Modular/Contracts/DirectSdkGatewayContract.php,Billing,35,3,12,0,,MOVE out of Services
+PaymentModuleContract,Contract,app/Services/Payments/Modular/Contracts/PaymentModuleContract.php,Billing,47,6,6,0,,MOVE out of Services
+SubscriptionGatewayContract,Contract,app/Services/Payments/Modular/Contracts/SubscriptionGatewayContract.php,Billing,45,5,12,0,,MOVE out of Services
+WebhookVerifiableContract,Contract,app/Services/Payments/Modular/Contracts/WebhookVerifiableContract.php,Billing,28,2,11,0,,MOVE out of Services
+CheckoutSessionRequest,Data object,app/Services/Payments/Modular/DTOs/CheckoutSessionRequest.php,Billing,26,0,14,2,,MOVE out of Services
+CheckoutSessionResult,Data object,app/Services/Payments/Modular/DTOs/CheckoutSessionResult.php,Billing,21,0,12,0,,MOVE out of Services
+CouponValidationResult,Data object,app/Services/Payments/Modular/DTOs/CouponValidationResult.php,Billing,23,0,12,0,,MOVE out of Services
+CustomerPortalRequest,Data object,app/Services/Payments/Modular/DTOs/CustomerPortalRequest.php,Billing,19,0,13,4,,MOVE out of Services
+CustomerPortalResult,Data object,app/Services/Payments/Modular/DTOs/CustomerPortalResult.php,Billing,20,0,12,0,,MOVE out of Services
+SubscriptionRequest,Data object,app/Services/Payments/Modular/DTOs/SubscriptionRequest.php,Billing,23,0,14,2,,MOVE out of Services
+SubscriptionResult,Data object,app/Services/Payments/Modular/DTOs/SubscriptionResult.php,Billing,24,0,12,0,,MOVE out of Services
+AbstractPaymentDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/AbstractPaymentDriver.php,Billing,26,2,11,0,,KEEP
+AdyenModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/AdyenModuleDriver.php,Billing,144,14,2,0,,KEEP
+AuthorizeNetModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/AuthorizeNetModuleDriver.php,Billing,150,14,2,0,,KEEP
+BraintreeModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/BraintreeModuleDriver.php,Billing,145,14,2,0,,KEEP
+CashierModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/CashierModuleDriver.php,Billing,204,14,2,2,,KEEP
+FlutterwaveModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/FlutterwaveModuleDriver.php,Billing,152,14,2,2,,KEEP
+MollieModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/MollieModuleDriver.php,Billing,151,14,2,0,,KEEP
+PayPalModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/PayPalModuleDriver.php,Billing,157,14,2,0,,KEEP
+PaystackModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/PaystackModuleDriver.php,Billing,160,14,2,2,,KEEP
+SquareModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/SquareModuleDriver.php,Billing,145,14,2,0,,KEEP
+StripeSdkModuleDriver,Driver/Channel,app/Services/Payments/Modular/Drivers/StripeSdkModuleDriver.php,Billing,173,14,2,0,,KEEP
+PaymentGatewayManager,Service,app/Services/Payments/Modular/PaymentGatewayManager.php,Billing,167,11,4,7,,KEEP
+PaymentOrchestratorService,Service,app/Services/Payments/PaymentOrchestratorService.php,Billing,703,18,12,18,Large,SPLIT
+ConfirmsReturns,Contract,app/Services/Payments/Providers/Contracts/ConfirmsReturns.php,Billing,23,1,4,2,,MOVE out of Services
+CreatesPaymentLinks,Contract,app/Services/Payments/Providers/Contracts/CreatesPaymentLinks.php,Billing,19,1,2,0,,MOVE out of Services
+CreatesRecurringPayments,Contract,app/Services/Payments/Providers/Contracts/CreatesRecurringPayments.php,Billing,19,1,2,0,,MOVE out of Services
+HandlesWebhooks,Contract,app/Services/Payments/Providers/Contracts/HandlesWebhooks.php,Billing,19,2,5,4,,MOVE out of Services
+OffersWalletPayments,Contract,app/Services/Payments/Providers/Contracts/OffersWalletPayments.php,Credentials,38,1,4,0,,MOVE out of Services
+PaymentProvider,Contract,app/Services/Payments/Providers/Contracts/PaymentProvider.php,Billing,61,6,8,0,,MOVE out of Services
+RefundsPayments,Contract,app/Services/Payments/Providers/Contracts/RefundsPayments.php,Billing,18,1,3,4,,MOVE out of Services
+TakesInPersonPayments,Contract,app/Services/Payments/Providers/Contracts/TakesInPersonPayments.php,Billing,45,3,5,0,,MOVE out of Services
+OfficeProvider,Driver/Channel,app/Services/Payments/Providers/Office/OfficeProvider.php,Billing,111,6,2,0,,KEEP
+PaymentInstruction,Data object,app/Services/Payments/Providers/PaymentInstruction.php,Billing,49,1,8,0,,MOVE out of Services
+PaymentRequest,Data object,app/Services/Payments/Providers/PaymentRequest.php,Billing,43,0,9,0,,MOVE out of Services
+ProviderRegistry,Driver/Channel,app/Services/Payments/Providers/ProviderRegistry.php,Billing,136,7,10,3,,KEEP
+StripeTerminalClient,Driver/Channel,app/Services/Payments/Providers/StripeTerminal/StripeTerminalClient.php,Billing,95,5,2,3,,KEEP
+StripeTerminalProvider,Driver/Channel,app/Services/Payments/Providers/StripeTerminal/StripeTerminalProvider.php,Billing,173,9,2,0,,KEEP
+StripeProvider,Driver/Channel,app/Services/Payments/Providers/Stripe/StripeProvider.php,Billing,155,10,2,0,,KEEP
+WalletProvider,Driver/Channel,app/Services/Payments/Providers/Wallet/WalletProvider.php,Credentials,107,6,2,0,,KEEP
+WiPayProvider,Driver/Channel,app/Services/Payments/Providers/WiPay/WiPayProvider.php,Billing,295,8,3,0,,KEEP
+RefundService,Service,app/Services/Payments/RefundService.php,Billing,399,4,2,10,,KEEP
+UniversalPaymentWebhookService,Service,app/Services/Payments/UniversalPaymentWebhookService.php,Billing,696,3,2,2,Large,SPLIT
+EnterprisePdfService,Service,app/Services/Pdf/EnterprisePdfService.php,Reporting,348,7,3,6,,KEEP
+OctanePerformanceService,Service,app/Services/Performance/OctanePerformanceService.php,Administration,166,4,3,5,,KEEP
+PropertyOccupancyService,Service,app/Services/PropertyOccupancyService.php,Security,1098,14,5,14,Large,SPLIT
+PropertyOwnershipService,Service,app/Services/PropertyOwnershipService.php,Properties,110,4,4,11,,KEEP
+QrCodePng,Service,app/Services/QrCodePng.php,Administration,62,1,6,8,Thin,MERGE into domain service
+ApiQueryService,Service,app/Services/Query/ApiQueryService.php,Administration,112,8,3,5,,KEEP
+GatePassQuery,Service,app/Services/Query/Builders/GatePassQuery.php,Credentials,97,0,2,0,,KEEP
+TransactionQuery,Service,app/Services/Query/Builders/TransactionQuery.php,Administration,100,0,2,0,,KEEP
+UserQuery,Service,app/Services/Query/Builders/UserQuery.php,Administration,79,0,2,0,Thin,MERGE into domain service
+VisitorQuery,Service,app/Services/Query/Builders/VisitorQuery.php,Visitors,96,0,2,0,,KEEP
+WarningQuery,Service,app/Services/Query/Builders/WarningQuery.php,Communications,77,0,2,0,Thin,MERGE into domain service
+QueueMonitoringService,Service,app/Services/Queue/QueueMonitoringService.php,Administration,336,4,4,4,,KEEP
+RealtimeBroadcasterService,Service,app/Services/Realtime/RealtimeBroadcasterService.php,Communications,172,7,3,7,,KEEP
+SilentAssistanceService,Service,app/Services/Safety/SilentAssistanceService.php,Safety,1049,26,4,11,Large,SPLIT
+UniversalSearchService,Service,app/Services/Search/UniversalSearchService.php,Administration,457,13,3,4,,KEEP
+SmsService,Service,app/Services/SmsService.php,Administration,54,3,11,31,,KEEP
+EnterpriseSpreadsheetService,Service,app/Services/Spreadsheets/EnterpriseSpreadsheetService.php,Reporting,259,9,4,7,,KEEP
+StripePaymentService,Service,app/Services/StripePaymentService.php,Billing,1320,18,12,22,Large,SPLIT
+TenantProvisioningService,Service,app/Services/Tenancy/TenantProvisioningService.php,Administration,69,2,1,2,Thin,MERGE into domain service
+VehicleManagementService,Service,app/Services/VehicleManagementService.php,Properties,217,5,2,5,,KEEP
+WebhookDispatcherService,Service,app/Services/Webhooks/WebhookDispatcherService.php,Administration,133,3,2,0,,KEEP
+WhatsAppService,Service,app/Services/WhatsAppService.php,Administration,96,3,6,5,,KEEP

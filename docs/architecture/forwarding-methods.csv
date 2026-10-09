@@ -1,0 +1,13 @@
+File,Method,Body
+app/Services/DigitalAccessWalletService.php,simulateNfcTap,"return $this->scanner->scan($nfcPayloadOrUid, $gate, $guardOrResident, 'NFC Contactless Tap');"
+app/Services/NotificationEngine/Channels/SmsChannel.php,isConfigured,return $this->twilio->hasCredentials() && filled(config('services.twilio.from'));
+app/Services/NotificationEngine/Channels/WhatsAppChannel.php,isConfigured,return $this->twilio->hasCredentials() && filled(config('services.twilio.whatsapp_from'));
+app/Services/Notifications/NotificationService.php,channel,return $this->engine->channel($key);
+app/Services/Notifications/NotificationService.php,getChannelsCatalog,return $this->engine->getChannelsCatalog();
+app/Services/Notifications/Universal/Channels/SlackNotificationChannel.php,send,"return $this->provider->sendSlack($recipient, $message);"
+app/Services/Notifications/Universal/Channels/TeamsNotificationChannel.php,send,"return $this->provider->sendTeams($recipient, $message);"
+app/Services/Notifications/Universal/Channels/WebhookNotificationChannel.php,send,"return $this->provider->dispatchSignedWebhook($recipient, $message);"
+app/Services/Payments/Providers/Stripe/StripeProvider.php,isAvailable,return $this->stripe->isLive();
+app/Services/Payments/Providers/Stripe/StripeProvider.php,handleWebhook,"return $this->stripe->handleWebhook($request->getContent(), $request->header('Stripe-Signature'));"
+app/Services/Payments/Providers/Stripe/StripeProvider.php,refundPayment,"$this->stripe->refund($ledgerPayment, $amountMinor, $actor, $note);"
+app/Services/Payments/Providers/StripeTerminal/StripeTerminalProvider.php,isAvailable,return $this->stripe->isLive();

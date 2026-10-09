@@ -1,0 +1,15 @@
+Route,Name,Gate
+POST api/gate-pass/rotate,,(in controller or none)
+POST api/map/check-position,,(in controller or none)
+POST api/visitors,,(in controller or none)
+POST api/visitors/{visitor}/check-in,,manageSecurity
+POST api/visitors/{visitor}/check-out,,manageSecurity
+POST dashboard/billing/terminals/{terminal}/retire,dashboard.billing.terminals.retire,"accessBilling, manageBilling"
+POST dashboard/deals/businesses,dashboard.deals.businesses.store,manageUsers
+DELETE dashboard/deals/businesses/{business},dashboard.deals.businesses.destroy,manageUsers
+POST dashboard/map/boundary/replace/{boundaryConfig},dashboard.boundary.replace,manageBoundary
+POST dashboard/map/boundary/validate,dashboard.boundary.validate,manageBoundary
+POST dashboard/ownership/household-members,dashboard.ownership.household-members.store,(in controller or none)
+DELETE dashboard/ownership/household-members/{member},dashboard.ownership.household-members.destroy,(in controller or none)
+POST dashboard/profile/avatar,dashboard.profile.avatar,(in controller or none)
+POST dashboard/safety/account-credential/assist,dashboard.safety.account-credential.assist,(in controller or none)

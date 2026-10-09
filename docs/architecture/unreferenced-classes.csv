@@ -1,0 +1,25 @@
+Class,Lines,Referenced only by tests
+app/Services/Payments/EnterpriseReconciliationService.php,616,Yes
+app/Services/AccessRelationshipEngine.php,602,No
+app/Services/GIS/MapService.php,247,No
+app/Repositories/VisitorRepository.php,227,No
+app/Services/Media/ImageService.php,201,Yes
+app/Livewire/QueryBuilderExplorer.php,161,Yes
+app/Services/Backup/BackupManagerService.php,143,Yes
+app/Services/Media/MediaManagementService.php,111,Yes
+app/Actions/Visitors/RegisterVisitorAction.php,95,No
+app/Actions/Visitors/CheckInVisitorAction.php,83,No
+app/Traits/BelongsToCommunityTenant.php,80,Yes
+app/Livewire/UniversalSearch.php,78,Yes
+app/Services/Tenancy/TenantProvisioningService.php,69,Yes
+app/Actions/Visitors/UpdateVisitorAction.php,67,No
+app/Mail/VisitorPassMail.php,61,Yes
+app/Filament/Providers/AdminPanelProvider.php,43,No
+app/Http/Requests/Visitors/UpdateVisitorRequest.php,43,No
+app/Models/PaymentQrCode.php,41,No
+app/Http/Resources/TransactionResource.php,40,No
+app/Filament/Providers/ResidentPanelProvider.php,39,No
+app/Livewire/EstateStatusWidget.php,37,Yes
+app/Http/Requests/Visitors/RegisterVisitorRequest.php,36,No
+app/Http/Requests/Api/CreateGatePassApiRequest.php,31,No
+app/Filament/Core/Infolists/Components/IconEntry.php,29,No

@@ -1,0 +1,13 @@
+Candidate,Files,App lines,Test lines,Example files
+Demo: Octane,4,342,162,"app/Http/Controllers/Api/V1/OctaneApiController.php, app/Livewire/Performance/OctanePerformanceHub.php, app/Services/Performance/OctanePerformanceService.php, tests/Feature/LaravelOctanePerformanceTest.php"
+Demo: Observability,4,976,236,"app/Http/Controllers/Api/V1/ObservabilityApiController.php, app/Livewire/Observability/ObservabilityHub.php, app/Services/Observability/ObservabilityService.php, tests/Feature/ObservabilityModuleTest.php"
+Demo: Queue dashboards/dispatch API,3,563,0,"app/Http/Controllers/Api/V1/QueueApiController.php, app/Livewire/Queue/HorizonQueueHub.php, app/Services/Queue/QueueMonitoringService.php"
+Demo: Feature flags API,4,722,257,"app/Http/Controllers/Api/V1/FeatureFlagApiController.php, app/Livewire/Features/FeatureFlagHub.php, app/Services/Features/FeatureFlagService.php, tests/Feature/LaravelPennantFeatureFlagsTest.php"
+Demo: Generic PDF API,3,612,0,"app/Http/Controllers/Api/V1/PdfApiController.php, app/Livewire/Pdf/PdfGenerationHub.php, app/Services/Pdf/EnterprisePdfService.php"
+Demo: Filament showcase hub,36,2173,174,"app/Filament/Core/Panel.php, app/Filament/Core/PanelRegistry.php, app/Filament/Core/Resource.php, app/Filament/Core/Forms/Form.php"
+Demo: Query builder playground,3,254,258,"app/Livewire/QueryBuilderExplorer.php, config/query-builder.php, tests/Feature/SpatieQueryBuilderModuleTest.php"
+Demo: Performance/benchmark,3,255,162,"app/Livewire/Performance/OctanePerformanceHub.php, app/Services/Performance/OctanePerformanceService.php, tests/Feature/LaravelOctanePerformanceTest.php"
+Payments: Modular stack (10 gateways),23,2085,0,"app/Services/Payments/Modular/PaymentGatewayManager.php, app/Services/Payments/Modular/Contracts/DirectSdkGatewayContract.php, app/Services/Payments/Modular/Contracts/PaymentModuleContract.php, app/Services/Payments/Modular/Contracts/SubscriptionGatewayContract.php"
+Payments: Drivers stack,9,472,0,"app/Services/Payments/Drivers/BankTransferDriver.php, app/Services/Payments/Drivers/CashDeskDriver.php, app/Services/Payments/Drivers/CommunityWalletDriver.php, app/Services/Payments/Drivers/DigitalWalletDriver.php"
+Notifications: Universal engine,36,2377,0,"app/Services/Notifications/Universal/UniversalNotificationService.php, app/Services/Notifications/Universal/Channels/AbstractNotificationChannel.php, app/Services/Notifications/Universal/Channels/DatabaseNotificationChannel.php, app/Services/Notifications/Universal/Channels/EmailNotificationChannel.php"
+Dead: AccessRelationshipEngine,1,602,0,app/Services/AccessRelationshipEngine.php

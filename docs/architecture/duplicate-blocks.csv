@@ -1,0 +1,35 @@
+Files sharing copied blocks,Overlapping 12-line windows
+app/Http/Controllers/Dashboard/VisitorController.php | app/Repositories/VisitorRepository.php,55
+resources/js/components/dashboard/edit-renter-form.tsx | resources/js/components/dashboard/register-renter-form.tsx,37
+app/Http/Controllers/Dashboard/DelegatedAccessController.php,9
+app/Services/GIS/LocationService.php | app/Services/GeofenceService.php,8
+resources/js/Pages/Dashboard/Overview.tsx | resources/js/components/dashboard/overview-at-a-glance.tsx,8
+resources/js/Pages/Dashboard/Delegation/Index.tsx,8
+app/Console/Commands/StripeTestTransactionCommand.php,7
+app/Http/Controllers/Dashboard/HouseholdController.php | app/Http/Controllers/Dashboard/OwnershipModuleController.php,7
+resources/js/components/dashboard/event-form.tsx,7
+config/excel.php,6
+app/Http/Controllers/Api/GatePassApiController.php | app/Http/Controllers/Dashboard/GatePassController.php,5
+resources/js/components/dashboard/blocklist-form.tsx | resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/staff-form.tsx,5
+resources/js/components/dashboard/create-user-form.tsx | resources/js/components/dashboard/donate-form.tsx,5
+resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/GatePass.tsx | resources/js/Pages/Dashboard/Visitors.tsx,5
+resources/js/components/dashboard/add-fundraiser-update-dialog.tsx | resources/js/components/dashboard/request-removal-form.tsx,4
+app/Actions/Visitors/RegisterVisitorAction.php | app/Http/Controllers/Dashboard/VisitorController.php,3
+app/Services/PropertyOccupancyService.php,3
+app/Services/Notifications/Universal/Channels/DatabaseNotificationChannel.php | app/Services/Notifications/Universal/Channels/InAppNotificationChannel.php,3
+resources/js/components/dashboard/blocklist-form.tsx | resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/create-fundraiser-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/food-app-form.tsx | resources/js/components/dashboard/guideline-form.tsx | resources/js/components/dashboard/staff-form.tsx | resources/js/components/dashboard/voucher-form.tsx,3
+resources/js/components/dashboard/admin-billing.tsx | resources/js/components/dashboard/billing-summary.tsx,2
+resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/Company.tsx | resources/js/Pages/Dashboard/Fundraising.tsx | resources/js/Pages/Dashboard/GatePass.tsx | resources/js/Pages/Dashboard/Occupancy.tsx | resources/js/Pages/Dashboard/Overview.tsx | resources/js/Pages/Dashboard/Renters.tsx | resources/js/Pages/Dashboard/Visitors.tsx | resources/js/components/dashboard/billing-summary.tsx,2
+resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/staff-form.tsx,2
+resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/staff-form.tsx,2
+resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/components/dashboard/transactions-ledger.tsx,2
+resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/Pages/Dashboard/BlockList.tsx,2
+resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/GatePass.tsx,2
+resources/js/Pages/Dashboard/Map.tsx | resources/js/Pages/Dashboard/Occupancy.tsx,2
+resources/js/Pages/Dashboard/Map.tsx,2
+resources/js/components/dashboard/blocklist-form.tsx | resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/food-app-form.tsx | resources/js/components/dashboard/guideline-form.tsx | resources/js/components/dashboard/staff-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1
+resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/food-app-form.tsx | resources/js/components/dashboard/guideline-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1
+resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1
+resources/js/components/dashboard/create-fundraiser-form.tsx | resources/js/components/dashboard/event-form.tsx,1
+resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1
+resources/js/lib/geofence-utils.ts | resources/js/modules/LocationModule.ts,1

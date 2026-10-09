@@ -1,0 +1,26 @@
+Kind,Action,Routes,Removable routes
+Alias,App\Livewire\Filament\FilamentHub,GET|HEAD admin | GET|HEAD filament | GET|HEAD portal,2
+Versioned copy,Api\V1\DocsApiController@ui,GET|HEAD api/docs | GET|HEAD api/v1/docs | GET|HEAD api/v2/docs,2
+Versioned copy,Api\V1\MonitoringApiController@health,GET|HEAD api/health | GET|HEAD api/v1/health | GET|HEAD api/v2/health,2
+Versioned copy,Api\V1\DocsApiController@openApiJson,GET|HEAD api/openapi.json | GET|HEAD api/v1/openapi.json | GET|HEAD api/v2/openapi.json,2
+Versioned copy,Api\V1\UniversalNotificationApiController@dispatchNotification,POST api/v1/notifications/dispatch | POST api/v1/notifications/send,1
+Versioned copy,Api\V1\VersionApiController@show,GET|HEAD api/v1/version | GET|HEAD api/v2/version | GET|HEAD api/version,2
+Alias,Dashboard\DelegatedAccessController@index,GET|HEAD dashboard/access-and-people | GET|HEAD dashboard/delegation,1
+Alias,Dashboard\BillingController@exportTransactions,GET|HEAD dashboard/billing/export-transactions | GET|HEAD dashboard/billing/export/transactions,1
+Alias,Dashboard\FundraisingController@receipt,GET|HEAD dashboard/fundraising/donation/{donation}/receipt | GET|HEAD dashboard/fundraising/donations/{donation}/receipt,1
+Alias,Dashboard\OwnershipEntityController@beneficialOwnership,GET|HEAD dashboard/ownership-entities/{entity}/beneficial-ownership | POST dashboard/ownership-entities/{entity}/beneficial-ownership,1
+Alias,Dashboard\OwnershipEntityController@revokeRepresentative,DELETE dashboard/ownership-entities/{entity}/representatives/{person} | POST dashboard/ownership-entities/{entity}/representatives/{person}/revoke,1
+Alias,Dashboard\VehicleController@anprLookup,GET|HEAD dashboard/vehicles/anpr-lookup | GET|HEAD dashboard/vehicles/anpr/lookup,1
+Alias,UniversalPaymentLinkController@show,GET|HEAD p/{token} | GET|HEAD pay/{token},1
+Resource candidate,Api\V1\TokenApiController,"destroy, index, store",0
+Resource candidate,Api\V1\WebhookApiController,"destroy, index, show, store",0
+Resource candidate,Dashboard\BlocklistController,"destroy, index, store, update",0
+Resource candidate,Dashboard\CalendarController,"destroy, index, store, update",0
+Resource candidate,Dashboard\FundraisingController,"index, store, update",0
+Resource candidate,Dashboard\GuidelinesController,"destroy, index, store, update",0
+Resource candidate,Dashboard\HouseholdController,"destroy, index, store, update",0
+Resource candidate,Dashboard\RenterController,"destroy, index, store, update",0
+Resource candidate,Dashboard\VehicleController,"destroy, index, store, update",0
+Resource candidate,Dashboard\VisitorController,"destroy, index, store, update",0
+Resource candidate,Dashboard\WarningController,"destroy, index, store",0
+Resource candidate,Auth\AuthenticatedSessionController,"create, destroy, store",0

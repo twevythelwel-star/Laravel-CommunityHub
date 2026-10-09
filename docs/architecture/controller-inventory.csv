@@ -1,0 +1,71 @@
+Controller,LOC,Public methods,LOC per method,Query calls,Inline validate(),FormRequests used,Flags,Recommendation
+Api/AccessLogApiController.php,36,1,36,4,0,0,,KEEP
+Api/AuthApiController.php,66,3,22,2,1,0,Inline validation x1,KEEP
+Api/GatePassApiController.php,111,5,22,0,2,0,Inline validation x2,KEEP
+Api/MapApiController.php,70,3,23,0,1,0,Inline validation x1,KEEP
+Api/QueryApiController.php,108,7,15,0,0,0,,KEEP
+Api/V1/DocsApiController.php,458,2,229,0,0,0,Fat (>400 LOC),THIN OUT
+Api/V1/FeatureFlagApiController.php,208,7,30,6,4,0,Inline validation x4,KEEP
+Api/V1/ModularPaymentApiController.php,245,6,41,0,4,0,Inline validation x4,KEEP
+Api/V1/MonitoringApiController.php,167,2,84,10,0,0,,KEEP
+Api/V1/ObservabilityApiController.php,222,10,22,0,2,0,Inline validation x2,KEEP
+Api/V1/OctaneApiController.php,87,4,22,0,0,0,,KEEP
+Api/V1/PdfApiController.php,127,5,25,0,1,0,Inline validation x1,KEEP
+Api/V1/QueueApiController.php,87,4,22,0,1,0,Inline validation x1,KEEP
+Api/V1/RealtimeApiController.php,178,3,59,0,1,0,Inline validation x1,KEEP
+Api/V1/SpreadsheetApiController.php,131,5,26,0,2,0,Inline validation x2,KEEP
+Api/V1/TokenApiController.php,103,4,26,3,0,1,,KEEP
+Api/V1/UniversalNotificationApiController.php,198,6,33,13,1,0,Inline validation x1,KEEP
+Api/V1/VersionApiController.php,48,2,24,0,0,0,,KEEP
+Api/V1/WebhookApiController.php,194,6,32,5,0,1,,KEEP
+Api/VisitorApiController.php,158,4,40,6,1,0,Inline validation x1,KEEP
+Auth/AuthenticatedSessionController.php,82,3,27,0,1,0,Inline validation x1,KEEP
+Auth/ConfirmPasswordController.php,47,2,24,0,1,0,Inline validation x1,KEEP
+Controller.php,13,0,13,0,0,0,,KEEP
+Dashboard/AccessGovernanceController.php,216,9,24,15,4,0,Inline validation x4,KEEP
+Dashboard/AccessLogController.php,144,2,72,8,0,0,,KEEP
+Dashboard/BillingController.php,1506,24,63,55,14,0,"Fat (>400 LOC), Query-heavy (55), Inline validation x14",THIN OUT
+Dashboard/BlocklistController.php,259,6,43,10,4,1,Inline validation x4,KEEP
+Dashboard/BoundaryController.php,526,8,66,17,2,0,"Fat (>400 LOC), Inline validation x2",THIN OUT
+Dashboard/CalendarController.php,141,4,35,5,2,0,Inline validation x2,KEEP
+Dashboard/ChangelogController.php,46,2,23,1,1,0,Inline validation x1,KEEP
+Dashboard/DeactivationController.php,76,2,38,2,1,0,Inline validation x1,KEEP
+Dashboard/DealsController.php,150,7,21,8,0,0,,KEEP
+Dashboard/DelegatedAccessController.php,1680,12,140,16,7,0,"Fat (>400 LOC), Inline validation x7",THIN OUT
+Dashboard/DigitalAccessWalletController.php,185,7,26,7,2,0,Inline validation x2,KEEP
+Dashboard/DirectoryController.php,320,8,40,9,5,0,Inline validation x5,KEEP
+Dashboard/FeedbackController.php,58,2,29,1,1,0,Inline validation x1,KEEP
+Dashboard/FundraisingController.php,538,10,54,13,6,0,"Fat (>400 LOC), Inline validation x6",THIN OUT
+Dashboard/GatePassController.php,265,10,26,0,1,4,Inline validation x1,KEEP
+Dashboard/GatePass/ScanGatePassController.php,41,1,41,0,0,1,,KEEP
+Dashboard/GateSensorEventController.php,66,3,22,0,2,0,Inline validation x2,KEEP
+Dashboard/GuidelinesController.php,86,4,22,5,1,0,Inline validation x1,KEEP
+Dashboard/HouseholdController.php,195,4,49,1,2,0,Inline validation x2,KEEP
+Dashboard/MapController.php,235,4,59,1,2,0,Inline validation x2,KEEP
+Dashboard/NotificationController.php,386,4,96,16,3,0,Inline validation x3,KEEP
+Dashboard/OccupancyController.php,402,8,50,2,3,0,"Fat (>400 LOC), Inline validation x3",THIN OUT
+Dashboard/OverviewController.php,384,1,384,24,0,0,,KEEP
+Dashboard/ParkingPassController.php,87,3,29,3,1,0,Inline validation x1,KEEP
+Dashboard/PaymentReturnController.php,47,1,47,0,0,0,,KEEP
+Dashboard/ProfileController.php,256,6,43,11,5,0,Inline validation x5,KEEP
+Dashboard/RenterController.php,164,4,41,9,2,0,Inline validation x2,KEEP
+Dashboard/ResidentEmergencyController.php,125,1,125,5,1,0,Inline validation x1,KEEP
+Dashboard/ReviewFeedbackController.php,60,2,30,7,1,0,Inline validation x1,KEEP
+Dashboard/SafetyController.php,361,10,36,2,6,0,Inline validation x6,KEEP
+Dashboard/SettingsController.php,140,2,70,6,1,0,Inline validation x1,KEEP
+Dashboard/SilentAssistanceController.php,169,5,34,2,3,0,Inline validation x3,KEEP
+Dashboard/StripeCheckoutController.php,169,4,42,0,2,0,Inline validation x2,KEEP
+Dashboard/UpdateController.php,45,2,22,1,1,0,Inline validation x1,KEEP
+Dashboard/VehicleController.php,182,5,36,9,2,0,Inline validation x2,KEEP
+Dashboard/VisitorController.php,716,9,80,37,5,0,"Fat (>400 LOC), Query-heavy (37), Inline validation x5",THIN OUT
+Dashboard/WarningController.php,141,4,35,5,2,0,Inline validation x2,KEEP
+EventRsvpController.php,139,3,46,6,2,0,Inline validation x2,KEEP
+GuestPassController.php,110,2,55,4,0,0,,KEEP
+PdfController.php,133,3,44,2,0,0,,KEEP
+ProviderWebhookController.php,49,1,49,0,0,0,,KEEP
+PublicPageController.php,68,5,14,0,0,0,,KEEP
+StripeWebhookController.php,62,1,62,0,0,0,,KEEP
+TwilioWebhookController.php,108,1,108,2,0,0,,KEEP
+UniversalPaymentLinkController.php,136,3,45,6,1,0,Inline validation x1,KEEP
+UniversalPaymentWebhookController.php,46,1,46,0,0,0,,KEEP
+UniversalSearchController.php,76,3,25,0,1,0,Inline validation x1,KEEP
