@@ -4,8 +4,6 @@ namespace Tests\Feature;
 
 use App\Enums\TokenAbility;
 use App\Enums\UserRole;
-use App\Livewire\Features\FeatureFlagHub;
-use App\Livewire\Pdf\PdfGenerationHub;
 use App\Livewire\Spreadsheets\SpreadsheetOperationsHub;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,10 +13,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Spreadsheet exports hand out the resident roster and the ledger, PDFs are
- * invoices and receipts in the estate's name, and feature flags change the
- * platform for everyone. All three were public; each now follows the roles
- * that already see the same records on the dashboard.
+ * Spreadsheet exports hand out the resident roster and the ledger. They were
+ * public; each now follows the roles that already see the same records on
+ * the dashboard.
  */
 class DocumentsAndDataExportAccessTest extends TestCase
 {
@@ -53,18 +50,6 @@ class DocumentsAndDataExportAccessTest extends TestCase
             'import roster' => ['POST', '/api/v1/spreadsheets/import/residents'],
             'blueprints' => ['GET', '/api/v1/spreadsheets/blueprints'],
             'sample template' => ['GET', '/api/v1/spreadsheets/sample-template/residents'],
-            'flags' => ['GET', '/api/v1/features'],
-            'flag catalog' => ['GET', '/api/v1/features/catalog'],
-            'flag check' => ['POST', '/api/v1/features/check'],
-            'flag activate' => ['POST', '/api/v1/features/activate'],
-            'flag deactivate' => ['POST', '/api/v1/features/deactivate'],
-            'flag purge' => ['POST', '/api/v1/features/purge'],
-            'flag simulate' => ['POST', '/api/v1/features/simulate'],
-            'pdf catalog' => ['GET', '/api/v1/pdf/catalog'],
-            'pdf drivers' => ['GET', '/api/v1/pdf/drivers'],
-            'pdf preview' => ['POST', '/api/v1/pdf/preview/receipt'],
-            'pdf download' => ['POST', '/api/v1/pdf/download/receipt'],
-            'pdf generate' => ['POST', '/api/v1/pdf/generate'],
         ];
     }
 
@@ -120,93 +105,14 @@ class DocumentsAndDataExportAccessTest extends TestCase
         $this->assertSame([], $response->json('data.import_blueprints'));
     }
 
-    // ── Feature flags ───────────────────────────────────────────────
+    // ── Livewire page ───────────────────────────────────────────────
 
-    /** @return array<string, array{string, array<string, mixed>}> */
-    public static function flagChanges(): array
-    {
-        return [
-            'activate' => ['/api/v1/features/activate', ['feature' => 'beta-dashboard']],
-            'deactivate' => ['/api/v1/features/deactivate', ['feature' => 'beta-dashboard']],
-            'purge' => ['/api/v1/features/purge', []],
-            'simulate' => ['/api/v1/features/simulate', ['feature' => 'beta-dashboard', 'scope_type' => 'role', 'scope_value' => 'Admin']],
-        ];
-    }
-
-    #[DataProvider('flagChanges')]
-    public function test_only_a_system_admin_can_change_flags(string $uri, array $body): void
-    {
-        $this->postJson($uri, $body, $this->bearer($this->as(UserRole::Admin)))->assertForbidden();
-        $this->postJson($uri, $body, $this->bearer($this->as(UserRole::SystemAdmin)))->assertSuccessful();
-    }
-
-    public function test_anyone_signed_in_can_read_their_own_flags(): void
+    public function test_a_resident_cannot_open_the_spreadsheet_page(): void
     {
         $resident = $this->as(UserRole::Homeowner);
 
-        $this->getJson('/api/v1/features', $this->bearer($resident))->assertOk();
-        $this->postJson('/api/v1/features/check', ['feature' => 'beta-dashboard'], $this->bearer($resident))->assertOk();
-    }
-
-    public function test_checking_someone_elses_flags_needs_a_system_admin(): void
-    {
-        $neighbour = $this->as(UserRole::Homeowner);
-
-        $this->postJson('/api/v1/features/check', ['feature' => 'beta-dashboard', 'user_id' => $neighbour->id], $this->bearer($this->as(UserRole::Homeowner)))
-            ->assertForbidden();
-    }
-
-    // ── PDF documents ───────────────────────────────────────────────
-
-    /** @return array<string, array{string, array<string, mixed>}> */
-    public static function pdfRenders(): array
-    {
-        return [
-            'preview' => ['/api/v1/pdf/preview/receipt', ['amount' => '1000000']],
-            'download' => ['/api/v1/pdf/download/receipt', ['amount' => '1000000']],
-            'generate' => ['/api/v1/pdf/generate', ['type' => 'receipt']],
-        ];
-    }
-
-    #[DataProvider('pdfRenders')]
-    public function test_residents_and_security_cannot_issue_documents(string $uri, array $body): void
-    {
-        foreach ([UserRole::Homeowner, UserRole::Security] as $role) {
-            $this->postJson($uri, $body, $this->bearer($this->as($role)))->assertForbidden();
-        }
-    }
-
-    public function test_an_administrator_can_preview_a_document(): void
-    {
-        $this->post('/api/v1/pdf/preview/receipt', [], $this->bearer($this->as(UserRole::Admin)))
-            ->assertOk()
-            ->assertHeader('Content-Type', 'application/pdf');
-    }
-
-    // ── Livewire pages ──────────────────────────────────────────────
-
-    public function test_a_resident_cannot_open_any_of_the_pages(): void
-    {
-        $resident = $this->as(UserRole::Homeowner);
-
-        foreach (['/operations/features', '/operations/pdf', '/operations/spreadsheets'] as $uri) {
-            $this->actingAs($resident)->get($uri)->assertForbidden();
-        }
-
-        foreach ([FeatureFlagHub::class, PdfGenerationHub::class, SpreadsheetOperationsHub::class] as $component) {
-            Livewire::actingAs($resident)->test($component)->assertForbidden();
-        }
-    }
-
-    public function test_the_flag_page_is_the_system_admins(): void
-    {
-        $this->actingAs($this->as(UserRole::Admin))->get('/operations/features')->assertForbidden();
-        $this->actingAs($this->as(UserRole::SystemAdmin))->get('/operations/features')->assertOk();
-    }
-
-    public function test_an_administrator_can_open_the_pdf_page(): void
-    {
-        $this->actingAs($this->as(UserRole::Admin))->get('/operations/pdf')->assertOk();
+        $this->actingAs($resident)->get('/operations/spreadsheets')->assertForbidden();
+        Livewire::actingAs($resident)->test(SpreadsheetOperationsHub::class)->assertForbidden();
     }
 
     public function test_security_cannot_export_the_roster_by_switching_blueprint(): void

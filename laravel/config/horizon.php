@@ -73,9 +73,7 @@ return [
         'monitored' => 10080,
     ],
 
-    'silenced' => [
-        // App\Jobs\Queue\DeliverWebhookJob::class,
-    ],
+    'silenced' => [],
 
     'metrics' => [
         'trim_snapshots' => [

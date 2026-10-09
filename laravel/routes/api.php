@@ -6,13 +6,8 @@ use App\Http\Controllers\Api\GatePassApiController;
 use App\Http\Controllers\Api\MapApiController;
 use App\Http\Controllers\Api\QueryApiController;
 use App\Http\Controllers\Api\V1\DocsApiController;
-use App\Http\Controllers\Api\V1\FeatureFlagApiController;
 use App\Http\Controllers\Api\V1\ModularPaymentApiController;
 use App\Http\Controllers\Api\V1\MonitoringApiController;
-use App\Http\Controllers\Api\V1\ObservabilityApiController;
-use App\Http\Controllers\Api\V1\OctaneApiController;
-use App\Http\Controllers\Api\V1\PdfApiController;
-use App\Http\Controllers\Api\V1\QueueApiController;
 use App\Http\Controllers\Api\V1\RealtimeApiController;
 use App\Http\Controllers\Api\V1\SpreadsheetApiController;
 use App\Http\Controllers\Api\V1\TokenApiController;
@@ -193,40 +188,11 @@ Route::prefix('v1')->group(function () {
     });
 
     /*
-    | Platform operations: queues, Octane, observability and metrics. These
-    | were public (or any token's): anyone could read the application and
-    | audit logs, write fake audit entries, inject or resolve tracked errors,
-    | run concurrency benchmarks, and queue email, SMS, export and webhook
-    | jobs. System Admin tokens only (`operatePlatform`). Load balancers keep
-    | Laravel's /up, and /api/health above, for liveness.
+    | Platform metrics. System Admin tokens only (`operatePlatform`). Load
+    | balancers keep Laravel's /up, and /api/health above, for liveness.
     */
     Route::middleware(['auth:sanctum', 'active', 'throttle:api', 'can:operatePlatform'])->group(function () {
-        // System & Telemetry Monitoring
         Route::get('/metrics', [MonitoringApiController::class, 'metrics'])->name('api.v1.metrics');
-
-        // Background Queues & Horizon Processing Layer (11 Domains)
-        Route::post('/queues/dispatch', [QueueApiController::class, 'dispatchJob'])->name('api.v1.queues.dispatch');
-        Route::get('/queues/stats', [QueueApiController::class, 'stats'])->name('api.v1.queues.stats');
-        Route::get('/queues/jobs', [QueueApiController::class, 'jobs'])->name('api.v1.queues.jobs');
-        Route::get('/queues/horizon-status', [QueueApiController::class, 'horizonStatus'])->name('api.v1.queues.horizon-status');
-
-        // Laravel Octane Performance & Concurrency Endpoints
-        Route::get('/octane/status', [OctaneApiController::class, 'status'])->name('api.v1.octane.status');
-        Route::get('/octane/servers', [OctaneApiController::class, 'servers'])->name('api.v1.octane.servers');
-        Route::get('/octane/suitability', [OctaneApiController::class, 'suitability'])->name('api.v1.octane.suitability');
-        Route::post('/octane/benchmark-concurrency', [OctaneApiController::class, 'benchmarkConcurrency'])->name('api.v1.octane.benchmark-concurrency');
-
-        // Reusable Observability Module Endpoints
-        Route::get('/observability/status', [ObservabilityApiController::class, 'status'])->name('api.v1.observability.status');
-        Route::get('/observability/health', [ObservabilityApiController::class, 'health'])->name('api.v1.observability.health');
-        Route::get('/observability/performance', [ObservabilityApiController::class, 'performance'])->name('api.v1.observability.performance');
-        Route::get('/observability/logs', [ObservabilityApiController::class, 'logs'])->name('api.v1.observability.logs');
-        Route::get('/observability/audit-logs', [ObservabilityApiController::class, 'auditLogs'])->name('api.v1.observability.audit-logs');
-        Route::get('/observability/errors', [ObservabilityApiController::class, 'errors'])->name('api.v1.observability.errors');
-        Route::post('/observability/errors/{id}/resolve', [ObservabilityApiController::class, 'resolveError'])->name('api.v1.observability.resolve-error');
-        Route::get('/observability/queue-metrics', [ObservabilityApiController::class, 'queueMetrics'])->name('api.v1.observability.queue-metrics');
-        Route::post('/observability/simulate-error', [ObservabilityApiController::class, 'simulateError'])->name('api.v1.observability.simulate-error');
-        Route::post('/observability/write-audit', [ObservabilityApiController::class, 'writeAudit'])->name('api.v1.observability.write-audit');
     });
 
     // Public catalog of notification channels. Sending and reading are not
@@ -243,33 +209,10 @@ Route::prefix('v1')->group(function () {
     Route::get('/realtime/channels', [RealtimeApiController::class, 'channels'])->name('api.v1.realtime.channels');
 
     /*
-    | Feature flags, PDF documents and spreadsheets. All three were public:
-    | anyone could switch features on or off for everybody, produce invoices
-    | and receipts in the estate's name, and download the resident roster or
-    | the ledger. Token holders only, then each action behind its own gate;
-    | spreadsheets are gated per blueprint in SpreadsheetApiController.
+    | Spreadsheets hand out the resident roster and the ledger. Token holders
+    | only, gated per blueprint in SpreadsheetApiController.
     */
     Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
-        // Laravel Pennant Feature Flags (feature.enabled, beta, A/B, rollout, tenant, role)
-        Route::get('/features', [FeatureFlagApiController::class, 'index'])->name('api.v1.features.index');
-        Route::get('/features/catalog', [FeatureFlagApiController::class, 'catalog'])->name('api.v1.features.catalog');
-        Route::post('/features/check', [FeatureFlagApiController::class, 'check'])->name('api.v1.features.check');
-        Route::middleware('can:operatePlatform')->group(function () {
-            Route::post('/features/activate', [FeatureFlagApiController::class, 'activate'])->name('api.v1.features.activate');
-            Route::post('/features/deactivate', [FeatureFlagApiController::class, 'deactivate'])->name('api.v1.features.deactivate');
-            Route::post('/features/purge', [FeatureFlagApiController::class, 'purge'])->name('api.v1.features.purge');
-            Route::post('/features/simulate', [FeatureFlagApiController::class, 'simulate'])->name('api.v1.features.simulate');
-        });
-
-        // PDF Generation Architecture (DOMPDF / Spatie, Invoices, Certificates, Reports, Receipts, Statements, Letters, Tickets, Government Forms)
-        Route::get('/pdf/catalog', [PdfApiController::class, 'catalog'])->name('api.v1.pdf.catalog');
-        Route::get('/pdf/drivers', [PdfApiController::class, 'drivers'])->name('api.v1.pdf.drivers');
-        Route::middleware('can:issueDocuments')->group(function () {
-            Route::post('/pdf/preview/{type}', [PdfApiController::class, 'preview'])->name('api.v1.pdf.preview');
-            Route::post('/pdf/download/{type}', [PdfApiController::class, 'download'])->name('api.v1.pdf.download');
-            Route::post('/pdf/generate', [PdfApiController::class, 'generate'])->name('api.v1.pdf.generate');
-        });
-
         // Excel & CSV Data Processing Module (Maatwebsite / Laravel Excel, XLSX/CSV, Imports, Exports, Queued Exports, Large Datasets)
         Route::get('/spreadsheets/blueprints', [SpreadsheetApiController::class, 'blueprints'])->name('api.v1.spreadsheets.blueprints');
         Route::get('/spreadsheets/export/{blueprint}', [SpreadsheetApiController::class, 'export'])->name('api.v1.spreadsheets.export');

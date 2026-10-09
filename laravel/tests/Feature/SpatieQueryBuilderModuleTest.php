@@ -8,7 +8,6 @@ use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
-use App\Livewire\QueryBuilderExplorer;
 use App\Models\GatePass;
 use App\Models\Transaction;
 use App\Models\User;
@@ -16,7 +15,6 @@ use App\Models\Visitor;
 use App\Services\Query\ApiQueryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
-use Livewire\Livewire;
 use Spatie\QueryBuilder\QueryBuilder;
 use Tests\TestCase;
 
@@ -231,27 +229,5 @@ class SpatieQueryBuilderModuleTest extends TestCase
                 'supported_entities',
                 'conventions',
             ]);
-    }
-
-    public function test_livewire_query_explorer_component_and_web_route(): void
-    {
-        $user = User::factory()->create(['name' => 'Explorer Admin', 'role' => UserRole::Admin]);
-        $this->actingAs($user);
-
-        // Test web route /query-builder
-        $response = $this->get('/query-builder');
-        $response->assertOk();
-        $response->assertSee('API Query Builder');
-        $response->assertSee('Spatie Query Builder');
-
-        // Test Livewire component reactivity
-        Livewire::test(QueryBuilderExplorer::class)
-            ->assertSet('entity', 'gate_passes')
-            ->call('setEntity', 'visitors')
-            ->assertSet('entity', 'visitors')
-            ->call('toggleInclude', 'homeowner')
-            ->assertCount('selectedIncludes', 1)
-            ->set('filterKeyword', 'Chaplin')
-            ->assertSet('filterKeyword', 'Chaplin');
     }
 }

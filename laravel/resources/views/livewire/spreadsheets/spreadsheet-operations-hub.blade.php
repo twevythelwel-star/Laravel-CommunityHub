@@ -251,17 +251,6 @@
                         </p>
                     </div>
                 </div>
-
-                {{-- Horizon Queue Link Card --}}
-                <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div>
-                        <div class="text-sm font-bold text-white">Monitor Export Jobs in Horizon Queue Hub</div>
-                        <div class="text-xs text-slate-400 mt-0.5">Asynchronous spreadsheet jobs run on the dedicated <code class="text-emerald-400 font-mono">exports</code> queue pool.</div>
-                    </div>
-                    <a href="{{ route('operations.queues') }}" class="py-2 px-4 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition-all shrink-0">
-                        View Horizon Queue Desk &rarr;
-                    </a>
-                </div>
             </div>
         </div>
     @endif

@@ -271,23 +271,6 @@ class User extends Authenticatable implements HasMedia
     }
 
     /**
-     * Determine whether the user can access a specific Filament panel.
-     * Internal teams (Admins, Security) access 'admin'; residents access 'portal'.
-     */
-    public function canAccessFilamentPanel(string $panelId): bool
-    {
-        if (strtolower($this->status ?? 'active') === 'deactivated') {
-            return false;
-        }
-
-        return match ($panelId) {
-            'admin' => $this->role->isAdministrative() || $this->role === UserRole::Security,
-            'portal' => $this->role->isResident(),
-            default => false,
-        };
-    }
-
-    /**
      * Register media collections for profile picture / avatar and documents.
      */
     public function registerMediaCollections(): void

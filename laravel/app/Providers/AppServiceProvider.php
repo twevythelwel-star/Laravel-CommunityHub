@@ -6,7 +6,6 @@ use App\Events\VisitorCheckedInEvent;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Models\Community;
 use App\Services\Api\RateLimiting\ApiRateLimiter;
-use App\Services\Features\FeatureFlagService;
 use App\Services\GatePassEngine;
 use App\Services\GeofenceService;
 use App\Services\NotificationEngine\NotificationEngine;
@@ -32,7 +31,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(PaymentGatewayManager::class);
         $this->app->singleton(UniversalNotificationService::class);
         $this->app->singleton(NotificationService::class);
-        $this->app->singleton(FeatureFlagService::class);
         $this->app->bind(NotificationServiceInterface::class, UniversalNotificationService::class);
     }
 
@@ -49,9 +47,6 @@ class AppServiceProvider extends ServiceProvider
 
         // Register custom API Rate Limiters (api, api.sensitive, api.webhooks)
         ApiRateLimiter::register();
-
-        // Register enterprise Laravel Pennant feature flags
-        app(FeatureFlagService::class)->registerFeatures();
 
         // Livewire re-runs `auth` on every component update by default, but not
         // `active`; without this a deactivated account keeps working an open page.

@@ -8,7 +8,7 @@ use App\Enums\UserRole;
 use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Models\User;
-use App\Services\Pdf\EnterprisePdfService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -81,34 +81,16 @@ class CommunityNameConfigurationTest extends TestCase
         $response->assertSee('Authorized Access');
     }
 
-    public function test_enterprise_documents_and_pdfs_reflect_updated_community_name(): void
+    public function test_the_gate_pass_pdf_reflects_the_updated_community_name(): void
     {
         Community::query()->update(['name' => 'Whispering Pines Sanctuary']);
-        $branding = BrandingSetting::current();
-        $tokens = $branding->theme_tokens ?? [];
-        $tokens['communityName'] = 'Whispering Pines Sanctuary';
-        $branding->update(['theme_tokens' => $tokens]);
 
-        // Verify Blade views automatically receive the updated community name via View::composer
-        $letterHtml = view('pdf.documents.letter', ['recipient_name' => 'John Resident'])->render();
-        $this->assertStringContainsString('Whispering Pines Sanctuary', $letterHtml);
+        // The view composer supplies the community when the controller does not.
+        $pass = ['name' => 'John Resident', 'category' => 'Visitor', 'lot' => 'Lot 7', 'vehicle' => null, 'qrImage' => ''];
 
-        $invoiceHtml = view('pdf.documents.invoice', ['reference' => 'INV-TEST-001'])->render();
-        $this->assertStringContainsString('Whispering Pines Sanctuary', $invoiceHtml);
+        $this->assertStringContainsString('WHISPERING PINES SANCTUARY', view('pdf.gate-pass', $pass)->render());
 
-        $statementHtml = view('pdf.documents.statement', ['account_number' => 'ACC-TEST-99'])->render();
-        $this->assertStringContainsString('Whispering Pines Sanctuary', $statementHtml);
-
-        $certHtml = view('pdf.documents.certificate', ['recipient_name' => 'Alice Homeowner'])->render();
-        $this->assertStringContainsString('Whispering Pines Sanctuary', $certHtml);
-
-        $govFormHtml = view('pdf.documents.government-form', ['recipient_name' => 'Bob Resident'])->render();
-        $this->assertStringContainsString('Whispering Pines Sanctuary', $govFormHtml);
-
-        // Verify PDF compilation succeeds with the updated community name
-        $pdfService = app(EnterprisePdfService::class);
-        $letterPdf = $pdfService->generate('letter', ['recipient_name' => 'John Resident'])->output();
-        $this->assertStringStartsWith('%PDF-', $letterPdf);
-        $this->assertGreaterThan(500, strlen($letterPdf));
+        $pdf = Pdf::loadView('pdf.gate-pass', $pass)->output();
+        $this->assertStringStartsWith('%PDF-', $pdf);
     }
 }

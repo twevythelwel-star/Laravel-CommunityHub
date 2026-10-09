@@ -102,18 +102,6 @@
                         <span>Search Hub</span>
                     </a>
 
-                    <!-- Query Builder Explorer Link (Spatie) -->
-                    <a href="{{ route('query-builder.index') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors" title="Spatie API Query Builder Explorer">
-                        <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                        <span>Query API</span>
-                    </a>
-
-                    <!-- Link to Filament Panels -->
-                    <a href="{{ route('filament.admin') }}" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 rounded-lg hover:bg-amber-100 transition-colors" title="Switch to Filament Admin Panel">
-                        <svg class="w-3.5 h-3.5 text-amber-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                        <span>Filament Panel</span>
-                    </a>
-
                     <!-- Link back to Inertia / React App -->
                     <a href="/dashboard" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" title="Switch to React SPA">
                         <svg class="w-3.5 h-3.5 text-cyan-500" viewBox="0 0 24 24" fill="currentColor">

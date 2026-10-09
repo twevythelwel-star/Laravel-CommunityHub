@@ -8,9 +8,7 @@ use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Livewire\CommunityOperationsHub;
-use App\Livewire\Filament\FilamentHub;
 use App\Livewire\GatePasses\PassManager;
-use App\Livewire\QueryBuilderExplorer;
 use App\Livewire\Residents\ResidentDirectory;
 use App\Livewire\Warnings\WarningDesk;
 use App\Models\GatePass;
@@ -23,7 +21,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * The operations, search, query-builder and "Filament" pages list residents,
+ * The operations and search pages list residents,
  * the ledger and the estate's passes, and can create, revoke and check
  * passes in and out. Each is limited to the roles that already see the same
  * records on the dashboard, both at the route and inside the component.
@@ -70,10 +68,6 @@ class OperationsHubAccessTest extends TestCase
             'search' => ['/search'],
             'search api' => ['/api/search?q=a'],
             'search driver' => ['/api/search/driver'],
-            'query builder' => ['/query-builder'],
-            'admin panel' => ['/admin'],
-            'portal' => ['/portal'],
-            'filament hub' => ['/filament'],
         ];
     }
 
@@ -98,9 +92,6 @@ class OperationsHubAccessTest extends TestCase
         return [
             'hub' => ['/operations'],
             'passes' => ['/operations/passes'],
-            'admin panel' => ['/admin'],
-            'portal' => ['/portal'],
-            'filament hub' => ['/filament'],
         ];
     }
 
@@ -331,26 +322,6 @@ class OperationsHubAccessTest extends TestCase
         $this->assertSame(3, Warning::count());
     }
 
-    // ── "Filament" hub ──────────────────────────────────────────────
-
-    public function test_a_resident_cannot_act_on_passes_from_the_filament_hub(): void
-    {
-        Livewire::actingAs($this->as(UserRole::Homeowner))->test(FilamentHub::class)->assertForbidden();
-    }
-
-    public function test_a_filament_pass_is_issued_by_the_signed_in_guard(): void
-    {
-        $guard = $this->as(UserRole::Security);
-        $this->as(UserRole::SystemAdmin);
-
-        Livewire::actingAs($guard)
-            ->test(FilamentHub::class)
-            ->set('formHolderName', 'Plumber Pat')
-            ->call('savePass');
-
-        $this->assertSame($guard->id, GatePass::where('holder_name', 'Plumber Pat')->sole()->user_id);
-    }
-
     // ── Search and the query API ────────────────────────────────────
 
     public function test_a_resident_searching_finds_no_other_residents_or_passes(): void
@@ -419,15 +390,5 @@ class OperationsHubAccessTest extends TestCase
         $this->getJson('/api/v1/query-meta', ['Authorization' => "Bearer {$token}"])
             ->assertOk()
             ->assertJsonPath('supported_entities', ['warnings']);
-    }
-
-    public function test_the_query_explorer_offers_a_resident_only_alerts(): void
-    {
-        Livewire::actingAs($this->as(UserRole::Homeowner))
-            ->withQueryParams(['entity' => 'users'])
-            ->test(QueryBuilderExplorer::class)
-            ->assertSet('entity', 'warnings')
-            ->call('setEntity', 'transactions')
-            ->assertSet('entity', 'warnings');
     }
 }
