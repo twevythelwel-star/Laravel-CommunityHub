@@ -234,10 +234,6 @@ class PaymentOwnershipTest extends TestCase
         $this->actingAs($this->homeowner())
             ->get(route('dashboard.billing.transactions.export'))
             ->assertForbidden();
-
-        $this->actingAs($this->homeowner())
-            ->get(route('dashboard.billing.transactions.export.alias'))
-            ->assertForbidden();
     }
 
     public function test_an_administrator_can_still_export_the_master_ledger(): void

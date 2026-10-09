@@ -173,7 +173,7 @@ class OccupancyAndRenterScopeAccuracyTest extends TestCase
 
     private function peopleSeenBy(User $renter): Collection
     {
-        return collect($this->actingAs($renter)->getJson('/dashboard/access-and-people')->assertOk()->json('authorizedPeople'))->pluck('name');
+        return collect($this->actingAs($renter)->getJson('/dashboard/delegation')->assertOk()->json('authorizedPeople'))->pluck('name');
     }
 
     public function test_a_renter_with_no_lot_does_not_see_another_households_people(): void

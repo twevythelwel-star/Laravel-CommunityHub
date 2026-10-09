@@ -357,7 +357,6 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
 
     // ── Delegated Access Center: My Property → Access & People ──
     Route::get('/delegation', [DelegatedAccessController::class, 'index'])->name('delegation');
-    Route::get('/access-and-people', [DelegatedAccessController::class, 'index'])->name('access-and-people');
     Route::post('/delegation', [DelegatedAccessController::class, 'store'])->name('delegation.store');
     Route::patch('/delegation/{delegation}/rules', [DelegatedAccessController::class, 'updateRules'])->name('delegation.rules.update');
     Route::post('/delegation/{delegation}/reissue-pass', [DelegatedAccessController::class, 'reissuePass'])->name('delegation.reissue-pass');
@@ -379,7 +378,6 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     // ── Vehicle Management & ANPR Plate Recognition ──
     Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles');
     Route::get('/vehicles/anpr/lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr.lookup');
-    Route::get('/vehicles/anpr-lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr-lookup');
     Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
     Route::match(['put', 'patch'], '/vehicles/{vehicle}', [VehicleController::class, 'update'])
         ->whereNumber('vehicle')
@@ -527,8 +525,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
          | residents handed the estate's finances to any homeowner.
          */
         Route::middleware('can:manageBilling')->group(function () {
-            Route::get('/billing/export/transactions', [BillingController::class, 'exportTransactions'])->middleware('password.confirm')->name('billing.transactions.export');
-            Route::get('/billing/export-transactions', [BillingController::class, 'exportTransactions'])->middleware('password.confirm')->name('billing.transactions.export.alias');
+            Route::get('/billing/export-transactions', [BillingController::class, 'exportTransactions'])->middleware('password.confirm')->name('billing.transactions.export');
         });
         Route::patch('/billing/settings', [BillingController::class, 'updateSettings'])
             ->middleware(['can:manageBilling', 'password.confirm'])
@@ -565,7 +562,6 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
 
     Route::middleware('can:accessCommunityLife')->group(function () {
         Route::get('/fundraising/donations/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt');
-        Route::get('/fundraising/donation/{donation}/receipt', [FundraisingController::class, 'receipt'])->name('fundraising.donation.receipt.alias');
         Route::post('/fundraising/{fundraiser}/updates', [FundraisingController::class, 'addUpdate'])
             ->middleware('can:manageFundraisers')
             ->name('fundraising.updates.store');

@@ -337,6 +337,6 @@ class PerPropertyHoaDuesTest extends TestCase
         ]);
 
         // It looked properties up by a homeowner_id column that does not exist.
-        $this->actingAs($renterUser)->getJson('/dashboard/access-and-people')->assertOk();
+        $this->actingAs($renterUser)->getJson('/dashboard/delegation')->assertOk();
     }
 }

@@ -181,7 +181,7 @@ class RevenueEngineTest extends TestCase
             'payment_channel' => 'card',
         ]);
 
-        $response = $this->actingAs($donor)->get("/dashboard/fundraising/donation/{$donation->id}/receipt");
+        $response = $this->actingAs($donor)->get("/dashboard/fundraising/donations/{$donation->id}/receipt");
 
         $response->assertOk();
         $this->assertEquals('application/pdf', $response->headers->get('content-type'));

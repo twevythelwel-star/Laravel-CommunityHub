@@ -181,12 +181,8 @@ class DelegatedAccessCenterTest extends TestCase
             'status' => 'revoked',
         ]);
 
-        // Request Access & People center via both routes
         $response = $this->actingAs($homeowner)->getJson('/dashboard/delegation');
         $response->assertOk();
-
-        $aliasResponse = $this->actingAs($homeowner)->getJson('/dashboard/access-and-people');
-        $aliasResponse->assertOk();
 
         $data = $response->json();
         $this->assertArrayHasKey('authorizedPeople', $data);
