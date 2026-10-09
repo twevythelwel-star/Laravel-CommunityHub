@@ -1,7 +1,7 @@
 
 
 import { useState, useEffect } from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, parseISO } from 'date-fns';
 
 /**
  * `date` accepts what the implementation has always handled: it calls
@@ -10,6 +10,13 @@ import { format, formatDistanceToNow } from 'date-fns';
  * are ISO strings, and every call site would otherwise need a cast.
  */
 type DateLike = Date | string | number;
+
+/**
+ * A bare "2026-10-18" is a calendar date, not UTC midnight: `new Date()` would
+ * show it as the 17th anywhere west of Greenwich. Timestamps are unchanged.
+ */
+const toDate = (date: DateLike): Date =>
+  typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? parseISO(date) : new Date(date);
 
 type ClientFormattedDateProps = {
   date: DateLike;
@@ -27,7 +34,7 @@ export function ClientFormattedDate({ date, formatString }: ClientFormattedDateP
     return null; 
   }
 
-  return <span>{format(new Date(date), formatString)}</span>;
+  return <span>{format(toDate(date), formatString)}</span>;
 }
 
 
@@ -46,5 +53,5 @@ export function ClientFormattedDistanceToNow({ date }: ClientFormattedDistanceTo
       return null;
     }
   
-    return <span>{formatDistanceToNow(new Date(date), { addSuffix: true })}</span>;
+    return <span>{formatDistanceToNow(toDate(date), { addSuffix: true })}</span>;
   }
