@@ -39,8 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { RegisterRenterForm, type HomeownerOption } from '@/components/dashboard/register-renter-form';
-import { EditRenterForm } from '@/components/dashboard/edit-renter-form';
+import { RenterForm, type HomeownerOption } from '@/components/dashboard/renter-form';
 import { useAuth } from '@/context/auth-context';
 import {
   AlertDialog,
@@ -114,12 +113,12 @@ export default function RentersPage({ renters, isHomeowner, canRegister, homeown
 
           {canRegister && (
             <div className="flex items-center gap-3">
-              <RegisterRenterForm open={isCreateOpen} onOpenChange={setCreateOpen} homeowners={homeowners}>
+              <RenterForm open={isCreateOpen} onOpenChange={setCreateOpen} homeowners={homeowners}>
                 <Button className="gap-2 shadow-sm">
                   <PlusCircle className="h-4 w-4" />
                   Register Renter / Temporary Homeowner
                 </Button>
-              </RegisterRenterForm>
+              </RenterForm>
             </div>
           )}
         </div>
@@ -305,7 +304,7 @@ export default function RentersPage({ renters, isHomeowner, canRegister, homeown
       </div>
 
       {/* Edit Form Dialog */}
-      <EditRenterForm
+      <RenterForm
         renter={editingRenter}
         open={Boolean(editingRenter)}
         onOpenChange={(open) => !open && setEditingRenter(null)}
