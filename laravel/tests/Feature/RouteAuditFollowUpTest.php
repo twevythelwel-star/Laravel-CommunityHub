@@ -4,9 +4,6 @@ namespace Tests\Feature;
 
 use App\Enums\TokenAbility;
 use App\Enums\UserRole;
-use App\Livewire\Notifications\UniversalNotificationHub;
-use App\Models\InAppNotification;
-use App\Models\NotificationDelivery;
 use App\Models\User;
 use App\Models\WebhookSubscription;
 use App\Services\Payments\Modular\Drivers\CashierModuleDriver;
@@ -14,7 +11,6 @@ use App\Services\Payments\Modular\DTOs\CustomerPortalRequest;
 use App\Services\Payments\Modular\PaymentGatewayManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
-use Livewire\Livewire;
 use Mockery;
 use Tests\TestCase;
 
@@ -37,78 +33,6 @@ class RouteAuditFollowUpTest extends TestCase
         $this->app['auth']->forgetGuards();
 
         return ['Authorization' => 'Bearer '.$user->createToken('Device', TokenAbility::forUser($user))->plainTextToken];
-    }
-
-    private function delivery(User $user, string $recipient): NotificationDelivery
-    {
-        return NotificationDelivery::create([
-            'user_id' => $user->id,
-            'channel' => 'sms',
-            'recipient' => $recipient,
-            'provider' => 'twilio',
-            'status' => 'delivered',
-        ]);
-    }
-
-    // ── Notification delivery log ───────────────────────────────────
-
-    public function test_a_resident_sees_only_their_own_deliveries(): void
-    {
-        $resident = $this->as(UserRole::Homeowner);
-        $this->delivery($resident, '+18765550101');
-        $this->delivery($this->as(UserRole::Homeowner), '+18765550202');
-
-        $response = $this->getJson('/api/v1/notifications/deliveries', $this->bearer($resident))->assertOk();
-
-        $this->assertSame(['+18765550101'], collect($response->json('data'))->pluck('recipient')->all());
-    }
-
-    public function test_an_administrator_sees_every_delivery(): void
-    {
-        $this->delivery($this->as(UserRole::Homeowner), '+18765550101');
-        $this->delivery($this->as(UserRole::Homeowner), '+18765550202');
-
-        $this->getJson('/api/v1/notifications/deliveries', $this->bearer($this->as(UserRole::Admin)))
-            ->assertOk()
-            ->assertJsonCount(2, 'data');
-    }
-
-    // ── Notification hub page ───────────────────────────────────────
-
-    public function test_a_resident_cannot_send_from_the_notification_hub(): void
-    {
-        Livewire::actingAs($this->as(UserRole::Homeowner))
-            ->test(UniversalNotificationHub::class)
-            ->set('title', 'Your dues are overdue')
-            ->set('body', 'Pay at this link.')
-            ->set('recipientEmail', 'neighbour@example.com')
-            ->call('triggerDispatch')
-            ->assertForbidden();
-    }
-
-    public function test_the_hub_shows_a_resident_only_their_own_deliveries(): void
-    {
-        $resident = $this->as(UserRole::Homeowner);
-        $this->delivery($resident, '+18765550101');
-        $this->delivery($this->as(UserRole::Homeowner), '+18765550202');
-
-        $deliveries = Livewire::actingAs($resident)->test(UniversalNotificationHub::class)->viewData('deliveries');
-
-        $this->assertSame(['+18765550101'], collect($deliveries->items())->pluck('recipient')->all());
-    }
-
-    public function test_marking_read_only_touches_your_own_notification(): void
-    {
-        $theirs = InAppNotification::create([
-            'user_id' => $this->as(UserRole::Homeowner)->id,
-            'title' => 'Private', 'body' => 'Not yours.', 'category' => 'general',
-        ]);
-
-        Livewire::actingAs($this->as(UserRole::Homeowner))
-            ->test(UniversalNotificationHub::class)
-            ->call('markAsRead', $theirs->id);
-
-        $this->assertNull($theirs->fresh()->read_at);
     }
 
     // ── Webhook subscriptions ───────────────────────────────────────

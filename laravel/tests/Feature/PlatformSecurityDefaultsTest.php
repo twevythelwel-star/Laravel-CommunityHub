@@ -2,9 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Services\Notifications\Universal\DTOs\NotificationMessage;
-use App\Services\Notifications\Universal\DTOs\NotificationRecipient;
-use App\Services\Notifications\Universal\Providers\ChatOps\SignedHttpWebhookProvider;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Validator;
@@ -13,7 +10,7 @@ use Tests\TestCase;
 
 /**
  * Framework-level defaults the app had left unset: response security
- * headers, password strength, a signing secret, and table pruning.
+ * headers, password strength, and table pruning.
  */
 class PlatformSecurityDefaultsTest extends TestCase
 {
@@ -59,20 +56,6 @@ class PlatformSecurityDefaultsTest extends TestCase
 
         $this->assertTrue($passes('password'));
         $this->assertFalse($passes('short'));
-    }
-
-    public function test_outbound_webhooks_are_not_signed_without_a_secret_of_our_own(): void
-    {
-        // The config used to fall back to a token published in the source.
-        config(['notifications.providers.webhook.signing_secret' => null]);
-
-        $report = (new SignedHttpWebhookProvider)->dispatchSignedWebhook(
-            new NotificationRecipient(userId: 1, name: 'Integration', webhookUrl: 'https://example.com/hook'),
-            new NotificationMessage(title: 'Gate Pass Scanned', body: 'Checked in', category: 'pass'),
-        );
-
-        $this->assertSame('skipped', $report->status);
-        $this->assertNull(config('notifications.providers.webhook.signing_secret'));
     }
 
     public function test_growing_tables_are_pruned_on_a_schedule(): void

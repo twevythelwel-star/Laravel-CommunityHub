@@ -45,7 +45,6 @@ use App\Http\Controllers\UniversalSearchController;
 use App\Livewire\CommunityOperationsHub;
 use App\Livewire\Components\UiShowcase;
 use App\Livewire\GatePasses\PassManager;
-use App\Livewire\Notifications\UniversalNotificationHub;
 use App\Livewire\Payments\PaymentGatewayHub;
 use App\Livewire\Realtime\RealtimeOperationsHub;
 use App\Livewire\Residents\ResidentDirectory;
@@ -346,8 +345,6 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/notifications/broadcast', [NotificationController::class, 'broadcastEmergency'])
         ->middleware('can:broadcastNotices')
         ->name('notifications.broadcast');
-    Route::get('/notifications/hub', UniversalNotificationHub::class)
-        ->name('notifications.universal-hub');
 
     // ── Live "Who's On Property?" & Community Occupancy ──
     Route::get('/occupancy', [OccupancyController::class, 'index'])->name('occupancy');

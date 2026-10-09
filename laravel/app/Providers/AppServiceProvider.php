@@ -9,9 +9,6 @@ use App\Services\Api\RateLimiting\ApiRateLimiter;
 use App\Services\GatePassEngine;
 use App\Services\GeofenceService;
 use App\Services\NotificationEngine\NotificationEngine;
-use App\Services\Notifications\NotificationService;
-use App\Services\Notifications\Universal\Contracts\NotificationServiceInterface;
-use App\Services\Notifications\Universal\UniversalNotificationService;
 use App\Services\Payments\Modular\PaymentGatewayManager;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
@@ -29,9 +26,6 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(GatePassEngine::class, fn () => new GatePassEngine);
         $this->app->singleton(PaymentGatewayManager::class);
-        $this->app->singleton(UniversalNotificationService::class);
-        $this->app->singleton(NotificationService::class);
-        $this->app->bind(NotificationServiceInterface::class, UniversalNotificationService::class);
     }
 
     public function boot(): void

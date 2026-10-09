@@ -11,9 +11,10 @@ use Tests\TestCase;
 
 /**
  * The showcase hubs (queues, Octane, observability, feature flags, generic
- * PDFs, the query-builder playground and the "Filament" role simulator) were
- * removed: none backed an estate screen, and several could queue jobs, write
- * audit entries or issue documents in the estate's name. Even a System Admin
+ * PDFs, the query-builder playground, the "Filament" role simulator and the
+ * universal notification engine) were removed: none backed an estate
+ * screen, and several could queue jobs, write audit entries, message
+ * residents or issue documents in the estate's name. Even a System Admin
  * must find nothing at their old addresses.
  */
 class RemovedShowcaseModulesTest extends TestCase
@@ -33,6 +34,7 @@ class RemovedShowcaseModulesTest extends TestCase
             'admin panel' => ['/admin'],
             'portal' => ['/portal'],
             'filament' => ['/filament'],
+            'notification hub' => ['/dashboard/notifications/hub'],
         ];
     }
 
@@ -58,6 +60,11 @@ class RemovedShowcaseModulesTest extends TestCase
             'flag activate' => ['POST', '/api/v1/features/activate'],
             'pdf generate' => ['POST', '/api/v1/pdf/generate'],
             'pdf preview' => ['POST', '/api/v1/pdf/preview/receipt'],
+            'notification send' => ['POST', '/api/v1/notifications/send'],
+            'notification dispatch' => ['POST', '/api/v1/notifications/dispatch'],
+            'notification inbox' => ['GET', '/api/v1/notifications/inbox'],
+            'notification deliveries' => ['GET', '/api/v1/notifications/deliveries'],
+            'notification channels' => ['GET', '/api/v1/notifications/channels'],
         ];
     }
 

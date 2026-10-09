@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\V1\MonitoringApiController;
 use App\Http\Controllers\Api\V1\RealtimeApiController;
 use App\Http\Controllers\Api\V1\SpreadsheetApiController;
 use App\Http\Controllers\Api\V1\TokenApiController;
-use App\Http\Controllers\Api\V1\UniversalNotificationApiController;
 use App\Http\Controllers\Api\V1\VersionApiController;
 use App\Http\Controllers\Api\V1\WebhookApiController;
 use App\Http\Controllers\Api\VisitorApiController;
@@ -177,12 +176,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/payments/subscriptions', [ModularPaymentApiController::class, 'createSubscription'])->name('api.v1.payments.subscriptions');
         Route::delete('/payments/subscriptions/{id}', [ModularPaymentApiController::class, 'cancelSubscription'])->name('api.v1.payments.subscriptions.cancel');
         Route::post('/payments/coupons/validate', [ModularPaymentApiController::class, 'validateCoupon'])->name('api.v1.payments.coupons.validate');
-        // Universal Multi-Channel Notification Engine (Email, SMS, WhatsApp, Push, Slack, Teams, Webhook, In-App, Database)
-        Route::post('/notifications/dispatch', [UniversalNotificationApiController::class, 'dispatchNotification'])->name('api.v1.notifications.dispatch');
-        Route::get('/notifications/inbox', [UniversalNotificationApiController::class, 'inbox'])->name('api.v1.notifications.inbox');
-        Route::post('/notifications/{id}/read', [UniversalNotificationApiController::class, 'markAsRead'])->name('api.v1.notifications.mark-read');
-        Route::post('/notifications/read-all', [UniversalNotificationApiController::class, 'markAllAsRead'])->name('api.v1.notifications.mark-all-read');
-        Route::get('/notifications/deliveries', [UniversalNotificationApiController::class, 'deliveries'])->name('api.v1.notifications.deliveries');
         // Real-Time WebSockets (Laravel Reverb & Echo)
         Route::post('/realtime/broadcast', [RealtimeApiController::class, 'broadcast'])->name('api.v1.realtime.broadcast');
     });
@@ -193,15 +186,6 @@ Route::prefix('v1')->group(function () {
     */
     Route::middleware(['auth:sanctum', 'active', 'throttle:api', 'can:operatePlatform'])->group(function () {
         Route::get('/metrics', [MonitoringApiController::class, 'metrics'])->name('api.v1.metrics');
-    });
-
-    // Public catalog of notification channels. Sending and reading are not
-    // public: `send` reached any email, phone, user or webhook URL without a
-    // token, and the inbox without a token listed every user's notifications.
-    Route::get('/notifications/channels', [UniversalNotificationApiController::class, 'channels'])->name('api.v1.notifications.channels');
-    Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
-        Route::post('/notifications/send', [UniversalNotificationApiController::class, 'dispatchNotification'])->name('api.v1.notifications.send');
-        Route::get('/notifications/inbox', [UniversalNotificationApiController::class, 'inbox'])->name('api.v1.notifications.public-inbox');
     });
 
     // Real-Time WebSocket Echo Config & Channels Catalog
