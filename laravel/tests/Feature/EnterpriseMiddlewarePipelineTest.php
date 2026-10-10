@@ -92,4 +92,78 @@ class EnterpriseMiddlewarePipelineTest extends TestCase
         // User preference must remain 'copper' (from first request), proving deduplication
         $this->assertSame('copper', $user->fresh()->preferences->theme_preset);
     }
+
+    public function test_subdomain_selects_the_community_whose_code_it_names(): void
+    {
+        Community::create(['name' => 'Royal Palms Enclave', 'code' => 'CID-ROYAL-PALMS', 'datum' => 'JAD2001']);
+
+        $this->get('http://royal-palms.estates.test/login')
+            ->assertOk()
+            ->assertHeader('X-Community-Code', 'CID-ROYAL-PALMS');
+    }
+
+    public function test_subdomain_that_only_partly_matches_a_community_falls_back_to_the_default(): void
+    {
+        Community::create(['name' => 'Royal Palms Enclave', 'code' => 'CID-ROYAL-PALMS', 'datum' => 'JAD2001']);
+
+        $this->get('http://palm.estates.test/login')
+            ->assertOk()
+            ->assertHeader('X-Community-Code', config('gatepass.default_community_id'));
+    }
+
+    public function test_idempotency_key_is_honoured_for_a_user_signed_in_through_the_session(): void
+    {
+        // Signs in through the login form, not actingAs: the user comes from the session.
+        $user = User::factory()->create(['role' => UserRole::Homeowner]);
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertRedirect();
+
+        $idempotencyKey = (string) Str::uuid();
+
+        $this->withHeader('Idempotency-Key', $idempotencyKey)
+            ->post('/dashboard/profile/theme-preset', ['theme_preset' => 'copper'])
+            ->assertHeader('X-Idempotent-Replayed', 'false');
+
+        $this->withHeader('Idempotency-Key', $idempotencyKey)
+            ->post('/dashboard/profile/theme-preset', ['theme_preset' => 'slate'])
+            ->assertHeader('X-Idempotent-Replayed', 'true');
+
+        $this->assertSame('copper', $user->fresh()->preferences->theme_preset);
+    }
+
+    public function test_idempotency_key_is_ignored_for_signed_out_requests(): void
+    {
+        $user = User::factory()->create();
+        $idempotencyKey = (string) Str::uuid();
+
+        $this->withHeader('Idempotency-Key', $idempotencyKey)
+            ->post('/login', ['email' => $user->email, 'password' => 'wrong-password'])
+            ->assertHeaderMissing('X-Idempotent-Replayed');
+
+        // Same key from the same address: a real attempt, not the cached failure.
+        $this->withHeader('Idempotency-Key', $idempotencyKey)
+            ->post('/login', ['email' => $user->email, 'password' => 'password'])
+            ->assertHeaderMissing('X-Idempotent-Replayed');
+
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_idempotency_key_is_honoured_for_an_api_token(): void
+    {
+        $user = User::factory()->create(['role' => UserRole::Homeowner]);
+        $token = $user->createToken('device', ['gate-pass:read'])->plainTextToken;
+        $idempotencyKey = (string) Str::uuid();
+
+        $first = $this->withToken($token)
+            ->withHeader('Idempotency-Key', $idempotencyKey)
+            ->postJson('/api/gate-pass/rotate')
+            ->assertOk()
+            ->assertHeader('X-Idempotent-Replayed', 'false');
+
+        // A replay returns the first rotation instead of rotating again.
+        $this->withToken($token)
+            ->withHeader('Idempotency-Key', $idempotencyKey)
+            ->postJson('/api/gate-pass/rotate')
+            ->assertHeader('X-Idempotent-Replayed', 'true')
+            ->assertJsonPath('rotationSeq', $first->json('rotationSeq'));
+    }
 }

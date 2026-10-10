@@ -31,7 +31,6 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->append([
             AssignCorrelationId::class,
-            EnforceIdempotency::class,
             SecurityHeaders::class,
         ]);
 
@@ -39,12 +38,16 @@ return Application::configure(basePath: dirname(__DIR__))
             // Web only: API calls, webhooks and health probes have no community
             // to show, and should not query (or create) one on every request.
             ResolveCommunityContext::class,
+            // In the groups, not global: the signed-in user is only known once the
+            // session has started, and the key is scoped to that user.
+            EnforceIdempotency::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
 
         $middleware->api(append: [
             ApiLoggingMiddleware::class,
+            EnforceIdempotency::class,
         ]);
 
         $middleware->alias([

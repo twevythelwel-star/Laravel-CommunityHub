@@ -80,9 +80,10 @@ class ResolveCommunityContext
         if (count($parts) > 2) {
             $subdomain = strtolower($parts[0]);
             if ($subdomain !== 'www' && $subdomain !== 'api' && $subdomain !== 'admin') {
+                // Exact code only, with or without its CID- prefix: a partial
+                // match let palm.example.com select "Royal Palms".
                 $found = Community::query()
-                    ->where('code', 'LIKE', '%'.$subdomain.'%')
-                    ->orWhere('name', 'LIKE', '%'.$subdomain.'%')
+                    ->whereRaw('LOWER(code) IN (?, ?)', [$subdomain, 'cid-'.$subdomain])
                     ->first();
                 if ($found) {
                     return $found;

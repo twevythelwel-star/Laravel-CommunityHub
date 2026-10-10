@@ -39,8 +39,19 @@ class EnforceIdempotency
             return $next($request);
         }
 
+        /*
+         | Signed-in requests only. An IP address is shared behind NAT, so two
+         | visitors sending the same key would be handed each other's response;
+         | and a replay cannot restore the cookies the first response set, so
+         | a replayed login would sign no one in.
+         */
+        $user = $request->user();
+        if ($user === null) {
+            return $next($request);
+        }
+
         $idempotencyKey = trim($idempotencyKey);
-        $userScope = $request->user()?->id ?? ('ip:'.$request->ip());
+        $userScope = $user->id;
         $cacheKey = "idempotency:{$userScope}:{$idempotencyKey}";
         $lockKey = "idempotency:lock:{$userScope}:{$idempotencyKey}";
 
