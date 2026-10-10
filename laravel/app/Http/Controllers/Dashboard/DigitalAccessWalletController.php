@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\GateId;
+use App\Exceptions\WalletPassUnavailable;
 use App\Http\Controllers\Controller;
 use App\Models\GatePass;
 use App\Models\Household;
@@ -98,13 +99,12 @@ class DigitalAccessWalletController extends Controller
     }
 
     /**
-     * Download an official Apple Wallet (.pkpass) bundle.
+     * Download a signed Apple Wallet (.pkpass) pass. 404 (WalletPassUnavailable) while Apple Wallet
+     * is not configured for the estate.
      */
     public function downloadApplePass(Request $request, string $passId): Response
     {
         $pass = GatePass::where('pass_id', $passId)->firstOrFail();
-
-        // Ensure user is authorized for this pass
         $this->authorizePassAccess($request->user(), $pass);
 
         $pkpass = $this->walletService->generateApplePkpass($pass);
@@ -119,29 +119,26 @@ class DigitalAccessWalletController extends Controller
     }
 
     /**
-     * Return Google Wallet "Save to Google Wallet" pass object & JWT payload.
+     * The "Save to Google Wallet" link for a pass. 404 (WalletPassUnavailable) while Google Wallet is
+     * not configured for the estate.
      */
     public function googlePassPayload(Request $request, string $passId): JsonResponse
     {
         $pass = GatePass::where('pass_id', $passId)->firstOrFail();
         $this->authorizePassAccess($request->user(), $pass);
 
-        $payload = $this->walletService->getGoogleWalletPayload($pass);
+        $saveUrl = $this->walletService->googleWalletSaveUrl($pass);
 
-        return response()->json($payload);
+        return response()->json(['save_url' => $saveUrl]);
     }
 
     /**
-     * Return Samsung Wallet digital key & pass card payload.
+     * Samsung Wallet needs Samsung partner onboarding before a pass can be
+     * issued; until then there is nothing to hand out.
      */
     public function samsungPassPayload(Request $request, string $passId): JsonResponse
     {
-        $pass = GatePass::where('pass_id', $passId)->firstOrFail();
-        $this->authorizePassAccess($request->user(), $pass);
-
-        $payload = $this->walletService->getSamsungWalletPayload($pass);
-
-        return response()->json($payload);
+        throw new WalletPassUnavailable('Samsung Wallet is not available.');
     }
 
     /**

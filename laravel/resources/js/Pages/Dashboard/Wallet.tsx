@@ -90,11 +90,6 @@ type WalletCredential = {
       save_url: string;
       badge_label: string;
     };
-    samsung_wallet: {
-      available: boolean;
-      save_url: string;
-      badge_label: string;
-    };
   };
   schedule?: {
     curfew_enabled?: boolean;
@@ -157,8 +152,6 @@ export default function DigitalAccessWalletPage({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30);
   const [isSimulatingNfc, setIsSimulatingNfc] = useState<boolean>(false);
   const [nfcSuccessResult, setNfcSuccessResult] = useState<any | null>(null);
-  const [googleWalletModal, setGoogleWalletModal] = useState<any | null>(null);
-  const [samsungWalletModal, setSamsungWalletModal] = useState<any | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [webNfcSupported, setWebNfcSupported] = useState<boolean>(false);
@@ -266,31 +259,16 @@ export default function DigitalAccessWalletPage({
     }
   };
 
-  // Load Google Wallet Payload
+  // Fetches the signed "Save to Google Wallet" link and hands over to Google.
   const handleOpenGoogleWallet = async () => {
     if (!currentPass) return;
     try {
-      const res = await axios.get(currentPass.wallet_integrations.google_wallet.save_url);
-      setGoogleWalletModal(res.data);
+      const res = await axios.get<{ save_url: string }>(currentPass.wallet_integrations.google_wallet.save_url);
+      window.location.assign(res.data.save_url);
     } catch (err: any) {
       toast({
         title: 'Google Wallet Error',
-        description: 'Unable to prepare Google Wallet pass object.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  // Load Samsung Wallet Payload
-  const handleOpenSamsungWallet = async () => {
-    if (!currentPass) return;
-    try {
-      const res = await axios.get(currentPass.wallet_integrations.samsung_wallet.save_url);
-      setSamsungWalletModal(res.data);
-    } catch (err: any) {
-      toast({
-        title: 'Samsung Wallet Error',
-        description: 'Unable to prepare Samsung Wallet pass payload.',
+        description: err?.response?.data?.message ?? 'Unable to prepare the Google Wallet pass.',
         variant: 'destructive',
       });
     }
@@ -861,12 +839,20 @@ export default function DigitalAccessWalletPage({
                       Native Mobile Wallets (No App Required)
                     </h3>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Store your credentials directly in Apple Wallet, Google Wallet, or Samsung Wallet for 1-tap lock screen access.
+                      Add your pass to Apple Wallet or Google Wallet for one-tap access from the lock screen.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {!currentPass.wallet_integrations.apple_wallet.available &&
+                    !currentPass.wallet_integrations.google_wallet.available && (
+                      <div className="p-4 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground">
+                        Wallet passes aren't set up for this estate yet. Use the QR code in the first tab at the gate.
+                      </div>
+                    )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* 1. Apple Wallet (.pkpass) */}
+                    {currentPass.wallet_integrations.apple_wallet.available && (
                     <div className="p-5 rounded-2xl bg-black border border-slate-800 text-white flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-all">
                       <div>
                         <div className="flex items-center justify-between">
@@ -881,7 +867,7 @@ export default function DigitalAccessWalletPage({
                           Apple Wallet
                         </h4>
                         <p className="text-xs text-slate-400 mt-1">
-                          Native passbook bundle with ISO QR, Apple VAS NFC payload, and lock screen notifications.
+                          A signed pass with your gate code, shown on the lock screen.
                         </p>
                       </div>
 
@@ -896,23 +882,22 @@ export default function DigitalAccessWalletPage({
                         </Button>
                       </a>
                     </div>
+                    )}
 
                     {/* 2. Google Wallet */}
+                    {currentPass.wallet_integrations.google_wallet.available && (
                     <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-white flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-all">
                       <div>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
                             Android / Wear OS
                           </span>
-                          <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-[10px]">
-                            Smart Tap
-                          </Badge>
                         </div>
                         <h4 className="text-lg font-black tracking-tight mt-2 flex items-center gap-1.5">
                           Google Wallet
                         </h4>
                         <p className="text-xs text-slate-400 mt-1">
-                          Google Pay Generic Pass class with dynamic barcode and Smart Tap NFC integration.
+                          Saves the pass with your gate code to Google Wallet.
                         </p>
                       </div>
 
@@ -924,35 +909,7 @@ export default function DigitalAccessWalletPage({
                         Save to Google Wallet
                       </Button>
                     </div>
-
-                    {/* 3. Samsung Wallet */}
-                    <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 text-white flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-all">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider">
-                            Galaxy Devices
-                          </span>
-                          <Badge variant="outline" className="border-sky-500/30 text-sky-400 text-[10px]">
-                            Samsung Pay
-                          </Badge>
-                        </div>
-                        <h4 className="text-lg font-black tracking-tight mt-2 flex items-center gap-1.5">
-                          Samsung Wallet
-                        </h4>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Digital key & estate access card compatible with Samsung Knox and Samsung Pay.
-                        </p>
-                      </div>
-
-                      <Button
-                        onClick={handleOpenSamsungWallet}
-                        variant="outline"
-                        className="w-full border-slate-700 hover:bg-slate-800 text-white font-bold text-xs gap-1.5"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
-                        Add to Samsung Wallet
-                      </Button>
-                    </div>
+                    )}
                   </div>
 
                   {/* Household Pass Dispatching */}
@@ -1103,87 +1060,6 @@ export default function DigitalAccessWalletPage({
           </div>
         </div>
       </div>
-
-      {/* Google Wallet Modal */}
-      <Dialog open={!!googleWalletModal} onOpenChange={() => setGoogleWalletModal(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-emerald-500" />
-              Save to Google Wallet
-            </DialogTitle>
-            <DialogDescription>
-              Google Wallet Pass payload generated for {currentPass.holder_name}.
-            </DialogDescription>
-          </DialogHeader>
-
-          {googleWalletModal && (
-            <div className="space-y-4 my-2">
-              <div className="p-4 rounded-xl bg-slate-950 text-white font-mono text-xs space-y-2 border border-slate-800">
-                <div className="text-emerald-400 font-bold">{googleWalletModal.protocol}</div>
-                <div>Pass Object: {googleWalletModal.genericObject?.id}</div>
-                <div>Class: {googleWalletModal.genericObject?.classId}</div>
-                <div>Holder: {googleWalletModal.genericObject?.header?.defaultValue?.value}</div>
-                <div>Barcode Type: {googleWalletModal.genericObject?.barcode?.type}</div>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                In a production deployment with Google Pay Developer keys, clicking below routes directly to Google Play Services to save this credential into Google Wallet.
-              </p>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                handleCopy(JSON.stringify(googleWalletModal, null, 2), 'Google Wallet Payload');
-                setGoogleWalletModal(null);
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              Copy Pass Payload
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Samsung Wallet Modal */}
-      <Dialog open={!!samsungWalletModal} onOpenChange={() => setSamsungWalletModal(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Smartphone className="w-5 h-5 text-sky-500" />
-              Add to Samsung Wallet
-            </DialogTitle>
-            <DialogDescription>
-              Samsung Wallet Digital Key Card for {currentPass.holder_name}.
-            </DialogDescription>
-          </DialogHeader>
-
-          {samsungWalletModal && (
-            <div className="space-y-4 my-2">
-              <div className="p-4 rounded-xl bg-slate-950 text-white font-mono text-xs space-y-2 border border-slate-800">
-                <div className="text-sky-400 font-bold">{samsungWalletModal.protocol}</div>
-                <div>Card ID: {samsungWalletModal.cdata?.cardId}</div>
-                <div>NFC UID: {samsungWalletModal.cdata?.nfcUid}</div>
-                <div>Deep Link: {samsungWalletModal.deepLink}</div>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                handleCopy(samsungWalletModal?.deepLink || '', 'Samsung Deep Link');
-                setSamsungWalletModal(null);
-              }}
-              className="bg-sky-600 hover:bg-sky-700 text-white"
-            >
-              Copy Samsung Wallet Link
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Share Member Pass Modal */}
       <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>

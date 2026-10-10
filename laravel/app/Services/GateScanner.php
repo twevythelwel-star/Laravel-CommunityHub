@@ -16,6 +16,7 @@ use App\Models\DelegatedAccess;
 use App\Models\GatePass;
 use App\Models\InAppNotification;
 use App\Models\User;
+use App\Services\Credentials\WalletCredentialCode;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -37,7 +38,8 @@ class GateScanner
     public function __construct(
         private readonly GatePassEngine $engine,
         private readonly AccessRiskEngine $riskEngine,
-        private readonly AccessAuditTimelineService $timelineService
+        private readonly AccessAuditTimelineService $timelineService,
+        private readonly WalletCredentialCode $walletCodes,
     ) {}
 
     /**
@@ -65,17 +67,23 @@ class GateScanner
             }
         }
 
-        // ── 0. Multi-Modal Token Translation (NFC Tap, Direct Pass ID, or Offline PIN) ──
-        if (str_starts_with($token, 'CHUB-NFC-V2|') || str_starts_with($token, 'NFC:')) {
-            $parts = explode('|', $token);
-            $candidatePassId = $parts[1] ?? '';
-            $candidate = GatePass::where('pass_id', $candidatePassId)->first();
+        // ── 0. Multi-Modal Token Translation (wallet pass, NFC tap, guard override, or card UID) ──
+        // A wallet pass (QR or NFC) carries a signed code. A bare pass ID or an
+        // unsigned NFC string is refused: anyone who has seen a pass ID could
+        // otherwise print one. The one exception is a guard's explicit
+        // anti-passback override, which is typed by security with a reason.
+        if (($walletPassId = $this->walletCodes->passIdFrom($token)) !== null) {
+            $candidate = GatePass::where('pass_id', $walletPassId)->first();
             if ($candidate) {
-                $issued = $this->engine->issueToken($candidate, $gate);
-                $token = $issued['token'];
-                $method = 'NFC Contactless Tap';
+                $isNfc = $this->walletCodes->isNfcMessage($token);
+                $token = $this->engine->issueToken($candidate, $gate)['token'];
+                if ($isNfc) {
+                    $method = 'NFC Contactless Tap';
+                } elseif ($method === 'Digital Pass') {
+                    $method = 'Mobile Wallet Pass';
+                }
             }
-        } elseif (str_starts_with($token, 'GP-') && ! str_contains($token, '.')) {
+        } elseif ($overridePassback && filled($overrideReason) && str_starts_with($token, 'GP-') && ! str_contains($token, '.')) {
             $candidate = GatePass::where('pass_id', $token)->first();
             if ($candidate) {
                 $issued = $this->engine->issueToken($candidate, $gate);

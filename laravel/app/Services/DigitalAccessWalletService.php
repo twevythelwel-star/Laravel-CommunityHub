@@ -5,14 +5,16 @@ namespace App\Services;
 use App\Enums\GateId;
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
+use App\Exceptions\WalletPassUnavailable;
 use App\Models\GatePass;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\User;
+use App\Services\Credentials\AppleWalletPass;
+use App\Services\Credentials\GoogleWalletPass;
+use App\Services\Credentials\WalletCredentialCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\URL;
-use ZipArchive;
 
 class DigitalAccessWalletService
 {
@@ -20,6 +22,9 @@ class DigitalAccessWalletService
         private readonly GatePassEngine $engine,
         private readonly GateScanner $scanner,
         private readonly HouseholdManagementService $householdService,
+        private readonly WalletCredentialCode $walletCodes,
+        private readonly AppleWalletPass $appleWallet,
+        private readonly GoogleWalletPass $googleWallet,
     ) {}
 
     /**
@@ -86,18 +91,14 @@ class DigitalAccessWalletService
                 $validUntil = $issued['valid_until']->toIso8601String();
                 $secondsRemaining = max(0, $issued['valid_until']->getTimestamp() - now()->getTimestamp());
             } catch (\Throwable $e) {
-                $qrToken = $pass->pass_id;
+                // No code rather than the bare pass ID, which the gate refuses.
+                $qrToken = null;
             }
         }
 
-        // Contactless NFC UID & Cryptographic Payload
+        // Contactless NFC: the card UID, and the signed wallet code as the message.
         $nfcUid = $this->generateNfcUid($pass);
-        $nfcPayload = sprintf('CHUB-NFC-V2|%s|%s|%d|%s',
-            $pass->pass_id,
-            $nfcUid,
-            now()->getTimestamp(),
-            hash_hmac('sha256', $pass->pass_id.'|'.$nfcUid, config('gatepass.secret', 'default_secret'))
-        );
+        $nfcPayload = $this->walletCodes->nfcMessageFor($pass);
 
         $schedule = $member?->access_schedule ?? $pass->metadata['access_schedule'] ?? null;
         $permissions = $member?->permissions ?? $pass->metadata['permissions'] ?? [];
@@ -137,23 +138,19 @@ class DigitalAccessWalletService
                 'ndef_mime' => 'application/vnd.communityhub.gatepass',
             ],
 
-            // Multi-Modal 3: Mobile Wallet Integrations
+            // Multi-Modal 3: Mobile Wallet Integrations. Offered only once the
+            // estate's Apple / Google credentials are configured (config/wallet.php).
             'wallet_integrations' => [
                 'apple_wallet' => [
-                    'available' => true,
+                    'available' => $this->appleWallet->isConfigured(),
                     'file_name' => "{$pass->pass_id}.pkpass",
                     'download_url' => url("/dashboard/wallet/apple-pass/{$pass->pass_id}"),
                     'badge_label' => 'Add to Apple Wallet',
                 ],
                 'google_wallet' => [
-                    'available' => true,
+                    'available' => $this->googleWallet->isConfigured(),
                     'save_url' => url("/dashboard/wallet/google-pass/{$pass->pass_id}"),
                     'badge_label' => 'Save to Google Wallet',
-                ],
-                'samsung_wallet' => [
-                    'available' => true,
-                    'save_url' => url("/dashboard/wallet/samsung-pass/{$pass->pass_id}"),
-                    'badge_label' => 'Add to Samsung Wallet',
                 ],
             ],
 
@@ -184,202 +181,31 @@ class DigitalAccessWalletService
     }
 
     /**
-     * Generate an Apple Wallet .pkpass ZIP bundle in memory.
+     * A signed Apple Wallet pass (.pkpass).
+     *
+     * @throws WalletPassUnavailable while Apple Wallet is not configured for the estate.
      */
     public function generateApplePkpass(GatePass $pass): string
     {
-        $category = $pass->category;
-        $variant = $this->engine->variantFor($pass);
+        if (! $this->appleWallet->isConfigured()) {
+            throw new WalletPassUnavailable('Apple Wallet passes are not set up for this estate yet.');
+        }
 
-        // Apple Pass JSON Structure (Passbook format version 1)
-        $passJson = [
-            'formatVersion' => 1,
-            'passTypeIdentifier' => 'pass.com.communityhub.gateaccess',
-            'serialNumber' => $pass->pass_id,
-            'teamIdentifier' => 'CHUBESTATES',
-            'organizationName' => 'Community Hub Estates',
-            'description' => "Community Gate Credential - {$pass->holder_name}",
-            'logoText' => 'Community Hub',
-            'foregroundColor' => 'rgb(255, 255, 255)',
-            'backgroundColor' => 'rgb(15, 23, 42)',
-            'labelColor' => 'rgb(212, 175, 55)',
-            'generic' => [
-                'primaryFields' => [
-                    [
-                        'key' => 'holder',
-                        'label' => 'AUTHORIZED HOLDER',
-                        'value' => $pass->holder_name,
-                    ],
-                ],
-                'secondaryFields' => [
-                    [
-                        'key' => 'role',
-                        'label' => 'CREDENTIAL CATEGORY',
-                        'value' => $category->label(),
-                    ],
-                    [
-                        'key' => 'property',
-                        'label' => 'ESTATE RESIDENCE',
-                        'value' => $pass->property ?: 'Unassigned',
-                    ],
-                ],
-                'auxiliaryFields' => [
-                    [
-                        'key' => 'status',
-                        'label' => 'CLEARANCE',
-                        'value' => $pass->status->label(),
-                    ],
-                    [
-                        'key' => 'gate',
-                        'label' => 'DESIGNATED GATE',
-                        'value' => $pass->designated_gate?->label() ?? 'All Gates',
-                    ],
-                ],
-                'backFields' => [
-                    [
-                        'key' => 'protocol',
-                        'label' => 'SECURITY PROTOCOL',
-                        'value' => 'ISO/IEC 18004 Anti-Replay QR & ISO 14443 Type A NFC Pass. Governed by Community Hub Estate Management.',
-                    ],
-                    [
-                        'key' => 'nfc_uid',
-                        'label' => 'VIRTUAL NFC CARD UID',
-                        'value' => $this->generateNfcUid($pass),
-                    ],
-                    [
-                        'key' => 'support',
-                        'label' => 'GATEHOUSE DISPATCH',
-                        'value' => 'Security Gatehouse: +1 (876) 555-GATE | Emergency SOS: 119',
-                    ],
-                ],
-            ],
-            'barcodes' => [
-                [
-                    'format' => 'PKBarcodeFormatQR',
-                    'message' => $pass->pass_id,
-                    'messageEncoding' => 'iso-8859-1',
-                    'altText' => "Gate Pass ID: {$pass->pass_id}",
-                ],
-            ],
-            'nfc' => [
-                'message' => sprintf('CHUB-NFC-V2|%s|%s', $pass->pass_id, $this->generateNfcUid($pass)),
-                'encryptionPublicKey' => '04'.hash('sha256', config('gatepass.secret', 'chub_nfc_pub')),
-            ],
-        ];
-
-        // Create ZipArchive in temporary file
-        $tempFile = tempnam(sys_get_temp_dir(), 'pkpass_');
-        $zip = new ZipArchive;
-        $zip->open($tempFile, ZipArchive::CREATE | ZipArchive::OVERWRITE);
-
-        $jsonStr = json_encode($passJson, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        $zip->addFromString('pass.json', $jsonStr);
-
-        // Minimal PNG 1x1 transparent icon for Apple Pass structure
-        $png1x1 = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
-        $zip->addFromString('icon.png', $png1x1);
-        $zip->addFromString('icon@2x.png', $png1x1);
-        $zip->addFromString('logo.png', $png1x1);
-        $zip->addFromString('logo@2x.png', $png1x1);
-
-        // Manifest of SHA-1 hashes
-        $manifest = [
-            'pass.json' => sha1($jsonStr),
-            'icon.png' => sha1($png1x1),
-            'icon@2x.png' => sha1($png1x1),
-            'logo.png' => sha1($png1x1),
-            'logo@2x.png' => sha1($png1x1),
-        ];
-        $zip->addFromString('manifest.json', json_encode($manifest, JSON_PRETTY_PRINT));
-
-        $zip->close();
-
-        $content = file_get_contents($tempFile);
-        @unlink($tempFile);
-
-        return $content;
+        return $this->appleWallet->build($pass);
     }
 
     /**
-     * Generate Google Wallet pass payload object.
+     * A "Save to Google Wallet" link.
      *
-     * @return array<string, mixed>
+     * @throws WalletPassUnavailable while Google Wallet is not configured for the estate.
      */
-    public function getGoogleWalletPayload(GatePass $pass): array
+    public function googleWalletSaveUrl(GatePass $pass): string
     {
-        $uid = $this->generateNfcUid($pass);
-        $category = $pass->category;
+        if (! $this->googleWallet->isConfigured()) {
+            throw new WalletPassUnavailable('Google Wallet passes are not set up for this estate yet.');
+        }
 
-        return [
-            'protocol' => 'Google Wallet REST API v1 / Save to Google Wallet',
-            'genericObject' => [
-                'id' => "COMMUNITY_HUB.PASS_{$pass->pass_id}",
-                'classId' => 'COMMUNITY_HUB.ESTATE_ACCESS_CREDENTIAL',
-                'logo' => [
-                    'sourceUri' => [
-                        'uri' => URL::to('/images/branding/community-crest.png'),
-                    ],
-                    'contentDescription' => [
-                        'defaultValue' => ['language' => 'en-US', 'value' => 'Community Hub Crest'],
-                    ],
-                ],
-                'cardTitle' => [
-                    'defaultValue' => ['language' => 'en-US', 'value' => 'Community Hub — Estate Access Pass'],
-                ],
-                'subheader' => [
-                    'defaultValue' => ['language' => 'en-US', 'value' => $pass->property ?: 'Unassigned'],
-                ],
-                'header' => [
-                    'defaultValue' => ['language' => 'en-US', 'value' => $pass->holder_name],
-                ],
-                'barcode' => [
-                    'type' => 'QR_CODE',
-                    'value' => $pass->pass_id,
-                    'alternateText' => $pass->pass_id,
-                ],
-                'hexBackgroundColor' => '#0F172A',
-                'textModulesData' => [
-                    [
-                        'id' => 'category',
-                        'header' => 'CATEGORY',
-                        'body' => $category->label(),
-                    ],
-                    [
-                        'id' => 'nfc_uid',
-                        'header' => 'NFC CARD UID',
-                        'body' => $uid,
-                    ],
-                    [
-                        'id' => 'status',
-                        'header' => 'STATUS',
-                        'body' => $pass->status->label(),
-                    ],
-                ],
-            ],
-            'deepLink' => "https://pay.google.com/gp/v/save/PASS_{$pass->pass_id}",
-        ];
-    }
-
-    /**
-     * Generate Samsung Wallet pass payload object.
-     *
-     * @return array<string, mixed>
-     */
-    public function getSamsungWalletPayload(GatePass $pass): array
-    {
-        return [
-            'protocol' => 'Samsung Wallet Partner Portal / Digital Key & Pass',
-            'cdata' => [
-                'cardId' => $pass->pass_id,
-                'title' => 'Community Hub Estate Pass',
-                'holderName' => $pass->holder_name,
-                'property' => $pass->property ?: 'Unassigned',
-                'category' => $pass->category->label(),
-                'nfcUid' => $this->generateNfcUid($pass),
-                'nfcPayload' => sprintf('CHUB-NFC-V2|%s|%s', $pass->pass_id, $this->generateNfcUid($pass)),
-            ],
-            'deepLink' => "samsungpay://wallet/card/add?passId={$pass->pass_id}",
-        ];
+        return $this->googleWallet->saveUrl($pass);
     }
 
     /**

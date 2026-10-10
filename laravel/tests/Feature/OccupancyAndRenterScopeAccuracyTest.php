@@ -225,11 +225,12 @@ class OccupancyAndRenterScopeAccuracyTest extends TestCase
             'holder_name' => $user->name,
             'property' => null,
             'status' => PassStatus::Active,
+            'rotation_seq' => 0,
         ]);
 
-        $payload = json_encode(app(DigitalAccessWalletService::class)->getGoogleWalletPayload($pass));
+        $credential = app(DigitalAccessWalletService::class)->formatWalletPass($pass, 'Staff');
 
-        $this->assertStringNotContainsString('Unit 14', $payload);
-        $this->assertStringContainsString('Unassigned', $payload);
+        $this->assertStringNotContainsString('Unit 14', json_encode($credential));
+        $this->assertSame('Unassigned', $credential['property']);
     }
 }

@@ -79,7 +79,11 @@ class DigitalAccessWalletTest extends TestCase
         $this->assertContains('Monday', $maria['schedule']['days']);
     }
 
-    public function test_user_can_download_apple_wallet_pkpass(): void
+    // The signed passes themselves are covered in WalletPassesTest. These pin
+    // that the head of household gets past authorization for a member's pass
+    // (404 "not set up", not 403) while the estate has no wallet credentials.
+
+    public function test_apple_wallet_pass_is_not_offered_until_configured(): void
     {
         $homeowner = User::factory()->create([
             'role' => UserRole::Homeowner,
@@ -90,16 +94,14 @@ class DigitalAccessWalletTest extends TestCase
         $household = app(HouseholdManagementService::class)->seedExampleSmithHousehold($homeowner);
         $maryPass = $household->members->firstWhere('name', 'Mary Smith')->gatePass;
 
-        $response = $this->actingAs($homeowner)->get("/dashboard/wallet/apple-pass/{$maryPass->pass_id}");
-        $response->assertOk();
-        $response->assertHeader('Content-Type', 'application/vnd.apple.pkpass');
+        config(['wallet.apple.pass_type_identifier' => null]);
 
-        // Verify valid ZIP bundle signature (PK\x03\x04)
-        $content = $response->getContent();
-        $this->assertStringStartsWith("PK\x03\x04", $content);
+        $this->actingAs($homeowner)->getJson("/dashboard/wallet/apple-pass/{$maryPass->pass_id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Apple Wallet passes are not set up for this estate yet.');
     }
 
-    public function test_user_can_retrieve_google_wallet_pass_payload(): void
+    public function test_google_wallet_pass_is_not_offered_until_configured(): void
     {
         $homeowner = User::factory()->create([
             'role' => UserRole::Homeowner,
@@ -110,21 +112,14 @@ class DigitalAccessWalletTest extends TestCase
         $household = app(HouseholdManagementService::class)->seedExampleSmithHousehold($homeowner);
         $pass = $household->members->firstWhere('name', 'James Smith')->gatePass;
 
-        $response = $this->actingAs($homeowner)->getJson("/dashboard/wallet/google-pass/{$pass->pass_id}");
-        $response->assertOk()
-            ->assertJsonStructure([
-                'protocol',
-                'genericObject' => [
-                    'id',
-                    'classId',
-                    'header',
-                    'barcode',
-                ],
-                'deepLink',
-            ]);
+        config(['wallet.google.issuer_id' => null]);
+
+        $this->actingAs($homeowner)->getJson("/dashboard/wallet/google-pass/{$pass->pass_id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Google Wallet passes are not set up for this estate yet.');
     }
 
-    public function test_user_can_retrieve_samsung_wallet_pass_payload(): void
+    public function test_samsung_wallet_pass_is_not_available(): void
     {
         $homeowner = User::factory()->create([
             'role' => UserRole::Homeowner,
@@ -135,17 +130,9 @@ class DigitalAccessWalletTest extends TestCase
         $household = app(HouseholdManagementService::class)->seedExampleSmithHousehold($homeowner);
         $pass = $household->members->firstWhere('name', 'John Smith')->gatePass;
 
-        $response = $this->actingAs($homeowner)->getJson("/dashboard/wallet/samsung-pass/{$pass->pass_id}");
-        $response->assertOk()
-            ->assertJsonStructure([
-                'protocol',
-                'cdata' => [
-                    'cardId',
-                    'nfcUid',
-                    'nfcPayload',
-                ],
-                'deepLink',
-            ]);
+        $this->actingAs($homeowner)->getJson("/dashboard/wallet/samsung-pass/{$pass->pass_id}")
+            ->assertNotFound()
+            ->assertJsonPath('message', 'Samsung Wallet is not available.');
     }
 
     public function test_simulated_nfc_tap_authenticates_gate_clearance(): void

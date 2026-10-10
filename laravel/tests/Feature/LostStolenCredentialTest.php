@@ -11,6 +11,7 @@ use App\Models\GatePass;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\User;
+use App\Services\Credentials\WalletCredentialCode;
 use App\Services\DigitalAccessWalletService;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
@@ -102,10 +103,15 @@ class LostStolenCredentialTest extends TestCase
         $this->assertEquals(DenyReason::PassRevoked->value, $scanResult['report']['denyReason']);
         $this->assertNull($scanResult['scanId']);
 
-        // Also verify scanning raw old pass ID is rejected
+        // The old wallet pass (Apple / Google, or its NFC message) is refused as revoked
+        $walletScanResult = $this->scanner->scan(app(WalletCredentialCode::class)->for($oldPass), GateId::Gate01, $this->guard);
+        $this->assertEquals('REJECT', $walletScanResult['decision']);
+        $this->assertEquals(DenyReason::PassRevoked->value, $walletScanResult['report']['denyReason']);
+        $this->assertNull($walletScanResult['scanId']);
+
+        // And a bare pass ID never opens the gate
         $rawScanResult = $this->scanner->scan($oldPass->pass_id, GateId::Gate01, $this->guard);
         $this->assertEquals('REJECT', $rawScanResult['decision']);
-        $this->assertEquals(DenyReason::PassRevoked->value, $rawScanResult['report']['denyReason']);
         $this->assertNull($rawScanResult['scanId']);
 
         // 6. Test that the NEW replacement pass QR code is GRANTED access!
