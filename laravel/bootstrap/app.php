@@ -2,10 +2,12 @@
 
 use App\Http\Middleware\ApiLoggingMiddleware;
 use App\Http\Middleware\AssignCorrelationId;
+use App\Http\Middleware\EnforceIdempotency;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RequirePasswordConfirmation;
+use App\Http\Middleware\ResolveCommunityContext;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -29,10 +31,14 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->append([
             AssignCorrelationId::class,
+            EnforceIdempotency::class,
             SecurityHeaders::class,
         ]);
 
         $middleware->web(append: [
+            // Web only: API calls, webhooks and health probes have no community
+            // to show, and should not query (or create) one on every request.
+            ResolveCommunityContext::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
