@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import NfcTagReadButton from '@/components/dashboard/nfc-tag-read-button';
 import {
   Scan,
   ShieldCheck,
@@ -305,6 +306,14 @@ export default function GateScannerPage({ gates = [], recentScans = [], guard }:
                     {isScanning ? 'Verifying...' : 'Verify Pass'}
                   </Button>
                 </form>
+
+                <NfcTagReadButton
+                  disabled={isScanning}
+                  onRead={(code) => {
+                    setTokenInput(code);
+                    inputRef.current?.focus();
+                  }}
+                />
               </CardContent>
             </Card>
 

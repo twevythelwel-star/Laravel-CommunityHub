@@ -80,6 +80,19 @@ class WalletPassesTest extends TestCase
         $this->assertDatabaseHas('access_log_entries', ['pass_id' => $this->pass->pass_id, 'method' => 'NFC Contactless Tap']);
     }
 
+    public function test_a_keycard_read_by_the_guard_is_checked_in_as_an_nfc_tap(): void
+    {
+        // What the wallet page writes to a keycard, and the guard's phone reads back.
+        $keycard = app(DigitalAccessWalletService::class)->formatWalletPass($this->pass, 'Homeowner')['nfc']['payload'];
+
+        $this->actingAs($this->guard)
+            ->postJson('/dashboard/gate-pass/scan', ['token' => $keycard, 'gate' => 'GATE-01'])
+            ->assertOk()
+            ->assertJsonPath('decision', 'CHECK_IN');
+
+        $this->assertDatabaseHas('access_log_entries', ['pass_id' => $this->pass->pass_id, 'method' => 'NFC Contactless Tap']);
+    }
+
     public function test_a_bare_pass_id_is_refused(): void
     {
         $result = app(GateScanner::class)->scan($this->pass->pass_id, GateId::Gate01, $this->guard);

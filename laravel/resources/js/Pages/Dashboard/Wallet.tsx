@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Head, router } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import { ProfileCustomQRCode } from '@/components/dashboard/ProfileCustomQRCode';
 import type { PassCategory } from '@/lib/gate-pass-engine/types';
+import { isWebNfcSupported, nfcErrorMessage, writeNfcText } from '@/lib/web-nfc';
 import {
   Wallet,
   QrCode,
@@ -150,8 +151,9 @@ export default function DigitalAccessWalletPage({
   );
   const [activeTab, setActiveTab] = useState<'qr' | 'nfc' | 'mobile_wallet'>('qr');
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30);
-  const [isSimulatingNfc, setIsSimulatingNfc] = useState<boolean>(false);
-  const [nfcSuccessResult, setNfcSuccessResult] = useState<any | null>(null);
+  const [isWritingNfc, setIsWritingNfc] = useState<boolean>(false);
+  const [nfcWrittenFor, setNfcWrittenFor] = useState<string | null>(null);
+  const nfcWriteAbortRef = useRef<AbortController | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [webNfcSupported, setWebNfcSupported] = useState<boolean>(false);
@@ -172,12 +174,18 @@ export default function DigitalAccessWalletPage({
     return credentialsList.find((c) => c.pass_id === selectedPassId) || credentialsList[0];
   }, [credentialsList, selectedPassId]);
 
-  // Check Web NFC hardware support
+  // Web NFC (Chrome on Android) can write a keycard; stop any pending write on leave.
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'NDEFReader' in window) {
-      setWebNfcSupported(true);
-    }
+    setWebNfcSupported(isWebNfcSupported());
+
+    return () => nfcWriteAbortRef.current?.abort();
   }, []);
+
+  // A keycard written for one pass says nothing about the next one selected.
+  useEffect(() => {
+    nfcWriteAbortRef.current?.abort();
+    setNfcWrittenFor(null);
+  }, [currentPass?.pass_id]);
 
   // Rolling countdown timer
   useEffect(() => {
@@ -230,32 +238,31 @@ export default function DigitalAccessWalletPage({
     }
   }, []);
 
-  // Simulate NFC Gate Tap
-  const handleSimulateNfcTap = async () => {
-    if (!currentPass) return;
-    setIsSimulatingNfc(true);
-    setNfcSuccessResult(null);
+  // Write this pass's signed NFC code onto a keycard or fob held to the phone.
+  const handleWriteNfcKeycard = async () => {
+    if (!currentPass?.is_active) return;
+
+    nfcWriteAbortRef.current?.abort();
+    const controller = new AbortController();
+    nfcWriteAbortRef.current = controller;
+    setIsWritingNfc(true);
+    setNfcWrittenFor(null);
 
     try {
-      const res = await axios.post('/dashboard/wallet/simulate-nfc-tap', {
-        payload: currentPass.nfc.payload,
-        gate: gates[0]?.id || 'GATE-01',
-      });
-
+      await writeNfcText(currentPass.nfc.payload, controller.signal);
       playClearanceChime();
-      setNfcSuccessResult(res.data);
+      setNfcWrittenFor(currentPass.pass_id);
       toast({
-        title: 'NFC Handshake Successful',
-        description: `Gate reader confirmed: ${res.data.decision} (${res.data.report?.primaryReason || 'Clearance Verified'})`,
+        title: 'Keycard written',
+        description: `${currentPass.holder_name}'s keycard now opens the gate. Reporting the pass lost stops it too.`,
       });
-    } catch (err: any) {
-      toast({
-        title: 'NFC Tap Failed',
-        description: err.response?.data?.message || 'Gate communication timeout',
-        variant: 'destructive',
-      });
+    } catch (err) {
+      const message = nfcErrorMessage(err);
+      if (message) {
+        toast({ title: 'Keycard not written', description: message, variant: 'destructive' });
+      }
     } finally {
-      setIsSimulatingNfc(false);
+      setIsWritingNfc(false);
     }
   };
 
@@ -428,10 +435,7 @@ export default function DigitalAccessWalletPage({
                 return (
                   <div
                     key={cred.pass_id}
-                    onClick={() => {
-                      setSelectedPassId(cred.pass_id);
-                      setNfcSuccessResult(null);
-                    }}
+                    onClick={() => setSelectedPassId(cred.pass_id)}
                     className={cn(
                       "relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden",
                       isSelected
@@ -720,10 +724,10 @@ export default function DigitalAccessWalletPage({
 
                     <div className="relative mt-4">
                       <h3 className="text-lg font-bold text-white tracking-tight">
-                        Hold Top of Phone Near Gate Reader
+                        Tap a Keycard at the Gate
                       </h3>
                       <p className="text-xs text-slate-400 max-w-sm mt-1 mx-auto">
-                        High Frequency 13.56 MHz contactless field ready. Compatible with estate card readers, turnstiles, and mobile security marshals.
+                        Write this pass to an NFC keycard or fob below, then tap it on the gate's reader. Your phone itself can't be tapped from a web page; use the QR code or a wallet pass for that.
                       </p>
                     </div>
 
@@ -744,70 +748,56 @@ export default function DigitalAccessWalletPage({
                     </div>
                   </div>
 
-                  {/* Interactive Gate Reader Simulator */}
+                  {/* Write this pass to an NFC keycard (Web NFC, Chrome on Android) */}
                   <div className="p-4 rounded-xl bg-slate-900/50 border border-border/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
                         <Radio className="w-3.5 h-3.5 text-emerald-400" />
-                        Simulate Gate Contactless Tap
+                        Write to an NFC keycard
                       </p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Test gate access clearance using this credential's cryptographic NFC challenge.
+                        {!webNfcSupported
+                          ? 'Writing keycards needs Chrome on an Android phone with NFC switched on.'
+                          : !currentPass.is_active
+                            ? 'Only an active pass can be written to a keycard.'
+                            : isWritingNfc
+                              ? 'Hold a blank NFC keycard or fob to the back of this phone.'
+                              : `Puts ${currentPass.holder_name}'s signed gate code on a keycard or fob. Reporting the pass lost stops the keycard too.`}
                       </p>
                     </div>
 
-                    <Button
-                      onClick={handleSimulateNfcTap}
-                      disabled={isSimulatingNfc}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shrink-0"
-                    >
-                      {isSimulatingNfc ? (
-                        <>
+                    {webNfcSupported && (
+                      isWritingNfc ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => nfcWriteAbortRef.current?.abort()}
+                          className="font-bold text-xs gap-2 shrink-0"
+                        >
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Tapping Antenna...
-                        </>
+                          Waiting for keycard… Cancel
+                        </Button>
                       ) : (
-                        <>
+                        <Button
+                          onClick={handleWriteNfcKeycard}
+                          disabled={!currentPass.is_active}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shrink-0"
+                        >
                           <Nfc className="w-3.5 h-3.5" />
-                          Tap Gate Reader Now
-                        </>
-                      )}
-                    </Button>
+                          Write keycard
+                        </Button>
+                      )
+                    )}
                   </div>
 
-                  {/* NFC Success Decision Banner */}
-                  {nfcSuccessResult && (
-                    <div
-                      className={cn(
-                        "p-4 rounded-xl border transition-all animate-in fade-in duration-300",
-                        nfcSuccessResult.decision === 'REJECT'
-                          ? "bg-red-500/10 border-red-500/40 text-red-400"
-                          : "bg-emerald-500/10 border-emerald-500/40 text-emerald-300"
-                      )}
-                    >
+                  {nfcWrittenFor === currentPass.pass_id && (
+                    <div className="p-4 rounded-xl border bg-emerald-500/10 border-emerald-500/40 text-emerald-300 animate-in fade-in duration-300">
                       <div className="flex items-start gap-3">
-                        {nfcSuccessResult.decision === 'REJECT' ? (
-                          <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                        ) : (
-                          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                        )}
+                        <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm">
-                              {nfcSuccessResult.decision === 'REJECT' ? 'Clearance Denied' : 'Clearance Granted (Gate Unlocked)'}
-                            </span>
-                            <Badge variant="outline" className="text-[10px] uppercase font-mono">
-                              Decision: {nfcSuccessResult.decision}
-                            </Badge>
-                          </div>
+                          <span className="font-bold text-sm">Keycard written</span>
                           <p className="text-xs mt-1 text-slate-300">
-                            {nfcSuccessResult.report?.primaryReason || 'Authorized resident pass verified by gate controller.'}
+                            Tap it on the gate reader, or hand it to the guard to read with their phone.
                           </p>
-                          <div className="mt-2 text-[11px] font-mono text-slate-400 flex items-center gap-3">
-                            <span>Gate: {nfcSuccessResult.report?.gate || 'GATE-01'}</span>
-                            <span>Method: NFC Contactless Tap</span>
-                            <span>Log ID: #{nfcSuccessResult.accessLogId}</span>
-                          </div>
                         </div>
                       </div>
                     </div>
