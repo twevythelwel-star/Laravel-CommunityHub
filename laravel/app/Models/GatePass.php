@@ -117,12 +117,14 @@ class GatePass extends Model
         return ! ($this->status === PassStatus::CheckedOut && $next === PassStatus::CheckedIn && $this->single_entry);
     }
 
-    /** Deterministic 6-digit offline backup gate PIN */
+    /** Deterministic, cryptographically secure 6-digit keyed offline backup gate PIN */
     public function getOfflinePinAttribute(): string
     {
-        $hash = crc32($this->pass_id.($this->created_at?->timestamp ?? 'pin'));
+        $key = config('app.key') ?: 'community-hub-secret-gate-key';
+        $binaryHash = hash_hmac('sha256', "gate-offline:{$this->pass_id}:".($this->created_at?->timestamp ?? 'pin'), $key, true);
+        $unpacked = unpack('N', substr($binaryHash, 0, 4))[1] & 0x7FFFFFFF;
 
-        return sprintf('%06d', abs($hash) % 1000000);
+        return sprintf('%06d', $unpacked % 1000000);
     }
 
     /**
