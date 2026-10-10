@@ -188,6 +188,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/gate-scanner', [GatePassController::class, 'scanner'])
         ->middleware('can:scanPasses')
         ->name('gate-scanner');
+    Route::post('/gate-pass/sync-offline-scans', [GatePassController::class, 'syncOfflineScans'])
+        ->middleware('can:scanPasses')
+        ->name('gate-pass.sync-offline-scans');
     // Authorization is in the controller: security for every move, a host
     // for cancelling their own guest's pass.
     Route::post('/gate-pass/{gatePass}/transition', [GatePassController::class, 'transition'])

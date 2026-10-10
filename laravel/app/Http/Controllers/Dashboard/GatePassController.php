@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Actions\GatePass\ConfirmScanAction;
 use App\Actions\GatePass\RevokePassAction;
 use App\Actions\GatePass\ScanGatePassAction;
+use App\Actions\GatePass\SyncOfflineScansAction;
 use App\Actions\GatePass\TransitionPassAction;
 use App\Enums\GateId;
 use App\Enums\PassStatus;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\GatePass\ConfirmScanRequest;
 use App\Http\Requests\GatePass\RevokePassRequest;
 use App\Http\Requests\GatePass\ScanGatePassRequest;
+use App\Http\Requests\GatePass\SyncOfflineScansRequest;
 use App\Http\Requests\GatePass\TransitionPassRequest;
 use App\Models\AccessLogEntry;
 use App\Models\GatePass;
@@ -153,6 +155,18 @@ class GatePassController extends Controller
         }
 
         return response()->json(['success' => true, ...$result]);
+    }
+
+    /**
+     * Reconcile queued offline scans recorded by gate guards during connectivity loss.
+     */
+    public function syncOfflineScans(SyncOfflineScansRequest $request, SyncOfflineScansAction $action): JsonResponse
+    {
+        return response()->json($action->execute(
+            $request->validated('scans'),
+            $request->validated('gate'),
+            $request->user()
+        ));
     }
 
     public function revoke(RevokePassRequest $request, RevokePassAction $action, GatePass $gatePass): RedirectResponse
