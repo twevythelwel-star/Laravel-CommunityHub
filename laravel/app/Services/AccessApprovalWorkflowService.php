@@ -235,7 +235,6 @@ class AccessApprovalWorkflowService
             'rotation_seq' => 1,
             'valid_from' => now(),
             'valid_until' => $validUntil,
-            'offline_pin' => sprintf('%06d', mt_rand(100000, 999999)),
             'color_variant' => $this->engine->randomApprovedColor($passCategory)['id'] ?? null,
             'status_changed_at' => now(),
         ]);

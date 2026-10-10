@@ -55,16 +55,22 @@ class GateScanner
         ?string $overrideReason = null
     ): array {
         $trimmed = trim(str_replace('-', '', $token));
+        // A PIN is six digits derived from the pass, so two active passes can
+        // share one. Then it names no one: taking the first match would check
+        // in the wrong person, so the guard is asked for the QR code instead.
+        $ambiguousPin = false;
         if (preg_match('/^\d{6}$/', $trimmed)) {
-            $candidate = GatePass::whereIn('status', [PassStatus::Active, PassStatus::CheckedIn])
+            $matches = GatePass::whereIn('status', [PassStatus::Active, PassStatus::CheckedIn])
                 ->get()
-                ->first(fn ($p) => $p->offline_pin === $trimmed);
+                ->filter(fn ($p) => $p->offline_pin === $trimmed);
 
-            if ($candidate) {
-                $issued = $this->engine->issueToken($candidate, $gate);
+            if ($matches->count() === 1) {
+                $issued = $this->engine->issueToken($matches->first(), $gate);
                 $token = $issued['token'];
                 $method = 'Offline Gate PIN';
             }
+
+            $ambiguousPin = $matches->count() > 1;
         }
 
         // ── 0. Multi-Modal Token Translation (wallet pass, NFC tap, guard override, or card UID) ──
@@ -114,6 +120,9 @@ class GateScanner
         }
 
         $report = $this->engine->validate($token, $gate);
+        if ($ambiguousPin) {
+            $report['primaryReason'] = 'This PIN matches more than one pass. Scan the QR code or check ID instead.';
+        }
         $pass = GatePass::with(['user', 'visitor'])->where('pass_id', $report['passId'])->first();
         $decision = ScanDecision::from($report['decision']);
 

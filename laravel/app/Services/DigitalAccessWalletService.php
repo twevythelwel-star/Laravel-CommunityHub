@@ -117,7 +117,8 @@ class DigitalAccessWalletService
             'status' => $pass->status->value,
             'status_label' => $pass->status->label(),
             'is_active' => $pass->isActive(),
-            'offline_pin' => $pass->offline_pin ?? '482910',
+            // Derived from the pass (GatePass::getOfflinePinAttribute), so never null.
+            'offline_pin' => $pass->offline_pin,
 
             // Multi-Modal 1: QR Credential
             'qr' => [
@@ -296,7 +297,6 @@ class DigitalAccessWalletService
                     'rotation_seq' => $seq,
                     'status_changed_at' => now(),
                     'color_variant' => $this->engine->randomApprovedColor($category)['id'] ?? null,
-                    'offline_pin' => sprintf('%06d', mt_rand(100000, 999999)),
                     'metadata' => array_merge($oldPass->metadata ?? [], [
                         'replaces_pass_id' => $oldPass->pass_id,
                         'replacement_reason' => $revocationReason,
@@ -324,7 +324,6 @@ class DigitalAccessWalletService
                 $newPass = $this->engine->reissuePassFor($user, $actor);
                 $newPass->update([
                     'rotation_seq' => $seq,
-                    'offline_pin' => sprintf('%06d', mt_rand(100000, 999999)),
                     'metadata' => array_merge($oldPass->metadata ?? [], [
                         'replaces_pass_id' => $oldPass->pass_id,
                         'replacement_reason' => $revocationReason,
