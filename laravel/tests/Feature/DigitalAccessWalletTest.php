@@ -228,8 +228,10 @@ class DigitalAccessWalletTest extends TestCase
         $walletService = app(DigitalAccessWalletService::class);
         $cred = $walletService->formatWalletPass($mariaPass, 'Caregiver', null, $mariaMember);
 
-        // Test on Saturday (outside Mon-Fri authorized days)
-        Carbon::setTestNow(Carbon::parse('2026-10-10 10:00:00')); // Saturday
+        // Next Saturday, outside the Mon-Fri authorized days. Not a fixed date:
+        // household passes are valid from when they are issued, so a date at
+        // or before today is refused as not yet valid instead.
+        Carbon::setTestNow(now()->next(Carbon::SATURDAY)->setTime(10, 0));
 
         $response = // The tap is a gate officer's: the simulator runs the real scanner (can:scanPasses).
         $this->actingAs(User::factory()->create(['role' => UserRole::Security]))->postJson('/dashboard/wallet/simulate-nfc-tap', [
