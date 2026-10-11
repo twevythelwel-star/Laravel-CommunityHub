@@ -13,7 +13,13 @@ class GatePassPolicy
      */
     public function view(User $user, GatePass $pass): bool
     {
-        return $user->id === $pass->user_id || $user->can('scanPasses');
+        if ($user->id === $pass->user_id || $user->can('scanPasses') || $user->role->isAdministrative()) {
+            return true;
+        }
+
+        return \App\Models\Household::where('primary_homeowner_id', $user->id)
+            ->whereHas('members', fn ($q) => $q->where('gate_pass_id', $pass->id))
+            ->exists();
     }
 
     /**

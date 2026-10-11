@@ -20,7 +20,11 @@ class VisitorPolicy
      */
     public function view(User $user, Visitor $visitor): bool
     {
-        return $user->can('manageSecurity') || $user->id === $visitor->homeowner_id;
+        if ($user->can('manageSecurity') || $user->id === $visitor->homeowner_id) {
+            return true;
+        }
+
+        return $visitor->property_id !== null && $user->canManageVisitorsForProperty($visitor->property_id);
     }
 
     /**
@@ -36,15 +40,27 @@ class VisitorPolicy
      */
     public function update(User $user, Visitor $visitor): bool
     {
-        return $user->can('manageSecurity') || $user->id === $visitor->homeowner_id;
+        if ($user->can('manageSecurity') || $user->id === $visitor->homeowner_id) {
+            return true;
+        }
+
+        return $visitor->property_id !== null && $user->canManageVisitorsForProperty($visitor->property_id);
     }
 
     /**
      * Determine whether the user can delete/cancel the visitor.
      */
-    public function delete(User $user, Visitor $visitor): bool
+    public function delete(User $user, Visitor $visitor): \Illuminate\Auth\Access\Response
     {
-        return $user->can('manageSecurity') || $user->id === $visitor->homeowner_id;
+        if ($user->can('manageSecurity') || $user->id === $visitor->homeowner_id) {
+            return \Illuminate\Auth\Access\Response::allow();
+        }
+
+        if ($visitor->property_id !== null && $user->canManageVisitorsForProperty($visitor->property_id)) {
+            return \Illuminate\Auth\Access\Response::allow();
+        }
+
+        return \Illuminate\Auth\Access\Response::deny('You can only manage visitors you registered or are authorized to manage.');
     }
 
     /**

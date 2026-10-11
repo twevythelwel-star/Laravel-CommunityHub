@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Actions\Visitors\CheckInVisitorAction;
+use App\Actions\Visitors\ExtendVisitorPassAction;
+use App\Actions\Visitors\RegisterBulkVisitorsAction;
+use App\Actions\Visitors\RegisterVisitorAction;
+use App\Actions\Visitors\UpdateVisitorAction;
 use App\Enums\GateId;
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
@@ -10,6 +15,13 @@ use App\Enums\VisitorStatus;
 use App\Events\VisitorCheckedInEvent;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Visitors\CheckInVisitorRequest;
+use App\Http\Requests\Visitors\CheckOutVisitorRequest;
+use App\Http\Requests\Visitors\ExtendVisitorPassRequest;
+use App\Http\Requests\Visitors\RegisterVisitorRequest;
+use App\Http\Requests\Visitors\ResendVisitorPassRequest;
+use App\Http\Requests\Visitors\StoreBulkVisitorsRequest;
+use App\Http\Requests\Visitors\UpdateVisitorRequest;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
 use App\Models\GatePass;
@@ -19,6 +31,7 @@ use App\Models\Visitor;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -46,8 +59,11 @@ class VisitorController extends Controller
         $isStaff = $user->can('manageSecurity');
         $tab = $request->string('tab')->toString() ?: 'all';
 
-        // Calculate live counters for Security Dashboard & Residents
-        $countsQuery = Visitor::query()->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id));
+        // A host sees their own visitors and those of properties they manage.
+        $manageableProperties = $user->propertiesForVisitorManagement();
+        $scopeForResidentOrRep = fn ($q) => $q->manageableBy($user, $manageableProperties->pluck('id'));
+
+        $countsQuery = Visitor::query()->when(! $isStaff, $scopeForResidentOrRep);
 
         $todayQuery = (clone $countsQuery)->where(function ($q) {
             $q->whereDate('expected_at', today())
@@ -107,7 +123,7 @@ class VisitorController extends Controller
         // Query visitors based on active sub-navigation tab
         $query = Visitor::query()
             ->with(['homeowner:id,name,display_name,lot,street', 'gatePass'])
-            ->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id))
+            ->when(! $isStaff, $scopeForResidentOrRep)
             ->when($request->string('search')->isNotEmpty(),
                 fn ($q) => $q->where('name', 'like', '%'.$request->string('search').'%'));
 
@@ -181,6 +197,13 @@ class VisitorController extends Controller
                     'checkedOutAt' => $v->checked_out_at?->toIso8601String(),
                     'shareToken' => $v->share_token,
                     'guestPassUrl' => $v->share_token ? route('guest-pass.show', $v->share_token) : null,
+                    'arrivalWindow' => $v->arrivalWindowLabel(),
+                    'arrivalWindowStart' => $v->arrival_window_start,
+                    'arrivalWindowEnd' => $v->arrival_window_end,
+                    'parkingInstructions' => $v->parkingInstructions(),
+                    'communityRules' => $v->communityRules(),
+                    'emergencyInfo' => $v->emergencyInfo(),
+                    'notes' => $v->notes,
                     'notify_email' => $v->notify_email,
                     'notify_sms' => $v->notify_sms,
                     'notify_whatsapp' => $v->notify_whatsapp,
@@ -215,316 +238,74 @@ class VisitorController extends Controller
             'canRegister' => $user->can('registerVisitors'),
             'userStay' => $userStay,
             'graceHours' => 12,
-            // An owner of several properties says which one a visitor is coming to.
-            'hostProperties' => $user->properties()->orderBy('id')->get()
-                ->map(fn ($p) => ['id' => $p->id, 'label' => $p->label()])
-                ->values(),
+            // An owner or authorized representative says which property a visitor is coming to.
+            'hostProperties' => $manageableProperties->map(fn ($p) => ['id' => $p->id, 'label' => $p->hostLabel()])->values(),
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(RegisterVisitorRequest $request, RegisterVisitorAction $action): RedirectResponse|JsonResponse
     {
-        $this->authorize('registerVisitors');
+        $result = $action->execute($request->validated(), $request->user());
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'contact' => ['nullable', 'string', 'max:120'],
-            'vehicle' => ['nullable', 'string', 'max:120'],
-            'id_type' => ['nullable', 'string', 'max:60'],
-            'id_number' => ['nullable', 'string', 'max:60'],
-            'type' => ['required', 'in:One-time,Recurring'],
-            // A pre-clearance in the past is almost always a mistyped date, and
-            // it would be swept straight away by visitors:expire-no-shows.
-            'expected_at' => ['required', 'date', 'after:-1 hour'],
-            'date_range' => ['nullable', 'string', 'max:120'],
-            'id_image_url' => ['nullable', 'url', 'max:2048'],
-            'notify_email' => ['nullable', 'boolean'],
-            'notify_sms' => ['nullable', 'boolean'],
-            'notify_whatsapp' => ['nullable', 'boolean'],
-            // A contractor's pass waits for security to approve it.
-            'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
-            // One of the host's own properties; no one else's address goes on the pass.
-            'property_id' => ['nullable', Rule::exists('properties', 'id')->where('owner_user_id', $request->user()->id)],
-        ], [
-            'property_id.exists' => 'Choose one of your own properties.',
-        ]);
+        return $this->visitorRegistered($request, $result['visitor'], $result['pass'], $result['message']);
+    }
 
-        $user = $request->user();
-        $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
-        unset($validated['pass_category']);
-
-        // Server-side stay timeframe enforcement for Temporary Homeowners
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if (! $stay || $stay->leaseHasExpired()) {
-                return back()->withErrors([
-                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot register visitors.',
-                ]);
-            }
-
-            $expectedDate = Carbon::parse($validated['expected_at'])->startOfDay();
-            $leaseStart = $stay->lease_start->startOfDay();
-            $leaseEnd = $stay->lease_end->endOfDay();
-
-            if ($expectedDate->lt($leaseStart) || $expectedDate->gt($leaseEnd)) {
-                return back()->withErrors([
-                    'expected_at' => "Visitors can only be registered within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
-                ]);
-            }
+    /** The page's flash, or JSON for a client that asked for it. */
+    private function visitorRegistered(Request $request, Visitor $visitor, GatePass $pass, string $successMsg): RedirectResponse|JsonResponse
+    {
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $successMsg,
+                'visitor' => [
+                    'id' => $visitor->id,
+                    'name' => $visitor->name,
+                    'status' => $visitor->status,
+                    'expectedAt' => $visitor->expected_at?->toIso8601String(),
+                    'passId' => $pass->pass_id,
+                    'passStatus' => $pass->status->value,
+                ],
+                'guestPassUrl' => $visitor->guestPassUrl(),
+                'shareToken' => $visitor->share_token,
+            ], 201);
         }
 
-        // Server-side blocklist enforcement.
-        $blocked = $this->isOnBlocklist($validated['name']);
-
-        if ($blocked) {
-            return back()->withErrors([
-                'name' => 'This person is on the community blocklist and cannot be registered. Contact security.',
-            ]);
-        }
-
-        $visitor = Visitor::create([
-            ...$validated,
-            'status' => 'Expected',
-            'homeowner_id' => $user->id,
-            'homeowner_name' => $user->display_name,
-            'is_blocked' => false,
-            'notify_email' => $validated['notify_email'] ?? true,
-            'notify_sms' => $validated['notify_sms'] ?? false,
-            'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
-        ]);
-
-        $user->recordActivity("Registered visitor {$validated['name']}");
-
-        $pass = $this->engine->issueGuestPass($visitor, $user, $passCategory);
-
-        // Send the pass on whichever chosen channels can actually deliver it.
-        // A contractor still awaiting approval is told once security approves.
-        $channels = $visitor->passNotificationChannels();
-
-        if ($channels !== [] && $pass->status !== PassStatus::Requested) {
-            $visitor->sendPassNotification($channels);
-        }
-
-        return back()->with('success', $pass->status === PassStatus::Requested
-            ? 'Contractor registered. Their pass is waiting for security approval.'
-            : 'Visitor registered.');
+        return back()
+            ->with('success', $successMsg)
+            ->with('guest_pass_url', $visitor->guestPassUrl())
+            ->with('share_token', $visitor->share_token);
     }
 
     /**
      * Bulk register attendees for private gatherings, events, or contractors.
      */
-    public function storeBulk(Request $request): RedirectResponse
+    public function storeBulk(StoreBulkVisitorsRequest $request, RegisterBulkVisitorsAction $action): RedirectResponse
     {
-        $this->authorize('registerVisitors');
+        $result = $action->execute($request->validated(), $request->user());
 
-        $validated = $request->validate([
-            'expected_at' => ['required', 'date', 'after:-1 hour'],
-            'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
-            'visitors' => ['required', 'array', 'min:1', 'max:50'],
-            'visitors.*.name' => ['required', 'string', 'max:120'],
-            'visitors.*.contact' => ['nullable', 'string', 'max:120'],
-            'visitors.*.vehicle' => ['nullable', 'string', 'max:120'],
-            'notify_email' => ['nullable', 'boolean'],
-            'notify_sms' => ['nullable', 'boolean'],
-            'notify_whatsapp' => ['nullable', 'boolean'],
-        ]);
-
-        $user = $request->user();
-        $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
-        $expectedAt = Carbon::parse($validated['expected_at']);
-
-        // Check stay timeframe for temporary residents
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if (! $stay || $stay->leaseHasExpired()) {
-                return back()->withErrors([
-                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot register visitors.',
-                ]);
-            }
-
-            $stayStart = $stay->lease_start->startOfDay();
-            $stayEnd = $stay->lease_end->endOfDay();
-            if ($expectedAt->lt($stayStart) || $expectedAt->gt($stayEnd)) {
-                return back()->withErrors([
-                    'expected_at' => "Visitors can only be scheduled within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
-                ]);
-            }
-        }
-
-        $createdCount = 0;
-        $blockedNames = [];
-
-        DB::transaction(function () use ($validated, $user, $expectedAt, $passCategory, &$createdCount, &$blockedNames) {
-            foreach ($validated['visitors'] as $item) {
-                $name = trim($item['name']);
-                if ($this->isOnBlocklist($name)) {
-                    $blockedNames[] = $name;
-
-                    continue;
-                }
-
-                $visitor = Visitor::create([
-                    'homeowner_id' => $user->id,
-                    'homeowner_name' => $user->display_name,
-                    'name' => $name,
-                    'contact' => $item['contact'] ?? null,
-                    'vehicle' => $item['vehicle'] ?? null,
-                    'type' => 'One-time',
-                    'expected_at' => $expectedAt,
-                    'status' => 'Expected',
-                    'is_blocked' => false,
-                    'notify_email' => $validated['notify_email'] ?? false,
-                    'notify_sms' => $validated['notify_sms'] ?? false,
-                    'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
-                ]);
-
-                $pass = $this->engine->issueGuestPass($visitor, $user, $passCategory);
-                $createdCount++;
-
-                $channels = $visitor->passNotificationChannels();
-                if ($channels !== [] && $pass->status !== PassStatus::Requested) {
-                    $visitor->sendPassNotification($channels);
-                }
-            }
-        });
-
-        $msg = "Registered {$createdCount} event attendee(s) with pre-cleared guest passes.";
-        if (! empty($blockedNames)) {
-            $msg .= ' Note: '.count($blockedNames).' attendee(s) could not be registered due to active community blocklist restrictions: '.implode(', ', $blockedNames);
-        }
-
-        return back()->with('success', $msg);
+        return back()->with('success', $result['message']);
     }
 
-    public function update(Request $request, Visitor $visitor): RedirectResponse
+    public function update(UpdateVisitorRequest $request, Visitor $visitor, UpdateVisitorAction $action): RedirectResponse
     {
-        $this->authorizeVisitor($request, $visitor);
-
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120'],
-            'contact' => ['nullable', 'string', 'max:120'],
-            'vehicle' => ['nullable', 'string', 'max:120'],
-            'type' => ['sometimes', 'in:One-time,Recurring'],
-            'expected_at' => ['sometimes', 'date'],
-            'date_range' => ['nullable', 'string', 'max:120'],
-            'notify_email' => ['nullable', 'boolean'],
-            'notify_sms' => ['nullable', 'boolean'],
-            'notify_whatsapp' => ['nullable', 'boolean'],
-        ]);
-
-        $user = $request->user();
-
-        // Server-side blocklist check if name was changed
-        if (isset($validated['name']) && $validated['name'] !== $visitor->name) {
-            if ($this->isOnBlocklist($validated['name'])) {
-                return back()->withErrors([
-                    'name' => 'This person is on the community blocklist and cannot be registered. Contact security.',
-                ]);
-            }
-        }
-
-        // Temporary Homeowners can only edit visitors within their approved timeframe
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if (! $stay || $stay->leaseHasExpired()) {
-                return back()->withErrors([
-                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot modify visitors.',
-                ]);
-            }
-
-            if (isset($validated['expected_at'])) {
-                $expectedDate = Carbon::parse($validated['expected_at'])->startOfDay();
-                $leaseStart = $stay->lease_start->startOfDay();
-                $leaseEnd = $stay->lease_end->endOfDay();
-
-                if ($expectedDate->lt($leaseStart) || $expectedDate->gt($leaseEnd)) {
-                    return back()->withErrors([
-                        'expected_at' => "Visitors can only be scheduled within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
-                    ]);
-                }
-            }
-        }
-
-        $visitor->update($validated);
-
-        if ($visitor->gatePass) {
-            $this->engine->syncGuestPass($visitor->gatePass, $visitor->fresh());
-        }
+        $action->execute($visitor, $request->validated(), $request->user());
 
         return back()->with('success', 'Visitor updated.');
     }
 
-    public function checkIn(Request $request, Visitor $visitor): RedirectResponse
+    public function checkIn(CheckInVisitorRequest $request, Visitor $visitor, CheckInVisitorAction $action): RedirectResponse
     {
-        $this->authorize('manageSecurity');
-
-        // A lapsed pre-clearance must be re-authorised by the resident. The page
-        // disables the button, but a disabled button is not an access control.
-        if ($visitor->expired_at !== null) {
-            return back()->withErrors([
-                'visitor' => 'This clearance expired after the no-show grace period. Ask the resident to re-register the visitor.',
-            ]);
+        try {
+            $action->execute($visitor, $request->user(), $this->gateFrom($request), $request->string('gate')->toString() ?: 'Main Gate');
+        } catch (ScanNotConfirmable $e) {
+            return back()->withErrors(['visitor' => "Not checked in: {$e->getMessage()}"]);
         }
-
-        if ($visitor->status === VisitorStatus::CheckedIn) {
-            return back()->withErrors(['visitor' => 'This visitor is already checked in.']);
-        }
-
-        // Re-check at the gate: someone may have been added to the blocklist
-        // after they were registered.
-        if ($this->isOnBlocklist($visitor->name)) {
-            $visitor->update(['is_blocked' => true]);
-
-            AccessLogEntry::create([
-                'user_id' => $visitor->homeowner_id,
-                'user_name' => $visitor->name,
-                'user_role' => 'Visitor',
-                'method' => 'Visitor Pass',
-                'gate' => $request->string('gate')->toString() ?: 'Main Gate',
-                'result' => 'DENY',
-                'deny_reason' => 'BLOCKLIST: Visitor is on the community blocklist.',
-                'scanned_by' => $request->user()->id,
-                'occurred_at' => now(),
-            ]);
-
-            return back()->withErrors(['visitor' => 'Denied — this visitor is on the blocklist.']);
-        }
-
-        // A visitor with a pass is checked in through it, so the pass rules
-        // (state, validity window) apply to the manual button too.
-        if ($visitor->gatePass) {
-            try {
-                $this->scanner->manualCheckIn($visitor->gatePass, $request->user(), $this->gateFrom($request));
-            } catch (ScanNotConfirmable $e) {
-                return back()->withErrors(['visitor' => "Not checked in: {$e->getMessage()}"]);
-            }
-
-            return back()->with('success', "{$visitor->name} checked in.");
-        }
-
-        $visitor->checkIn();
-
-        $gate = $request->string('gate')->toString() ?: 'Main Gate';
-        event(new VisitorCheckedInEvent($visitor, $gate));
-
-        AccessLogEntry::create([
-            'user_id' => $visitor->homeowner_id,
-            'user_name' => $visitor->name,
-            'user_role' => 'Visitor',
-            'method' => 'Visitor Pass',
-            'gate' => $gate,
-            'result' => 'ALLOW',
-            'scanned_by' => $request->user()->id,
-            'occurred_at' => now(),
-        ]);
 
         return back()->with('success', "{$visitor->name} checked in.");
     }
 
-    public function checkOut(Request $request, Visitor $visitor): RedirectResponse
+    public function checkOut(CheckOutVisitorRequest $request, Visitor $visitor): RedirectResponse
     {
-        $this->authorize('manageSecurity');
-
         if ($visitor->gatePass) {
             try {
                 $this->scanner->manualCheckOut($visitor->gatePass, $request->user(), $this->gateFrom($request));
@@ -542,7 +323,7 @@ class VisitorController extends Controller
 
     public function destroy(Request $request, Visitor $visitor): RedirectResponse
     {
-        $this->authorizeVisitor($request, $visitor);
+        $this->authorize('delete', $visitor);
 
         $user = $request->user();
         if ($user->role === UserRole::TemporaryHomeowner) {
@@ -562,24 +343,14 @@ class VisitorController extends Controller
     /**
      * Dispatch or re-send guest pass via SMS, WhatsApp, or Email.
      */
-    public function resendPass(Request $request, Visitor $visitor): RedirectResponse
+    public function resendPass(ResendVisitorPassRequest $request, Visitor $visitor): RedirectResponse
     {
-        $this->authorizeVisitor($request, $visitor);
-
-        $validated = $request->validate([
-            'channel' => ['required', 'string', 'in:sms,whatsapp,email,all'],
-        ]);
-
-        $channel = $validated['channel'];
+        $channel = $request->validated('channel');
         $channels = $channel === 'all'
             ? $visitor->passNotificationChannels()
             : [$channel];
 
-        if (empty($channels)) {
-            $channels = ['sms'];
-        }
-
-        $visitor->resendPassNotification($channels);
+        $visitor->resendPassNotification(empty($channels) ? ['sms'] : $channels);
 
         return back()->with('success', 'Guest pass dispatched via '.strtoupper($channel).'.');
     }
@@ -587,49 +358,12 @@ class VisitorController extends Controller
     /**
      * Extend a visitor pass validity window.
      */
-    public function extendPass(Request $request, Visitor $visitor): RedirectResponse
+    public function extendPass(ExtendVisitorPassRequest $request, Visitor $visitor, ExtendVisitorPassAction $action): RedirectResponse
     {
-        $this->authorizeVisitor($request, $visitor);
-
-        $validated = $request->validate([
-            'hours' => ['required', 'integer', 'min:1', 'max:72'],
-        ]);
-
-        $hours = (int) $validated['hours'];
-        $base = $visitor->expected_at && $visitor->expected_at->isFuture()
-            ? $visitor->expected_at
-            : now();
-
-        $newExpectedAt = $base->copy()->addHours($hours);
-
-        $visitor->update([
-            'expected_at' => $newExpectedAt,
-            'expired_at' => null,
-            'status' => $visitor->status === VisitorStatus::CheckedIn ? VisitorStatus::CheckedIn : VisitorStatus::Expected,
-        ]);
-
-        if ($visitor->gatePass) {
-            $passBase = $visitor->gatePass->valid_until && $visitor->gatePass->valid_until->isFuture()
-                ? $visitor->gatePass->valid_until
-                : now();
-
-            $visitor->gatePass->update([
-                'valid_until' => $passBase->copy()->addHours($hours),
-                'status' => $visitor->gatePass->status === PassStatus::Expired ? PassStatus::Active : $visitor->gatePass->status,
-            ]);
-        }
+        $hours = (int) $request->validated('hours');
+        $action->execute($visitor, $hours);
 
         return back()->with('success', "Visitor pass validity successfully extended by {$hours} hours.");
-    }
-
-    /** A resident may only touch their own visitors; security may touch any. */
-    private function authorizeVisitor(Request $request, Visitor $visitor): void
-    {
-        $user = $request->user();
-
-        if ($visitor->homeowner_id !== $user->id && ! $user->can('manageSecurity')) {
-            abort(403, 'You can only manage visitors you registered.');
-        }
     }
 
     private function isOnBlocklist(string $name): bool
@@ -660,7 +394,7 @@ class VisitorController extends Controller
         $manual = [PassStatus::Approved, PassStatus::Rejected, PassStatus::Suspended, PassStatus::Active, PassStatus::Cancelled, PassStatus::Revoked];
 
         $actions = array_values(array_filter($manual, fn (PassStatus $to) => $pass->canTransitionTo($to)
-            && ($isSecurity || ($to === PassStatus::Cancelled && $pass->visitor?->homeowner_id === $viewer->id))));
+            && ($isSecurity || ($to === PassStatus::Cancelled && ($pass->visitor?->homeowner_id === $viewer->id || ($pass->visitor?->property_id && $viewer->canManageVisitorsForProperty($pass->visitor->property_id)))))));
 
         return [
             'id' => $pass->id,

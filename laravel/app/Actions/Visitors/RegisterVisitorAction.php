@@ -61,6 +61,9 @@ class RegisterVisitorAction
             ]);
         }
 
+        // With only one property to choose from, the visit is to that one.
+        $validated['property_id'] ??= ($own = $user->propertiesForVisitorManagement())->count() === 1 ? $own->first()->id : null;
+
         $visitor = Visitor::create([
             ...$validated,
             'status' => 'Expected',
@@ -83,7 +86,7 @@ class RegisterVisitorAction
 
         $message = $pass->status === PassStatus::Requested
             ? 'Contractor registered. Their pass is waiting for security approval.'
-            : 'Visitor registered.';
+            : 'Guest pre-registered successfully. Digital Guest Pass has been generated.';
 
         return [
             'visitor' => $visitor,

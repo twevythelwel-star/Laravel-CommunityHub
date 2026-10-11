@@ -75,6 +75,13 @@ type VisitorRow = {
   notify_email?: boolean;
   notify_sms?: boolean;
   notify_whatsapp?: boolean;
+  arrivalWindow?: string | null;
+  arrivalWindowStart?: string | null;
+  arrivalWindowEnd?: string | null;
+  parkingInstructions?: string | null;
+  communityRules?: string[] | null;
+  emergencyInfo?: Record<string, string> | null;
+  notes?: string | null;
   /** The visitor's gate pass. Absent for visitors registered before passes existed. */
   pass?: VisitorPass | null;
 };
@@ -241,6 +248,7 @@ export default function VisitorsPage({
       onError: (errs) => toast({ variant: 'destructive', title: 'Extension Failed', description: (Object.values(errs)[0] as string) || 'Unable to extend pass.' }),
     });
   };
+
 
   const handleBulkSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -436,10 +444,14 @@ export default function VisitorsPage({
             </DialogHeader>
 
             <div className="space-y-4 py-2">
-              <div className="rounded-xl border border-border/80 bg-muted/40 p-4 space-y-2">
+              <div className="rounded-xl border border-border/80 bg-muted/40 p-4 space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Visitor</span>
                   <span className="font-semibold text-foreground">{sharePassVisitor.name}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Property Destination</span>
+                  <span className="font-mono font-medium text-foreground">{sharePassVisitor.hostLot || sharePassVisitor.homeowner || '—'}</span>
                 </div>
                 {sharePassVisitor.vehicle && (
                   <div className="flex items-center justify-between text-xs">
@@ -448,15 +460,34 @@ export default function VisitorsPage({
                   </div>
                 )}
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Expected Arrival</span>
-                  <span className="font-medium text-foreground">
-                    {sharePassVisitor.timeDisplay || (sharePassVisitor.expectedAt ? format(parseISO(sharePassVisitor.expectedAt), 'PPp') : 'Pending')}
+                  <span className="text-muted-foreground">Arrival Window</span>
+                  <span className="font-mono font-medium text-primary">
+                    {sharePassVisitor.arrivalWindow || sharePassVisitor.timeDisplay || (sharePassVisitor.expectedAt ? format(parseISO(sharePassVisitor.expectedAt), 'PPp') : 'Pending')}
                   </span>
                 </div>
+                {sharePassVisitor.parkingInstructions && (
+                  <div className="pt-1 border-t border-border/50 text-xs">
+                    <span className="text-muted-foreground block text-[11px] font-semibold mb-0.5">Parking Instructions:</span>
+                    <p className="text-foreground text-[11px] leading-relaxed bg-background/60 p-2 rounded-lg border border-border/50 font-mono">
+                      {sharePassVisitor.parkingInstructions}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Guest Pass Direct URL</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Digital Guest Pass URL</Label>
+                  <a
+                    href={sharePassVisitor.guestPassUrl || (sharePassVisitor.shareToken ? `/guest/pass/${sharePassVisitor.shareToken}` : '#')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-primary hover:underline font-medium inline-flex items-center gap-1"
+                  >
+                    <span>Preview Pass</span>
+                    <span>↗</span>
+                  </a>
+                </div>
                 <div className="flex items-center gap-2">
                   <Input
                     readOnly
@@ -1148,6 +1179,20 @@ export default function VisitorsPage({
                           </Badge>
                         )}
                       </div>
+                      {visitor.arrivalWindow && (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground font-normal">
+                          <Clock className="w-3 h-3 text-primary shrink-0" />
+                          <span className="font-mono text-foreground/80">{visitor.arrivalWindow}</span>
+                        </div>
+                      )}
+                      {visitor.parkingInstructions && (
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/80 font-normal">
+                          <Car className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <span className="truncate max-w-[200px]" title={visitor.parkingInstructions}>
+                            {visitor.parkingInstructions}
+                          </span>
+                        </div>
+                      )}
                     </TableCell>
 
                     {/* Column 2: Type */}

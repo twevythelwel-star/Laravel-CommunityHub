@@ -14,12 +14,7 @@ class UpdateVisitorRequest extends FormRequest
             return false;
         }
 
-        $user = $this->user();
-        if (! $user) {
-            return false;
-        }
-
-        return $visitor->homeowner_id === $user->id || $user->can('manageSecurity');
+        return $this->user()?->can('update', $visitor) ?? false;
     }
 
     /**

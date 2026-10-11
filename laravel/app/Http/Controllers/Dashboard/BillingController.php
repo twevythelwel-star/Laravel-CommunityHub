@@ -2,8 +2,21 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Actions\Billing\ChargeOnTerminalAction;
+use App\Actions\Billing\StoreReconciliationAction;
 use App\Enums\PaymentState;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Billing\CancelTerminalPaymentRequest;
+use App\Http\Requests\Billing\ChargeTerminalRequest;
+use App\Http\Requests\Billing\ReceivePaymentRequest;
+use App\Http\Requests\Billing\RegisterTerminalRequest;
+use App\Http\Requests\Billing\RejectPaymentRequest;
+use App\Http\Requests\Billing\RetireTerminalRequest;
+use App\Http\Requests\Billing\RetryTerminalPaymentRequest;
+use App\Http\Requests\Billing\StorePaymentPlanRequest;
+use App\Http\Requests\Billing\StoreReconciliationRequest;
+use App\Http\Requests\Billing\ToggleChannelRequest;
+use App\Http\Requests\Billing\ValidateChannelRequest;
 use App\Models\Account;
 use App\Models\AutoPaySetting;
 use App\Models\BankReconciliation;
@@ -939,14 +952,9 @@ class BillingController extends Controller
      * only once the provider confirms the reader and its location.
      * Route gate: `manageBilling`.
      */
-    public function registerTerminal(Request $request, ProviderRegistry $providers): RedirectResponse
+    public function registerTerminal(RegisterTerminalRequest $request, ProviderRegistry $providers): RedirectResponse
     {
-        $validated = $request->validate([
-            'registration_code' => ['required', 'string', 'max:64'],
-            'location_id' => ['required', 'string', 'max:64'],
-            'label' => ['required', 'string', 'max:80'],
-        ]);
-
+        $validated = $request->validated();
         $provider = $providers->inPersonProvider();
 
         if (! $provider) {
@@ -963,7 +971,7 @@ class BillingController extends Controller
     }
 
     /** Take a reader out of use. Route gate: `manageBilling`. */
-    public function retireTerminal(Request $request, PaymentTerminal $terminal): RedirectResponse
+    public function retireTerminal(RetireTerminalRequest $request, PaymentTerminal $terminal): RedirectResponse
     {
         $terminal->update(['status' => 'retired']);
         $request->user()->recordActivity("Retired card reader {$terminal->label} ({$terminal->terminal_id})");
@@ -977,49 +985,15 @@ class BillingController extends Controller
      * settled by the provider's webhook, never by this request.
      * Route gate: `manageBilling`.
      */
-    public function chargeOnTerminal(Request $request, ProviderRegistry $providers): RedirectResponse
+    public function chargeOnTerminal(ChargeTerminalRequest $request, ChargeOnTerminalAction $action): RedirectResponse
     {
-        $validated = $request->validate([
-            'invoice_id' => ['required', 'integer', 'exists:invoices,id'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'terminal_id' => ['required', 'integer', 'exists:payment_terminals,id'],
-        ]);
+        $result = $action->execute($request->validated(), $request->user());
 
-        $provider = $providers->inPersonProvider();
-        $terminal = PaymentTerminal::findOrFail($validated['terminal_id']);
-        $invoice = Invoice::findOrFail($validated['invoice_id']);
-        $amountMinor = (int) round($validated['amount'] * 100);
-
-        if (! $provider || $provider->key() !== $terminal->provider || ! $terminal->isUsable()) {
-            return back()->withErrors(['terminal_id' => "Reader {$terminal->label} cannot take payments: it is not a confirmed reader of the estate's in-person provider."]);
-        }
-
-        if ($amountMinor > $invoice->balanceRemainingMinor()) {
-            return back()->withErrors(['amount' => 'That is more than the balance still owed on this statement.']);
-        }
-
-        $payment = $this->orchestrator->startPayment([
-            'user' => $invoice->user,
-            'channel' => 'nfc_pos',
-            'invoice' => $invoice,
-            'amount_minor' => $amountMinor,
-            'currency' => $invoice->currency,
-            'source' => 'staff',
-        ]);
-
-        try {
-            $instruction = $provider->startInPersonPayment($payment, $terminal);
-        } catch (\DomainException $e) {
-            return back()->withErrors(['terminal_id' => $e->getMessage()]);
-        }
-
-        $request->user()->recordActivity("Sent payment {$payment->transaction_id} for {$invoice->reference} to reader {$terminal->label}");
-
-        return back()->with('success', "{$payment->transaction_id}: {$instruction->message}");
+        return back()->with('success', "{$result['payment']->transaction_id}: {$result['instruction']->message}");
     }
 
     /** Send a payment whose card was declined to its reader again. Route gate: `manageBilling`. */
-    public function retryOnTerminal(Payment $payment, ProviderRegistry $providers): RedirectResponse
+    public function retryOnTerminal(RetryTerminalPaymentRequest $request, Payment $payment, ProviderRegistry $providers): RedirectResponse
     {
         $provider = $providers->inPersonProvider();
 
@@ -1037,7 +1011,7 @@ class BillingController extends Controller
     }
 
     /** Clear a payment from its reader before a card is presented. Route gate: `manageBilling`. */
-    public function cancelOnTerminal(Request $request, Payment $payment, ProviderRegistry $providers): RedirectResponse
+    public function cancelOnTerminal(CancelTerminalPaymentRequest $request, Payment $payment, ProviderRegistry $providers): RedirectResponse
     {
         $provider = $providers->byKey($payment->provider);
 
@@ -1054,12 +1028,9 @@ class BillingController extends Controller
         return back()->with('success', "Payment {$payment->transaction_id} cleared from the reader.");
     }
 
-    public function receivePayment(Request $request, Payment $payment): RedirectResponse
+    public function receivePayment(ReceivePaymentRequest $request, Payment $payment): RedirectResponse
     {
-        $validated = $request->validate([
-            'bank_reference' => ['nullable', 'string', 'max:120'],
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->orchestrator->markReceived($payment, $request->user(), $validated['bank_reference'] ?? null, $validated['note'] ?? null);
@@ -1074,11 +1045,9 @@ class BillingController extends Controller
      * An administrator records that an office payment never arrived.
      * Route gate: `manageBilling`.
      */
-    public function rejectPayment(Request $request, Payment $payment): RedirectResponse
+    public function rejectPayment(RejectPaymentRequest $request, Payment $payment): RedirectResponse
     {
-        $validated = $request->validate([
-            'reason' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->orchestrator->rejectPayment($payment, $request->user(), $validated['reason'] ?? null);
@@ -1273,7 +1242,7 @@ class BillingController extends Controller
     /**
      * Validate an individual payment channel integration technical readiness.
      */
-    public function validateChannel(Request $request, string $channel): RedirectResponse|JsonResponse
+    public function validateChannel(ValidateChannelRequest $request, string $channel): RedirectResponse|JsonResponse
     {
         $report = $this->orchestrator->validateChannelIntegration($channel);
 
@@ -1289,7 +1258,7 @@ class BillingController extends Controller
     /**
      * Enable or disable a payment channel for production (enforces pre-flight technical validation).
      */
-    public function toggleChannel(Request $request, string $channel): RedirectResponse
+    public function toggleChannel(ToggleChannelRequest $request, string $channel): RedirectResponse
     {
         $setting = PaymentChannelSetting::where('channel_key', $channel)->first();
         $targetEnabled = ! ($setting ? $setting->enabled : true);
@@ -1317,14 +1286,9 @@ class BillingController extends Controller
     /**
      * Configure a structured installment payment plan for an invoice.
      */
-    public function storePaymentPlan(Request $request): RedirectResponse
+    public function storePaymentPlan(StorePaymentPlanRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'invoice_id' => ['required', 'exists:invoices,id'],
-            'total_installments' => ['required', 'integer', 'between:2,12'],
-            'frequency' => ['required', 'string', 'in:monthly,biweekly,weekly'],
-        ]);
-
+        $validated = $request->validated();
         $invoice = Invoice::findOrFail($validated['invoice_id']);
         $installmentAmountMinor = (int) ceil($invoice->amount_minor / $validated['total_installments']);
 
@@ -1380,72 +1344,15 @@ class BillingController extends Controller
     /**
      * Perform an automated estate bank reconciliation against the general ledger.
      */
-    public function storeReconciliation(Request $request): RedirectResponse
+    public function storeReconciliation(StoreReconciliationRequest $request, StoreReconciliationAction $action): RedirectResponse
     {
-        $validated = $request->validate([
-            'bank_statement_date' => ['required', 'date'],
-            'statement_balance' => ['required', 'numeric', 'min:0'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-            'verify_payment_ids' => ['nullable', 'array'],
-            'verify_payment_ids.*' => ['integer'],
-        ]);
-
-        $admin = $request->user();
-        $date = $validated['bank_statement_date'];
-        $statementBalanceMinor = (int) round(((float) $validated['statement_balance']) * 100);
-
         try {
-            [$reconciliation, $verified] = DB::transaction(function () use ($validated, $admin, $date, $statementBalanceMinor): array {
-                $reconciliation = BankReconciliation::create([
-                    'bank_statement_date' => $date,
-                    'statement_balance_minor' => $statementBalanceMinor,
-                    'ledger_balance_minor' => 0,
-                    'difference_minor' => 0,
-                    'reconciled_by' => $admin->id,
-                    'status' => 'Discrepancy',
-                    'notes' => $validated['notes'] ?? null,
-                ]);
-
-                /*
-                 | Office payments on this statement are verified first — by an
-                 | administrator other than the one who logged them received —
-                 | so the comparison below includes them. All or none: one
-                 | payment that cannot be verified stops the reconciliation.
-                 */
-                $verified = 0;
-                foreach (Payment::query()->whereKey($validated['verify_payment_ids'] ?? [])->get() as $payment) {
-                    $this->orchestrator->verifyReceived($payment, $admin, $reconciliation);
-                    $verified++;
-                }
-
-                // Money received less money refunded, by the date it arrived.
-                $asOf = fn ($query) => $query->whereRaw('date(coalesce(settled_at, created_at)) <= ?', [$date]);
-                $completedMinor = (int) $asOf(Transaction::where('status', Transaction::STATUS_COMPLETED))->sum('amount_minor');
-                $refundedMinor = (int) $asOf(Transaction::where('status', Transaction::STATUS_REFUNDED))->sum('amount_minor');
-
-                $ledgerBalanceMinor = $completedMinor - $refundedMinor;
-                $diffMinor = $statementBalanceMinor - $ledgerBalanceMinor;
-
-                $reconciliation->update([
-                    'ledger_balance_minor' => $ledgerBalanceMinor,
-                    'difference_minor' => $diffMinor,
-                    'status' => $diffMinor === 0 ? 'Reconciled' : 'Discrepancy',
-                ]);
-
-                return [$reconciliation, $verified];
-            });
+            $result = $action->execute($request->validated(), $request->user());
         } catch (\DomainException $e) {
             return back()->withErrors(['verify_payment_ids' => $e->getMessage()]);
         }
 
-        $statusWord = $reconciliation->status === 'Reconciled'
-            ? 'balanced perfectly'
-            : 'has a variance of J$'.number_format($reconciliation->difference_minor / 100, 2);
-        $verifiedWord = $verified > 0 ? " {$verified} office ".($verified === 1 ? 'payment' : 'payments').' verified and applied.' : '';
-
-        $admin->recordActivity("Completed bank reconciliation for {$date}: {$statusWord}".($verified ? "; verified {$verified} office payments" : ''));
-
-        return back()->with('success', "Bank reconciliation recorded. Status: {$reconciliation->status} ({$statusWord}).{$verifiedWord}");
+        return back()->with('success', $result['message']);
     }
 
     /**

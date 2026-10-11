@@ -16,6 +16,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GeofenceService;
+use App\Services\PropertyOccupancyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -208,6 +209,8 @@ class OverviewController extends Controller
 
         $outstanding = Invoice::outstanding();
 
+        $occupancyData = $isStaff ? $this->occupancyStats() : null;
+
         return [
             'month' => now()->format('F'),
 
@@ -248,6 +251,34 @@ class OverviewController extends Controller
             'myRentersCount' => $user->role === UserRole::Homeowner
                 ? $user->renters()->where('status', 'Active')->count()
                 : null,
+
+            'occupancy' => $occupancyData,
+        ];
+    }
+
+    /**
+     * "Currently inside" and "expected today", from the same occupancy
+     * service as the Who's On Property page, so the two never disagree.
+     *
+     * @return array{currentlyInside: array<string, int>, expectedToday: array<string, int>}
+     */
+    private function occupancyStats(): array
+    {
+        $summary = app(PropertyOccupancyService::class)->getDualSummary();
+
+        $card = fn (array $counts): array => [
+            'total' => $counts['total'],
+            'residents' => $counts['residents'],
+            'renters' => $counts['long_term_guests'] + $counts['short_term_guests'],
+            'visitors' => $counts['visitors'],
+            'staff' => $counts['staff'],
+            'contractors' => $counts['contractors'],
+            'legacyContacts' => $counts['legacy_contacts'],
+        ];
+
+        return [
+            'currentlyInside' => $card($summary['inside']),
+            'expectedToday' => $card($summary['expected']),
         ];
     }
 

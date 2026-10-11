@@ -3,15 +3,15 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Household\StoreHouseholdMemberRequest;
+use App\Http\Requests\Household\UpdateHouseholdMemberRequest;
 use App\Models\Household;
 use App\Models\HouseholdMember;
-use App\Models\User;
 use App\Services\GatePassEngine;
 use App\Services\HouseholdManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -27,10 +27,9 @@ class HouseholdController extends Controller
      */
     public function index(Request $request): InertiaResponse
     {
-        $user = $request->user();
-        $this->ensureResident($user);
+        $this->authorize('create', HouseholdMember::class);
 
-        // Get or initialize homeowner's household
+        $user = $request->user();
         $household = $this->householdService->getOrCreateHousehold($user);
 
         return Inertia::render('Dashboard/Household', [
@@ -83,26 +82,10 @@ class HouseholdController extends Controller
     /**
      * Add a new member to the household.
      */
-    public function store(Request $request): RedirectResponse|JsonResponse
+    public function store(StoreHouseholdMemberRequest $request): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
-        $this->ensureResident($user);
-        $household = $this->householdService->getOrCreateHousehold($user);
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'phone' => ['nullable', 'string', 'max:50'],
-            // Not 'homeowner': that member is the account holder, created with the household.
-            'role_in_household' => ['required', 'string', 'in:spouse,child,long_term_occupant,caregiver,other'],
-            'relationship_label' => ['nullable', 'string', 'max:100'],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['string', Rule::in(array_keys(HouseholdManagementService::AVAILABLE_PERMISSIONS))],
-            'access_schedule' => ['nullable', 'array'],
-            'valid_until' => ['nullable', 'date'],
-        ]);
-
-        $member = $this->householdService->addMember($household, $validated);
+        $household = $this->householdService->getOrCreateHousehold($request->user());
+        $member = $this->householdService->addMember($household, $request->validated());
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -117,24 +100,9 @@ class HouseholdController extends Controller
     /**
      * Update permissions or details for a household member.
      */
-    public function update(Request $request, HouseholdMember $member): RedirectResponse|JsonResponse
+    public function update(UpdateHouseholdMemberRequest $request, HouseholdMember $member): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
-        $this->ensureResident($user);
-        $this->ensureCanManageMember($user, $member, 'Unauthorized to modify this household member.');
-
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120'],
-            'email' => ['nullable', 'email', 'max:150'],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'permissions' => ['nullable', 'array'],
-            'permissions.*' => ['string', Rule::in(array_keys(HouseholdManagementService::AVAILABLE_PERMISSIONS))],
-            'access_schedule' => ['nullable', 'array'],
-            'status' => ['nullable', 'string', 'in:active,suspended'],
-            'valid_until' => ['nullable', 'date'],
-        ]);
-
-        $updated = $this->householdService->updateMember($member, $validated);
+        $updated = $this->householdService->updateMember($member, $request->validated());
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -151,9 +119,7 @@ class HouseholdController extends Controller
      */
     public function destroy(Request $request, HouseholdMember $member): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
-        $this->ensureResident($user);
-        $this->ensureCanManageMember($user, $member, 'Unauthorized to delete this household member.');
+        $this->authorize('delete', $member);
 
         $name = $member->name;
         $this->householdService->removeMember($member);
@@ -165,30 +131,5 @@ class HouseholdController extends Controller
         }
 
         return back()->with('success', "Member {$name} removed and digital credential revoked.");
-    }
-
-    /**
-     * Households are residents' (and administrators'): each member gets a gate
-     * pass, and any role could create a household and fill it.
-     */
-    private function ensureResident(User $user): void
-    {
-        abort_unless($user->role->isResident() || $user->role->isAdministrative(), 403, 'Households belong to residents.');
-    }
-
-    /**
-     * A member of the user's own household, or any member for administrators.
-     * Looked up, not created: checking used to give the caller a household
-     * and a homeowner gate pass of their own first.
-     */
-    private function ensureCanManageMember(User $user, HouseholdMember $member, string $message): void
-    {
-        if ($user->role->isAdministrative()) {
-            return;
-        }
-
-        $ownHouseholdId = Household::where('primary_homeowner_id', $user->id)->value('id');
-
-        abort_unless($ownHouseholdId !== null && (int) $member->household_id === (int) $ownHouseholdId, 403, $message);
     }
 }

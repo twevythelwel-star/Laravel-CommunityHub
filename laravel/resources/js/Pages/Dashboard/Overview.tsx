@@ -71,6 +71,26 @@ type Stats = {
   deniedToday: number | null;
   myOutstandingBalance: number;
   myRentersCount?: number | null;
+  occupancy?: {
+    currentlyInside: {
+      total: number;
+      residents: number;
+      renters: number;
+      visitors: number;
+      staff: number;
+      contractors: number;
+      legacyContacts: number;
+    };
+    expectedToday: {
+      total: number;
+      residents: number;
+      renters: number;
+      visitors: number;
+      staff: number;
+      contractors: number;
+      legacyContacts: number;
+    };
+  };
 };
 
 type Announcement = {

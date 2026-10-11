@@ -6,6 +6,10 @@ import {
   KeyRound,
   Users,
   Wallet,
+  Users2,
+  Building2,
+  UserCheck,
+  HardHat,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
@@ -25,6 +29,26 @@ export type GlanceStats = {
   entriesToday: number | null;
   deniedToday: number | null;
   myRentersCount?: number | null;
+  occupancy?: {
+    currentlyInside: {
+      total: number;
+      residents: number;
+      renters: number;
+      visitors: number;
+      staff: number;
+      contractors: number;
+      legacyContacts: number;
+    };
+    expectedToday: {
+      total: number;
+      residents: number;
+      renters: number;
+      visitors: number;
+      staff: number;
+      contractors: number;
+      legacyContacts: number;
+    };
+  };
 };
 
 type Props = {
@@ -262,6 +286,75 @@ export function OverviewAtAGlance({ stats, permissions }: Props) {
             <p className="text-xs text-muted-foreground">
               {plural(stats.myRentersCount ?? 0, 'active tenant', 'active tenants')}
             </p>
+          </Tile>
+        )}
+
+        {stats.occupancy && permissions.viewActiveResidents && (
+          <Tile
+            label="Unit occupancy"
+            icon={Users2}
+            tone="bg-indigo-500/15 text-indigo-700 dark:text-indigo-300"
+            className="sm:col-span-2 xl:col-span-4"
+          >
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground mb-2">Currently Inside</p>
+                <p className="text-3xl font-extrabold text-foreground">{stats.occupancy.currentlyInside.total}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.currentlyInside.residents} residents
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.currentlyInside.renters} renters
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <CalendarCheck className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.currentlyInside.visitors} visitors
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <UserCheck className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.currentlyInside.staff} staff
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground mb-2">Expected Today</p>
+                <p className="text-3xl font-extrabold text-foreground">{stats.occupancy.expectedToday.total}</p>
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.expectedToday.residents} residents
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.expectedToday.renters} renters
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <CalendarCheck className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.expectedToday.visitors} visitors
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <UserCheck className="h-3 w-3" aria-hidden />
+                    {stats.occupancy.expectedToday.staff} staff
+                  </span>
+                  {stats.occupancy.expectedToday.contractors > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <HardHat className="h-3 w-3" aria-hidden />
+                      {stats.occupancy.expectedToday.contractors} contractors
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <SplitBar
+              left={stats.occupancy.currentlyInside.total}
+              right={stats.occupancy.expectedToday.total - stats.occupancy.currentlyInside.total}
+              leftClass="bg-indigo-500"
+              rightClass="bg-slate-300 dark:bg-slate-600"
+              label={`${stats.occupancy.currentlyInside.total} currently inside out of ${stats.occupancy.expectedToday.total} expected today`}
+            />
           </Tile>
         )}
       </div>

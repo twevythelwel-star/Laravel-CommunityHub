@@ -23,6 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 
 /** Combines a calendar date and a 12-hour time selection into an ISO string. */
 export function toIsoDateTime(date: Date | undefined, hour: string, minute: string, meridiem: string): string {
@@ -40,6 +41,23 @@ export function toIsoDateTime(date: Date | undefined, hour: string, minute: stri
 type Stay = { leaseStart: string; leaseEnd: string } | null | undefined;
 
 const ID_TYPES = ["Driver's License", 'Passport', 'National ID', 'School ID', 'Work ID'];
+
+const ARRIVAL_WINDOWS: { value: string; label: string; range?: [string, string] }[] = [
+  { value: '2h', label: '2 hours from arrival time' },
+  { value: '4h', label: '4 hours from arrival time' },
+  { value: 'morning', label: 'Morning (8:00 AM – 12:00 PM)', range: ['08:00', '12:00'] },
+  { value: 'afternoon', label: 'Afternoon (12:00 PM – 5:00 PM)', range: ['12:00', '17:00'] },
+  { value: 'evening', label: 'Evening (5:00 PM – 10:00 PM)', range: ['17:00', '22:00'] },
+  { value: 'allday', label: 'All day (6:00 AM – 11:00 PM)', range: ['06:00', '23:00'] },
+  { value: 'custom', label: 'Custom window' },
+];
+
+// Blank means the estate's own visitor parking rules (config/visitor_pass.php)
+// go on the pass; a host only overrides them for their own driveway or a note.
+const PARKING_PRESETS: { value: string; label: string; text: string }[] = [
+  { value: 'estate', label: "Estate's visitor parking rules", text: '' },
+  { value: 'driveway', label: 'Host driveway only', text: 'Host driveway parking only. Please do not block neighboring access.' },
+];
 
 /** Dates a visit cannot start on: the past, and anything outside a renter's stay. */
 function isUnavailable(date: Date, stay: Stay): boolean {
@@ -103,6 +121,10 @@ function RegisterVisitorForm({ graceHours, userStay, hostProperties = [], onDone
   const [hour, setHour] = useState('10');
   const [minute, setMinute] = useState('00');
   const [meridiem, setMeridiem] = useState('AM');
+  const [windowPreset, setWindowPreset] = useState('2h');
+  const [customWindowStart, setCustomWindowStart] = useState('10:00');
+  const [customWindowEnd, setCustomWindowEnd] = useState('12:00');
+  const [parkingPreset, setParkingPreset] = useState('estate');
 
   const form = useForm({
     name: '',
@@ -113,6 +135,10 @@ function RegisterVisitorForm({ graceHours, userStay, hostProperties = [], onDone
     type: 'One-time' as 'One-time' | 'Recurring',
     expected_at: '',
     date_range: '',
+    arrival_window_start: '' as string | null,
+    arrival_window_end: '' as string | null,
+    parking_instructions: PARKING_PRESETS[0].text,
+    notes: '',
     notify_email: true,
     notify_sms: false,
     notify_whatsapp: false,
@@ -123,6 +149,21 @@ function RegisterVisitorForm({ graceHours, userStay, hostProperties = [], onDone
 
   const isRecurring = form.data.type === 'Recurring';
   const errors = form.errors as Partial<Record<keyof typeof form.data, string>>;
+
+  const arrivalWindow = (): [string | null, string | null] => {
+    if (windowPreset === 'custom') {
+      return [customWindowStart || null, customWindowEnd || null];
+    }
+    const fixed = ARRIVAL_WINDOWS.find((w) => w.value === windowPreset)?.range;
+    if (fixed) {
+      return fixed;
+    }
+    // 2h or 4h from the arrival time.
+    let h = parseInt(hour, 10) % 12;
+    if (meridiem === 'PM') h += 12;
+    const endH = Math.min(23, h + (windowPreset === '4h' ? 4 : 2));
+    return [`${String(h).padStart(2, '0')}:${minute}`, `${String(endH).padStart(2, '0')}:${minute}`];
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,12 +176,15 @@ function RegisterVisitorForm({ graceHours, userStay, hostProperties = [], onDone
         : start
           ? format(start, 'yyyy-MM-dd')
           : '';
+    const [winStart, winEnd] = arrivalWindow();
 
     form.transform((data) => ({
       ...data,
       property_id: data.property_id ? Number(data.property_id) : null,
       expected_at: toIsoDateTime(start, hour, minute, meridiem),
       date_range: rangeLabel,
+      arrival_window_start: winStart,
+      arrival_window_end: winEnd,
     }));
 
     form.post('/dashboard/visitors', {
@@ -378,9 +422,95 @@ function RegisterVisitorForm({ graceHours, userStay, hostProperties = [], onDone
         </div>
         <FieldError message={errors.expected_at} />
 
+        <div className="space-y-1.5">
+          <Label htmlFor="visit-window">Arrival window</Label>
+          <Select value={windowPreset} onValueChange={setWindowPreset}>
+            <SelectTrigger id="visit-window">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ARRIVAL_WINDOWS.map((w) => (
+                <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {windowPreset === 'custom' && (
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <Label htmlFor="visit-window-start" className="text-xs text-muted-foreground">From</Label>
+                <Input
+                  id="visit-window-start"
+                  type="time"
+                  value={customWindowStart}
+                  onChange={(e) => setCustomWindowStart(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="visit-window-end" className="text-xs text-muted-foreground">Until</Label>
+                <Input
+                  id="visit-window-end"
+                  type="time"
+                  value={customWindowEnd}
+                  onChange={(e) => setCustomWindowEnd(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <FieldError message={errors.arrival_window_start ?? errors.arrival_window_end} />
+        </div>
       </Section>
 
-      <Section title="Delivery">
+      <Section title="On the pass">
+        <div className="space-y-1.5">
+          <Label htmlFor="visit-parking">Parking instructions</Label>
+          <Select
+            value={parkingPreset}
+            onValueChange={(value) => {
+              setParkingPreset(value);
+              const preset = PARKING_PRESETS.find((p) => p.value === value);
+              if (preset) {
+                form.setData('parking_instructions', preset.text);
+              }
+            }}
+          >
+            <SelectTrigger id="visit-parking">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PARKING_PRESETS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+              ))}
+              <SelectItem value="custom">Custom instructions</SelectItem>
+            </SelectContent>
+          </Select>
+          <Textarea
+            rows={2}
+            className="min-h-0"
+            aria-label="Parking instructions text"
+            value={form.data.parking_instructions}
+            onChange={(e) => {
+              form.setData('parking_instructions', e.target.value);
+              setParkingPreset('custom');
+            }}
+            placeholder="Blank: the estate's visitor parking rules go on the pass"
+          />
+          <FieldError message={errors.parking_instructions} />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="visit-notes">
+            Notes for the gate <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
+            id="visit-notes"
+            placeholder="e.g. Bringing catering supplies, elderly guest needing escort"
+            value={form.data.notes}
+            onChange={(e) => form.setData('notes', e.target.value)}
+            aria-invalid={!!errors.notes}
+          />
+          <FieldError message={errors.notes} />
+        </div>
+
         <div className="space-y-2">
           <Label id="visit-send-label">Send the pass by</Label>
           <div className="flex flex-wrap gap-x-5 gap-y-2" role="group" aria-labelledby="visit-send-label" aria-describedby="visit-send-help">

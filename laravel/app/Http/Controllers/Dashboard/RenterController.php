@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Renters\StoreRenterRequest;
+use App\Http\Requests\Renters\UpdateRenterRequest;
 use App\Models\Property;
 use App\Models\Renter;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,7 +19,7 @@ class RenterController extends Controller
 {
     public function index(Request $request): Response
     {
-        $this->authorize('accessHomeownerFunctions');
+        $this->authorize('viewAny', Renter::class);
 
         $user = $request->user();
         $isHomeowner = $user->role === UserRole::Homeowner;
@@ -63,28 +64,9 @@ class RenterController extends Controller
      * stay is what lets their account sign in and register visitors. The
      * administrator says whose property it is; the address is that homeowner's.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(StoreRenterRequest $request): RedirectResponse
     {
-        $this->authorize('manageUsers');
-
-        $validated = $request->validate([
-            'homeowner_id' => ['required', Rule::exists('users', 'id')->where('role', UserRole::Homeowner->value)],
-            'name' => ['required', 'string', 'max:120'],
-            'stay_type' => ['required', 'in:Long-term (Renter),Short-term (Airbnb)'],
-            'contact' => ['nullable', 'string', 'max:120'],
-            'notes' => ['nullable', 'string', 'max:500'],
-            'lease_start' => ['required', 'date'],
-            'lease_end' => ['required', 'date', 'after_or_equal:lease_start'],
-            'lot' => ['nullable', 'string', 'max:60'],
-            'street' => ['nullable', 'string', 'max:120'],
-            // Only a Temporary Homeowner account can hold a stay.
-            'user_id' => ['nullable', Rule::exists('users', 'id')->where('role', UserRole::TemporaryHomeowner->value)],
-        ], [
-            'homeowner_id.required' => 'Choose the homeowner whose property this is.',
-            'homeowner_id.exists' => 'Choose a homeowner account.',
-            'user_id.exists' => 'Only a Temporary Homeowner account can be linked to a stay.',
-        ]);
-
+        $validated = $request->validated();
         $homeowner = User::findOrFail($validated['homeowner_id']);
         $lot = $validated['lot'] ?? $homeowner->lot;
 
@@ -118,45 +100,24 @@ class RenterController extends Controller
         return $owned->count() === 1 ? $owned->first() : null;
     }
 
-    public function update(Request $request, Renter $renter): RedirectResponse
+    public function update(UpdateRenterRequest $request, Renter $renter): RedirectResponse
     {
-        $this->authorize('accessHomeownerFunctions');
-
-        $user = $request->user();
-        if ($user->role === UserRole::Homeowner && $renter->homeowner_id !== $user->id) {
-            abort(403, 'You can only update temporary homeowners registered under your property.');
-        }
-
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120'],
-            'stay_type' => ['sometimes', 'in:Long-term (Renter),Short-term (Airbnb)'],
-            'contact' => ['nullable', 'string', 'max:120'],
-            'notes' => ['nullable', 'string', 'max:500'],
-            'lease_start' => ['sometimes', 'date'],
-            'lease_end' => ['sometimes', 'date', 'after_or_equal:lease_start'],
-            'status' => ['sometimes', 'in:Active,Inactive'],
-        ]);
-
+        $validated = $request->validated();
         $renter->update($validated);
 
-        $user->recordActivity("Updated temporary homeowner {$renter->name}");
+        $request->user()->recordActivity("Updated temporary homeowner {$renter->name}");
 
         return back()->with('success', 'Temporary homeowner updated.');
     }
 
     public function destroy(Request $request, Renter $renter): RedirectResponse
     {
-        $this->authorize('accessHomeownerFunctions');
-
-        $user = $request->user();
-        if ($user->role === UserRole::Homeowner && $renter->homeowner_id !== $user->id) {
-            abort(403, 'You can only remove temporary homeowners registered under your property.');
-        }
+        $this->authorize('delete', $renter);
 
         $renterName = $renter->name;
         $renter->delete();
 
-        $user->recordActivity("Removed temporary homeowner {$renterName}");
+        $request->user()->recordActivity("Removed temporary homeowner {$renterName}");
 
         return back()->with('success', 'Temporary homeowner removed.');
     }
