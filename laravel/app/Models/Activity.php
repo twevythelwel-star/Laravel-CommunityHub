@@ -7,12 +7,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Spatie\Activitylog\Models\Activity as BaseActivity;
-use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
 class Activity extends BaseActivity
 {
-    use CentralConnection;
-
     /**
      * IP address associated with the activity.
      */
@@ -43,14 +40,6 @@ class Activity extends BaseActivity
     public function getUserAgentAttribute(): ?string
     {
         return $this->getProperty('user_agent');
-    }
-
-    /**
-     * Multi-tenant identifier if logged inside tenant context.
-     */
-    public function getTenantIdAttribute(): ?string
-    {
-        return $this->getProperty('tenant_id');
     }
 
     /**
@@ -113,14 +102,6 @@ class Activity extends BaseActivity
         }
 
         return $summary;
-    }
-
-    /**
-     * Scope query to a specific tenant.
-     */
-    public function scopeForTenant(Builder $query, string $tenantId): Builder
-    {
-        return $query->where('properties->tenant_id', $tenantId);
     }
 
     /**

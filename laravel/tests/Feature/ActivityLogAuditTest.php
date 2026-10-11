@@ -8,7 +8,6 @@ use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Models\Activity;
 use App\Models\GatePass;
-use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -17,28 +16,6 @@ use Tests\TestCase;
 class ActivityLogAuditTest extends TestCase
 {
     use RefreshDatabase;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        foreach (glob(database_path('tenant*')) ?: [] as $file) {
-            @unlink($file);
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        if (function_exists('tenancy') && tenancy()->initialized) {
-            tenancy()->end();
-        }
-
-        foreach (glob(database_path('tenant*')) ?: [] as $file) {
-            @unlink($file);
-        }
-
-        parent::tearDown();
-    }
 
     public function test_activity_is_logged_on_model_creation_with_causer_and_subject(): void
     {
@@ -142,36 +119,6 @@ class ActivityLogAuditTest extends TestCase
         $this->assertNotEmpty($activity->ip);
         $this->assertNotEmpty($activity->url);
         $this->assertNotEmpty($activity->method);
-    }
-
-    public function test_activity_captures_tenant_id_when_inside_tenant_context(): void
-    {
-        $tenant = Tenant::create([
-            'id' => 'emerald-ridge',
-            'name' => 'Emerald Ridge Estates',
-        ]);
-
-        tenancy()->initialize($tenant);
-
-        activity()
-            ->withProperties(['action' => 'kiosk_login'])
-            ->log('Kiosk station 4 activated');
-
-        $activity = Activity::latest('id')->first();
-
-        $this->assertNotNull($activity);
-        $this->assertEquals('emerald-ridge', $activity->tenant_id);
-
-        // Query by tenant scope
-        $tenantActivities = Activity::forTenant('emerald-ridge')->get();
-        $this->assertTrue($tenantActivities->contains($activity));
-
-        tenancy()->end();
-
-        // Central activity has no tenant_id
-        activity()->log('Central platform maintenance performed');
-        $centralActivity = Activity::latest('id')->first();
-        $this->assertNull($centralActivity->tenant_id);
     }
 
     public function test_gate_pass_lifecycle_auditing(): void

@@ -25,10 +25,6 @@ class EnterpriseLogActivityAction extends LogActivityAction
             'user_agent' => $request ? ($request->userAgent() ?? (app()->runningInConsole() ? 'Console/Artisan' : 'Unknown Agent')) : 'System',
         ];
 
-        if (function_exists('tenancy') && tenancy()->initialized) {
-            $auditMetadata['tenant_id'] = tenant('id');
-        }
-
         // Merge properties without overriding existing explicit properties
         $activity->properties = collect(array_merge($auditMetadata, $properties));
 

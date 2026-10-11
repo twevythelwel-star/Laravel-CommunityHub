@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Media;
-use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Warning;
 use App\Services\Media\MediaManagementService;
@@ -23,23 +22,6 @@ class MediaLibraryManagementTest extends TestCase
         parent::setUp();
         Storage::fake('public');
         Storage::fake('local');
-
-        foreach (glob(database_path('tenant*')) ?: [] as $file) {
-            @unlink($file);
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        if (function_exists('tenancy') && tenancy()->initialized) {
-            tenancy()->end();
-        }
-
-        foreach (glob(database_path('tenant*')) ?: [] as $file) {
-            @unlink($file);
-        }
-
-        parent::tearDown();
     }
 
     public function test_user_can_upload_profile_picture_avatar_with_thumbnails(): void
@@ -136,31 +118,5 @@ class MediaLibraryManagementTest extends TestCase
         $this->assertEquals('s3', $disksConfig['spaces']['driver']);
         $this->assertEquals('s3', $disksConfig['gcs']['driver']);
         $this->assertNotEmpty($disksConfig['public']['root']);
-    }
-
-    public function test_media_library_under_multi_tenancy_context(): void
-    {
-        $service = app(MediaManagementService::class);
-        $tenant = Tenant::create([
-            'id' => 'solaris-bay',
-            'name' => 'Solaris Bay Estate',
-        ]);
-
-        $user = User::factory()->create(['name' => 'Tenant Admin']);
-
-        tenancy()->initialize($tenant);
-
-        // Upload media while inside tenant context
-        $file = UploadedFile::fake()->image('estate_map.png', 500, 500);
-        $media = $service->attachDocument($user, $file, 'documents', 'Solaris Map');
-
-        $this->assertNotNull($media);
-        $this->assertEquals('Solaris Map', $media->name);
-        $this->assertEquals('documents', $media->collection_name);
-
-        tenancy()->end();
-
-        // Accessible centrally without cross-connection error
-        $this->assertDatabaseHas('media', ['name' => 'Solaris Map']);
     }
 }

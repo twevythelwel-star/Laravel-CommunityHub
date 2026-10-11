@@ -6,17 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
-/**
- * Mirrors the CommunityInfo contract from src/lib/boundary-manager/types.ts.
- *
- * Communities live in the central database: a tenant points at one
- * (Tenant::community), and tenant databases have no communities table.
- */
+/** Mirrors the CommunityInfo contract from src/lib/boundary-manager/types.ts. */
 class Community extends Model
 {
-    use CentralConnection;
     use HasFactory;
 
     protected $fillable = [

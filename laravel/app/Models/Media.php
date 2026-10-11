@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Spatie\MediaLibrary\MediaCollections\Models\Media as BaseMedia;
-use Stancl\Tenancy\Database\Concerns\CentralConnection;
 
 class Media extends BaseMedia
 {
-    use CentralConnection;
-
     /**
      * Human readable file size formatted (e.g. 2.4 MB).
      */
