@@ -382,7 +382,9 @@ class ControlledDelegatedAccessSystemTest extends TestCase
 
         $guard = User::factory()->create(['role' => UserRole::Security, 'name' => 'Officer Miller']);
 
-        // Homeowner creates Long-Term Occupant Michael Brown (Oct 10, 2026 to Apr 10, 2027)
+        // Homeowner creates Long-Term Occupant Michael Brown (Oct 10, 2026 to Apr 10, 2027).
+        // Pinned to that day: a start date in the past is refused.
+        \Illuminate\Support\Carbon::setTestNow('2026-10-10 09:00:00');
         $response = $this->actingAs($homeowner)->postJson('/dashboard/delegation', [
             'name' => 'Michael Brown',
             'email' => 'michael.brown@residence-guest.com',
