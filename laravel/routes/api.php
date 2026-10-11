@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccessLogApiController;
 use App\Http\Controllers\Api\AuthApiController;
+use App\Http\Controllers\Api\GateDeviceApiController;
 use App\Http\Controllers\Api\GatePassApiController;
 use App\Http\Controllers\Api\MapApiController;
 use App\Http\Controllers\Api\QueryApiController;
@@ -55,6 +56,16 @@ Route::post('/webhooks/{provider}', ProviderWebhookController::class)
 // Verified with X-Twilio-Signature via Twilio SDK RequestValidator.
 Route::post('/webhooks/twilio/status', [TwilioWebhookController::class, 'messagingStatus'])
     ->name('webhooks.twilio.status');
+
+// ── Physical Gate Devices & Scanners ──
+Route::middleware('gate.device')->prefix('gate-devices')->group(function () {
+    Route::post('/heartbeat', [GateDeviceApiController::class, 'heartbeat'])->name('api.gate-devices.heartbeat');
+    Route::post('/sync-scans', [GateDeviceApiController::class, 'syncScans'])->name('api.gate-devices.sync-scans');
+    Route::post('/sensor-events', [GateDeviceApiController::class, 'sensorEvent'])
+        ->middleware('throttle:120,1')
+        ->name('api.gate-devices.sensor-events');
+    Route::get('/revocations', [GateDeviceApiController::class, 'revocations'])->name('api.gate-devices.revocations');
+});
 
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
 

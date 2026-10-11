@@ -415,7 +415,7 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/access-governance/documents/attach', [AccessGovernanceController::class, 'attachDocument'])->middleware('can:manageUsers')->name('access-governance.attach-doc');
 
     // ── Gate Sensor & Tailgating Detection ──
-    Route::post('/gate-sensor/sequence', [GateSensorEventController::class, 'sequence'])->middleware('can:manageSecurity')->name('gate-sensor.sequence');
+    // Readings come from gate hardware (POST /api/gate-devices/sensor-events); guards review them here.
     Route::post('/gate-sensor/resolve', [GateSensorEventController::class, 'resolve'])->middleware('can:manageSecurity')->name('gate-sensor.resolve');
     Route::get('/gate-sensor/recent', [GateSensorEventController::class, 'recent'])->middleware('can:manageSecurity')->name('gate-sensor.recent');
 

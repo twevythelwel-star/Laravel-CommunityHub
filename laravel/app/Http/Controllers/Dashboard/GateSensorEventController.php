@@ -13,24 +13,11 @@ class GateSensorEventController extends Controller
         protected GateTailgatingDetectionService $tailgatingService
     ) {}
 
-    public function sequence(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'gate' => ['nullable', 'string', 'max:32'],
-            'direction' => ['nullable', 'string', 'in:in,out'],
-            'pass_id' => ['nullable', 'string', 'max:64'],
-            'license_plate' => ['nullable', 'string', 'max:32'],
-            'authorized_occupants' => ['nullable', 'integer', 'min:1'],
-            'detected_occupants' => ['required', 'integer', 'min:0'],
-            'sensor_type' => ['nullable', 'string', 'max:128'],
-            'confidence' => ['nullable', 'numeric'],
-            'transit_duration_ms' => ['nullable', 'integer'],
-        ]);
-
-        $result = $this->tailgatingService->processGateTransitSequence($validated, $request->user());
-
-        return response()->json($result);
-    }
+    /*
+     | Sensor readings arrive from the gate's own hardware, authenticated by
+     | its device key (POST /api/gate-devices/sensor-events). Guards review
+     | and resolve them here; they no longer type head counts in.
+     */
 
     public function resolve(Request $request): JsonResponse
     {

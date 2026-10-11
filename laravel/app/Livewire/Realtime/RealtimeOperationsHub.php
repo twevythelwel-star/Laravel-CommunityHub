@@ -138,57 +138,6 @@ class RealtimeOperationsHub extends Component
         $this->feedbackMessage = 'Message broadcasted in real time via Reverb!';
     }
 
-    public function simulateTelemetrySpike(RealtimeBroadcasterService $broadcaster): void
-    {
-        $this->authorize('manageSecurity');
-
-        $this->activeVisitorsCount += rand(1, 4);
-        $this->activePassesCount += rand(2, 5);
-        $this->recentScansCount += rand(3, 8);
-        $this->gateClearanceSeconds = rand(12, 22);
-
-        $broadcaster->broadcastDashboardTelemetry([
-            'active_visitors_count' => $this->activeVisitorsCount,
-            'active_passes_count' => $this->activePassesCount,
-            'recent_scans_count' => $this->recentScansCount,
-            'gate_clearance_seconds' => $this->gateClearanceSeconds,
-            'system_health' => $this->systemStatus,
-        ]);
-
-        $this->feedbackMessage = 'Live dashboard telemetry broadcasted on channel [dashboard-telemetry]!';
-    }
-
-    public function simulatePassScan(RealtimeBroadcasterService $broadcaster): void
-    {
-        $this->authorize('manageSecurity');
-
-        $code = 'GP-'.rand(1000, 9999);
-        $visitor = 'Guest '.rand(100, 999);
-        $gate = 'Main Gate '.rand(1, 2);
-
-        $broadcaster->broadcastGatePassUpdate(
-            passId: rand(100, 999),
-            passCode: $code,
-            status: 'scanned',
-            visitorName: $visitor,
-            gate: $gate
-        );
-
-        array_unshift($this->recentPassEvents, [
-            'pass_code' => $code,
-            'visitor' => $visitor,
-            'gate' => $gate,
-            'status' => 'scanned',
-            'time' => now()->format('H:i:s'),
-        ]);
-
-        if (count($this->recentPassEvents) > 8) {
-            array_pop($this->recentPassEvents);
-        }
-
-        $this->feedbackMessage = "Gate pass scan broadcasted for {$code} on [gatehouse-stream]!";
-    }
-
     public function dispatchOperationsAlert(RealtimeBroadcasterService $broadcaster): void
     {
         $this->authorize('manageSecurity');

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\ApiLoggingMiddleware;
 use App\Http\Middleware\AssignCorrelationId;
+use App\Http\Middleware\AuthenticateGateDevice;
 use App\Http\Middleware\EnforceIdempotency;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\EnsureUserIsActive;
@@ -56,6 +57,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'abilities' => CheckAbilities::class,
             'ability' => CheckForAnyAbility::class,
             'api.log' => ApiLoggingMiddleware::class,
+            'gate.device' => AuthenticateGateDevice::class,
             // Replaces Laravel's: Inertia submissions get a validation error, not a redirect.
             'password.confirm' => RequirePasswordConfirmation::class,
         ]);

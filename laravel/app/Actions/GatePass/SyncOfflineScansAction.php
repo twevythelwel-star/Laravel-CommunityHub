@@ -6,6 +6,7 @@ use App\Enums\GateId;
 use App\Enums\PassStatus;
 use App\Events\Realtime\OperationsCommandCenterEvent;
 use App\Models\AccessLogEntry;
+use App\Models\GateDevice;
 use App\Models\GatePass;
 use App\Models\User;
 use App\Services\GatePassEngine;
@@ -18,14 +19,14 @@ class SyncOfflineScansAction
     ) {}
 
     /**
-     * Reconcile queued offline scans recorded by gate guards during connectivity loss.
+     * Reconcile queued offline scans recorded by gate guards or automated gate devices during connectivity loss.
      *
      * @param  array<int, array{offline_id: string, token_or_pin: string, method?: string, scanned_at?: string, action?: string, notes?: string}>  $scans
      * @return array<string, mixed>
      */
-    public function execute(array $scans, ?string $gateStr, ?User $guard = null): array
+    public function execute(array $scans, ?string $gateStr, ?User $guard = null, ?GateDevice $device = null): array
     {
-        $gate = GateId::tryFrom($gateStr ?? '') ?? GateId::Gate01;
+        $gate = GateId::tryFrom($gateStr ?? '') ?? ($device && GateId::tryFrom($device->gate_id) ? GateId::from($device->gate_id) : GateId::Gate01);
 
         $processed = 0;
         $accepted = 0;
@@ -142,6 +143,8 @@ class SyncOfflineScansAction
                     'decision' => $decision,
                     'offline_synced' => true,
                     'notes' => $scan['notes'] ?? null,
+                    'gate_device_id' => $device?->id,
+                    'device_identifier' => $device?->device_identifier,
                 ]),
                 'scanned_by' => $guard?->id,
                 'occurred_at' => $scannedAt,
@@ -156,8 +159,12 @@ class SyncOfflineScansAction
             ];
         }
 
+        if ($device) {
+            $device->updateQuietly(['last_sync_at' => now()]);
+        }
+
         if ($processed > 0) {
-            $operatorName = $guard?->name ?? 'Automated Gate Controller';
+            $operatorName = $guard?->name ?? ($device ? "Device: {$device->name}" : 'Automated Gate Controller');
             OperationsCommandCenterEvent::dispatch(
                 alertId: 'SYNC-'.strtoupper(bin2hex(random_bytes(3))),
                 type: 'gate_traffic',

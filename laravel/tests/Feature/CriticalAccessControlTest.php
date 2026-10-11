@@ -38,7 +38,6 @@ class CriticalAccessControlTest extends TestCase
             'audit documents' => ['post', '/dashboard/access-governance/documents/audit'],
             'attach a document' => ['post', '/dashboard/access-governance/documents/attach'],
             'simulate an NFC tap' => ['post', '/dashboard/wallet/simulate-nfc-tap'],
-            'record a sensor sequence' => ['post', '/dashboard/gate-sensor/sequence'],
             'resolve a sensor event' => ['post', '/dashboard/gate-sensor/resolve'],
             'read sensor events' => ['get', '/dashboard/gate-sensor/recent'],
         ];

@@ -75,9 +75,6 @@
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white">Live Estate Telemetry & KPIs</h2>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Instantly pushed via WebSocket event <code class="text-indigo-400">dashboard.telemetry-updated</code>.</p>
                 </div>
-                <button wire:click="simulateTelemetrySpike" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all">
-                    Simulate Live Event Spike
-                </button>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -195,9 +192,6 @@
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white">Gate Pass Access Tracking</h2>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Streamed over private & public channels: <code class="text-indigo-400">gatehouse-stream</code> & <code class="text-indigo-400">passes.{id}</code>.</p>
                 </div>
-                <button wire:click="simulatePassScan" class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md transition-all">
-                    Simulate Gate Scan Event
-                </button>
             </div>
 
             <div class="overflow-x-auto">

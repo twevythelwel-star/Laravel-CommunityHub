@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\UserRole;
+use App\Events\Realtime\OperationsCommandCenterEvent;
+use App\Models\GateDevice;
 use App\Models\GatePass;
 use App\Models\GateSensorEvent;
 use App\Models\InAppNotification;
@@ -14,26 +17,26 @@ use Illuminate\Support\Facades\Log;
 class GateTailgatingDetectionService
 {
     /**
-     * Process full gate sequence:
-     * 1. Credential Scan
-     * 2. Gate Open
-     * 3. Optical / Sensor Transit Detection (people / vehicle count)
-     * 4. Gate Closed
-     * 5. Anomaly & Tailgating Evaluation
+     * Records one barrier cycle as reported by an authenticated gate device,
+     * and raises a tailgating alert when more people passed than the
+     * credential allowed.
      *
-     * @param  array<string, mixed>  $sequence
-     * @return array<string, mixed>
+     * Only what the device reports is stored: the gate is the device's own,
+     * and confidence, timing and sensor type are kept as sent or left empty,
+     * never filled in.
+     *
+     * @param  array{direction?: string, pass_id?: ?string, license_plate?: ?string, authorized_occupants?: ?int, detected_occupants: int, sensor_type?: ?string, confidence?: ?float, transit_duration_ms?: ?int, occurred_at?: ?string}  $reading
      */
-    public function processGateTransitSequence(array $sequence, ?User $guard = null): array
+    public function recordDeviceReading(array $reading, GateDevice $device): GateSensorEvent
     {
-        $now = CarbonImmutable::now();
-        $gate = $sequence['gate'] ?? 'GATE-01';
-        $direction = $sequence['direction'] ?? 'in';
-        $passId = $sequence['pass_id'] ?? null;
-        $plate = ! empty($sequence['license_plate']) ? strtoupper(trim((string) $sequence['license_plate'])) : null;
+        $gate = $device->gate_id;
+        $direction = $reading['direction'] ?? 'in';
+        $passId = $reading['pass_id'] ?? null;
+        $plate = ! empty($reading['license_plate']) ? strtoupper(trim((string) $reading['license_plate'])) : null;
+        $occurredAt = ! empty($reading['occurred_at']) ? CarbonImmutable::parse($reading['occurred_at']) : CarbonImmutable::now();
 
-        $authorizedOccupants = max(1, (int) ($sequence['authorized_occupants'] ?? 1));
-        $detectedOccupants = max(0, (int) ($sequence['detected_occupants'] ?? 1));
+        $authorizedOccupants = max(1, (int) ($reading['authorized_occupants'] ?? 1));
+        $detectedOccupants = max(0, (int) $reading['detected_occupants']);
 
         $gatePass = $passId ? GatePass::where('pass_id', $passId)->first() : null;
         $vehicle = $plate ? Vehicle::where('license_plate', $plate)->first() : null;
@@ -46,35 +49,23 @@ class GateTailgatingDetectionService
         if ($isTailgating) {
             $excess = $detectedOccupants - $authorizedOccupants;
             $severity = $excess >= 2 ? 'CRITICAL' : 'WARNING';
-            $alertTitle = "⚠️ Possible Tailgating Event Detected at {$gate}";
+            $alertTitle = "Possible tailgating at {$gate}";
             $alertMessage = sprintf(
-                'Credential authorized %d person(s), but camera/optical sensor detected %d people (+%d unauthorized) during single barrier cycle.',
+                'The credential allowed %d person(s), but %s counted %d (%d more) in one barrier cycle.',
                 $authorizedOccupants,
+                $device->name,
                 $detectedOccupants,
                 $excess
             );
 
-            // Log security warning
             Log::channel('security')->warning('Tailgating anomaly flagged', [
                 'gate' => $gate,
+                'device' => $device->device_identifier,
                 'pass_id' => $passId,
                 'license_plate' => $plate,
                 'authorized' => $authorizedOccupants,
                 'detected' => $detectedOccupants,
-                'excess' => $excess,
             ]);
-
-            // Notify security personnel if guard on duty
-            if ($guard) {
-                InAppNotification::create([
-                    'user_id' => $guard->id,
-                    'category' => 'security',
-                    'title' => $alertTitle,
-                    'body' => $alertMessage,
-                    'action_url' => '/dashboard/gate-scanner',
-                    'priority' => 'high',
-                ]);
-            }
         }
 
         $event = GateSensorEvent::create([
@@ -91,48 +82,58 @@ class GateTailgatingDetectionService
             'severity' => $severity,
             'alert_title' => $alertTitle,
             'alert_message' => $alertMessage,
-            'sensor_metadata' => [
-                'sensor_type' => $sequence['sensor_type'] ?? 'Overhead Optical Stereoscopic 3D Sensor + ANPR Plate Camera',
-                'confidence' => $sequence['confidence'] ?? 98.4,
-                'transit_duration_ms' => $sequence['transit_duration_ms'] ?? 3420,
-                'sequence_steps' => [
-                    ['step' => 'CREDENTIAL_SCANNED', 'timestamp' => $now->subSeconds(4)->toIso8601String(), 'status' => 'OK'],
-                    ['step' => 'GATE_BARRIER_OPENED', 'timestamp' => $now->subSeconds(3)->toIso8601String(), 'status' => 'OK'],
-                    ['step' => 'OPTICAL_TRANSIT_DETECTED', 'timestamp' => $now->subSeconds(1)->toIso8601String(), 'detected_count' => $detectedOccupants],
-                    ['step' => 'GATE_BARRIER_CLOSED', 'timestamp' => $now->toIso8601String(), 'status' => 'OK'],
-                ],
-            ],
+            'sensor_metadata' => array_filter([
+                'device_identifier' => $device->device_identifier,
+                'device_name' => $device->name,
+                'sensor_type' => $reading['sensor_type'] ?? null,
+                'confidence' => $reading['confidence'] ?? null,
+                'transit_duration_ms' => $reading['transit_duration_ms'] ?? null,
+            ], fn ($value) => $value !== null),
             'resolution_status' => $isTailgating ? 'UNRESOLVED' : 'CLEAR',
-            'occurred_at' => $now,
+            'occurred_at' => $occurredAt,
         ]);
 
-        return [
-            'success' => true,
-            'id' => $event->id,
-            'event' => $event,
-            'gate' => $gate,
-            'direction' => $direction,
-            'passId' => $passId,
-            'pass_id' => $passId,
-            'licensePlate' => $plate,
-            'license_plate' => $plate,
-            'authorizedOccupants' => $authorizedOccupants,
-            'authorized_occupants' => $authorizedOccupants,
-            'detectedOccupants' => $detectedOccupants,
-            'detected_occupants' => $detectedOccupants,
-            'isTailgating' => $isTailgating,
-            'is_tailgating' => $isTailgating,
-            'severity' => $severity,
-            'alertTitle' => $alertTitle,
-            'alert_title' => $alertTitle,
-            'alertMessage' => $alertMessage,
-            'alert_message' => $alertMessage,
-            'resolutionStatus' => $event->resolution_status,
-            'resolution_status' => $event->resolution_status,
-            'occurredAt' => $event->occurred_at->format('g:i:s A'),
-            'sensorMetadata' => $event->sensor_metadata,
-            'sequence' => $event->sensor_metadata['sequence_steps'] ?? [],
-        ];
+        if ($isTailgating) {
+            $this->alertSecurity($event, $device);
+        }
+
+        return $event;
+    }
+
+    /**
+     * A device has no one signed in to tell, so every active security officer
+     * and administrator is notified, and the operations centre is told live.
+     */
+    private function alertSecurity(GateSensorEvent $event, GateDevice $device): void
+    {
+        User::query()
+            ->whereIn('role', [UserRole::Security, UserRole::Admin, UserRole::SystemAdmin])
+            ->get()
+            ->filter(fn (User $user) => $user->isActive())
+            ->each(fn (User $user) => InAppNotification::create([
+                'user_id' => $user->id,
+                'category' => 'security',
+                'title' => $event->alert_title,
+                'body' => $event->alert_message,
+                'action_url' => '/dashboard/gate-scanner',
+                'priority' => 'high',
+            ]));
+
+        OperationsCommandCenterEvent::dispatch(
+            alertId: 'TAILGATE-'.$event->id,
+            type: 'perimeter_sensor',
+            severity: $event->severity === 'CRITICAL' ? 'critical' : 'warning',
+            headline: $event->alert_title,
+            location: $event->gate,
+            operatorName: "Device: {$device->name}",
+            details: [
+                'event_id' => $event->id,
+                'authorized' => $event->authorized_occupants,
+                'detected' => $event->detected_occupants,
+                'pass_id' => $event->pass_id,
+                'license_plate' => $event->license_plate,
+            ],
+        );
     }
 
     /**
