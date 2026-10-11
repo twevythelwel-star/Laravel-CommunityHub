@@ -49,7 +49,7 @@ class GateDeviceApiController extends Controller
 
         $result = $action->execute(
             $request->validated('scans'),
-            $request->validated('gate', $device->gate_id),
+            $device->gate_id,
             null,
             $device
         );

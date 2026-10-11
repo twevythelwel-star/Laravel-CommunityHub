@@ -14,9 +14,9 @@ class AuthenticateGateDevice
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $rawKey = $request->header('X-Gate-Device-Key')
-            ?? $request->bearerToken()
-            ?? $request->input('device_key');
+        // Headers only. A key in the body or query string ends up in proxy,
+        // server and error logs, where anyone who can read them can reuse it.
+        $rawKey = $request->header('X-Gate-Device-Key') ?? $request->bearerToken();
 
         if (! $rawKey) {
             return response()->json([
