@@ -44,6 +44,11 @@ class GuestPassController extends Controller
             'isExpired' => $isExpired,
             'statusColor' => $statusColor,
             'code' => $this->codeFor($visitor->gatePass),
+            'arrivalWindow' => $visitor->arrivalWindowLabel(),
+            'parkingInstructions' => $visitor->parkingInstructions(),
+            'communityRules' => $visitor->communityRules(),
+            'emergencyInfo' => $visitor->emergencyInfo(),
+            'hostProperty' => $visitor->hostPropertyLabel(),
         ]);
     }
 

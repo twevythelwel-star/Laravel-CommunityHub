@@ -14,6 +14,8 @@ class AuthorizationDocument extends Model
         'title',
         'document_type',
         'household_id',
+        'ownership_entity_id',
+        'authorized_person_id',
         'user_id',
         'gate_pass_id',
         'approval_request_id',
@@ -43,6 +45,16 @@ class AuthorizationDocument extends Model
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
+    }
+
+    public function ownershipEntity(): BelongsTo
+    {
+        return $this->belongsTo(OwnershipEntity::class);
+    }
+
+    public function authorizedPerson(): BelongsTo
+    {
+        return $this->belongsTo(AuthorizedPerson::class);
     }
 
     public function user(): BelongsTo

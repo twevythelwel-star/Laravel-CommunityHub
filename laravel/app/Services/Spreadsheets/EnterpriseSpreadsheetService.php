@@ -31,7 +31,6 @@ class EnterpriseSpreadsheetService
      */
     public const EXPORT_GATES = [
         'residents' => 'manageUsers',
-        'large_dataset_benchmark' => 'manageUsers',
         'transactions' => 'manageBilling',
         'gate_passes' => 'manageSecurity',
     ];
@@ -87,16 +86,6 @@ class EnterpriseSpreadsheetService
                 'supports_queue' => true,
                 'chunk_size' => 500,
                 'default_filename' => 'gate-passes-registry',
-            ],
-            'large_dataset_benchmark' => [
-                'name' => 'Enterprise Large Dataset (Queued Chunking)',
-                'description' => 'High-throughput stream processing demonstrating FromQuery chunking without memory bloat.',
-                'model' => User::class,
-                'count' => User::count(),
-                'formats' => ['xlsx', 'csv'],
-                'supports_queue' => true,
-                'chunk_size' => 1000,
-                'default_filename' => 'large-dataset-batch-export',
             ],
         ];
     }

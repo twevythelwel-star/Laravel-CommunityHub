@@ -115,7 +115,7 @@ class ErrorPageNavigationTest extends TestCase
             ->assertForbidden()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Error')
-                ->where('message', 'You can only manage visitors you registered.')
+                ->where('message', 'You can only manage visitors you registered or are authorized to manage.')
             );
     }
 

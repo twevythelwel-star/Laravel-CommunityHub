@@ -48,6 +48,8 @@ class PasswordConfirmationTest extends TestCase
             'dashboard.directory.users.update',
             'dashboard.fundraising.donations.export',
             'dashboard.fundraising.donations.refund',
+            'dashboard.safety.duress-pin',
+            'dashboard.safety.duress-pin.clear',
         ], $protected);
     }
 

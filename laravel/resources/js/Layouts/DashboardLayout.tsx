@@ -13,13 +13,23 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '@/components/ui/collapsible';
+import {
   Bell,
   BookUser,
+  Building2,
   Calendar,
+  ChevronDown,
   ClipboardCheck,
   ClipboardList,
   CreditCard,
@@ -37,21 +47,24 @@ import {
   Settings,
   ShieldOff,
   Siren,
+  LifeBuoy,
   Sun,
   User,
+  UserCheck,
   UserCog,
   UserX,
   Users,
-  ShieldAlert,
-  Wallet,
-  Car,
-  SquareParking,
-  UserCheck,
   BadgeCheck,
   ListTree,
   ShieldCheck,
   Scan,
+  Wallet,
+  Car,
+  SquareParking,
+  ShieldAlert,
   LogOut,
+  Landmark,
+  FileText,
 } from 'lucide-react';
 import { useDarkMode } from '@/hooks/use-dark-mode';
 import { Logo } from '@/components/logo';
@@ -60,6 +73,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/auth-context';
 import type { UserRole } from '@/types';
 import { useIsClient } from '@/hooks/use-is-client';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { MyGatePassDialog } from '@/components/dashboard/my-gate-pass-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -78,50 +92,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus } from "lucide-react";
-
-const allMenuItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: Home, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/map', label: 'Community Map', icon: Map, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/map?tab=boundary', label: 'Boundary Manager', icon: ShieldCheck, roles: ['System Admin', 'Admin'] },
-  { href: '/dashboard/deals', label: 'Perks & Savings', icon: Gift, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/directory', label: 'Directory', icon: Users, roles: ['System Admin', 'Admin'] },
-  { href: '/dashboard/renters', label: 'Renters', icon: KeyRound, roles: ['Homeowner', 'Admin', 'System Admin'] },
-  { href: '/dashboard/visitors', label: 'Visitors', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/gate-pass', label: 'Gate Pass', icon: BadgeCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/wallet', label: 'Access Wallet', icon: Wallet, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/access-governance', label: 'Access Risk & Governance', icon: ShieldAlert, roles: ['System Admin', 'Admin', 'Security'] },
-  { href: '/dashboard/vehicles', label: 'Vehicles & ANPR', icon: Car, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/parking', label: 'Parking Passes', icon: SquareParking, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  { href: '/dashboard/occupancy', label: "Who's On Property?", icon: Users, roles: ['System Admin', 'Admin', 'Security', 'Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/household', label: 'Family & Household', icon: HeartHandshake, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/delegation', label: 'Access & People', icon: UserCheck, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/gate-scanner', label: 'Gate Scanner', icon: Scan, roles: ['System Admin', 'Admin', 'Security'] },
-  { href: '/dashboard/calendar', label: 'Calendar', icon: Calendar, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  // Every role, because a notice can now be addressed to any role. The menu
-  // previously stopped at Homeowner, so a notice targeted at Security or Staff
-  // would have been filtered to them by the server and then hidden by the menu.
-  { href: '/dashboard/notifications', label: 'Notifications', icon: Bell, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/updates', label: 'Updates', icon: ClipboardList, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  // Everyone on the estate. Temporary Homeowners live here, and Staff are the
-  // people most likely to spot the thing an alert is about — both were excluded
-  // from a safety feed that any signed-in user can now raise and corroborate.
-  { href: '/dashboard/warnings', label: 'Safety Alert', icon: Siren, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'] },
-  // Security too: they operate the gate this log records, and the route's
-  // `manageSecurity` gate already included them.
-  { href: '/dashboard/access-log', label: 'Access Log', icon: ListTree, roles: ['System Admin', 'Admin', 'Security'] },
-  // Temporary Homeowners are billed like any other resident, so they get the
-  // same entry. Matches the `accessBilling` gate on the routes.
-  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/changelog', label: 'App Changelog', icon: History, roles: ['System Admin'] },
-  { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck, roles: ['System Admin', 'Admin'] },
-  { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/deactivation', label: 'Deactivation', icon: UserX, roles: ['Homeowner', 'Temporary Homeowner'] },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-  { href: '/dashboard/profile', label: 'Profile', icon: User, roles: ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'] },
-];
 
 export default function DashboardLayout({
   children,
@@ -177,10 +147,287 @@ export default function DashboardLayout({
    * Profile "if missing", which it never was, because Profile's roles already
    * list Security. It was a no-op guarding against nothing.
    */
-  const menuItems = useMemo(
-    () => (user ? allMenuItems.filter((item) => item.roles.includes(user.role)) : []),
-    [user],
-  );
+  const ownershipNav = (props as Record<string, any>).ownershipNav;
+  const ownershipLabel = ownershipNav?.label || 'Ownership & Representatives';
+  const ownershipType = ownershipNav?.type || 'company';
+  const OwnershipIcon = ownershipType === 'company'
+    ? Building2
+    : ownershipType === 'individual'
+    ? HeartHandshake
+    : ownershipType === 'trust'
+    ? Landmark
+    : FileText;
+
+interface NavSubItem {
+  href: string;
+  label: string;
+  icon?: React.ElementType;
+}
+
+interface NavSection {
+  title: string;
+  href: string;
+  icon: React.ElementType;
+  subItems?: NavSubItem[];
+}
+
+  const navSections = useMemo((): NavSection[] => {
+    if (!user) return [];
+
+    const role = user.role;
+
+    if (role === 'Security') {
+      return [
+        {
+          title: 'Credentials & Gate',
+          href: '/dashboard/gate-scanner',
+          icon: Scan,
+          subItems: [
+            { href: '/dashboard/gate-scanner', label: 'Gate Scanner', icon: Scan },
+            { href: '/dashboard/gate-pass', label: 'Gate Passes', icon: BadgeCheck },
+            { href: '/dashboard/access-log', label: 'Access Activity Log', icon: ListTree },
+            { href: '/dashboard/occupancy', label: "Who's On Property", icon: Users },
+          ],
+        },
+        {
+          title: 'Emergency & Safety',
+          href: '/dashboard/safety',
+          icon: ShieldAlert,
+          subItems: [
+            { href: '/dashboard/safety', label: 'Distress & Incidents', icon: ShieldAlert },
+            { href: '/dashboard/silent-assistance', label: 'Silent Assistance', icon: LifeBuoy },
+            { href: '/dashboard/warnings', label: 'Safety Advisories', icon: Siren },
+            { href: '/dashboard/safety/credential', label: 'Credential Assistance', icon: BadgeCheck },
+          ],
+        },
+        {
+          title: 'People & Access',
+          href: '/dashboard/visitors',
+          icon: UserCheck,
+          subItems: [
+            { href: '/dashboard/visitors', label: 'Visitor Check-In', icon: User },
+            { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff },
+            { href: '/dashboard/access-governance', label: 'Access Governance', icon: ShieldAlert },
+          ],
+        },
+        {
+          title: 'Operations Dashboard',
+          href: '/dashboard',
+          icon: Home,
+        },
+        {
+          title: 'Community & Map',
+          href: '/dashboard/map',
+          icon: Map,
+          subItems: [
+            { href: '/dashboard/map', label: 'Perimeter Map', icon: Map },
+            { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser },
+          ],
+        },
+      ];
+    }
+
+    if (role === 'Staff') {
+      return [
+        {
+          title: 'Dashboard',
+          href: '/dashboard',
+          icon: Home,
+        },
+        {
+          title: 'Credentials & Gate',
+          href: '/dashboard/gate-pass',
+          icon: BadgeCheck,
+          subItems: [
+            { href: '/dashboard/gate-pass', label: 'My Credential', icon: BadgeCheck },
+            { href: '/dashboard/wallet', label: 'Access Wallet', icon: Wallet },
+          ],
+        },
+        {
+          title: 'Emergency & Safety',
+          href: '/dashboard/safety',
+          icon: LifeBuoy,
+          subItems: [
+            { href: '/dashboard/safety', label: 'Safety Hub', icon: LifeBuoy },
+            { href: '/dashboard/safety/credential', label: 'Credential Assistance', icon: LifeBuoy },
+            { href: '/dashboard/warnings', label: 'Safety Alerts', icon: Siren },
+          ],
+        },
+        {
+          title: 'Community',
+          href: '/dashboard/notifications',
+          icon: Bell,
+          subItems: [
+            { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
+            { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus },
+          ],
+        },
+      ];
+    }
+
+    if (role === 'Admin' || role === 'System Admin') {
+      return [
+        {
+          title: 'Dashboard',
+          href: '/dashboard',
+          icon: Home,
+          subItems: [
+            { href: '/dashboard', label: 'Executive Overview', icon: Home },
+            { href: '/dashboard/occupancy', label: "Who's On Property", icon: Users },
+            { href: '/dashboard/ownership', label: ownershipLabel, icon: OwnershipIcon },
+          ],
+        },
+        {
+          title: 'People & Access',
+          href: '/dashboard/delegation',
+          icon: UserCheck,
+          subItems: [
+            { href: '/dashboard/delegation', label: 'People & Access Hub', icon: UserCheck },
+            { href: '/dashboard/directory', label: 'Resident Directory', icon: Users },
+            { href: '/dashboard/household', label: 'Family & Household', icon: HeartHandshake },
+            { href: '/dashboard/renters', label: 'Renters', icon: KeyRound },
+            { href: '/dashboard/visitors', label: 'Visitors', icon: User },
+            { href: '/dashboard/block-list', label: 'Block List', icon: ShieldOff },
+          ],
+        },
+        {
+          title: 'Credentials & Gate',
+          href: '/dashboard/gate-pass',
+          icon: BadgeCheck,
+          subItems: [
+            { href: '/dashboard/gate-pass', label: 'Gate Passes & Policies', icon: BadgeCheck },
+            { href: '/dashboard/gate-scanner', label: 'Gate Scanner', icon: Scan },
+            { href: '/dashboard/access-governance', label: 'Access Governance', icon: ShieldAlert },
+            { href: '/dashboard/access-log', label: 'Access Activity Log', icon: ListTree },
+            { href: '/dashboard/vehicles', label: 'Vehicles & ANPR', icon: Car },
+            { href: '/dashboard/parking', label: 'Parking Passes', icon: SquareParking },
+          ],
+        },
+        {
+          title: 'Emergency & Safety',
+          href: '/dashboard/safety',
+          icon: LifeBuoy,
+          subItems: [
+            { href: '/dashboard/safety', label: 'Emergency Command Hub', icon: LifeBuoy },
+            { href: '/dashboard/silent-assistance', label: 'Silent Assistance Triage', icon: ShieldAlert },
+            { href: '/dashboard/warnings', label: 'Safety Alerts & Broadcasts', icon: Siren },
+          ],
+        },
+        {
+          title: 'Payments & Community',
+          href: '/dashboard/billing',
+          icon: CreditCard,
+          subItems: [
+            { href: '/dashboard/billing', label: 'Dues & Ledger', icon: CreditCard },
+            { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank },
+            { href: '/dashboard/map', label: 'Community Map', icon: Map },
+            { href: '/dashboard/map?tab=boundary', label: 'Perimeter Boundary', icon: ShieldCheck },
+            { href: '/dashboard/calendar', label: 'Calendar & Events', icon: Calendar },
+            { href: '/dashboard/updates', label: 'Community Updates', icon: ClipboardList },
+            { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser },
+            { href: '/dashboard/deals', label: 'Perks & Savings', icon: Gift },
+          ],
+        },
+        {
+          title: 'Administration',
+          href: '/dashboard/settings',
+          icon: Settings,
+          subItems: [
+            { href: '/dashboard/settings', label: 'System Settings', icon: Settings },
+            { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck },
+            ...(role === 'System Admin'
+              ? [{ href: '/dashboard/changelog', label: 'App Changelog', icon: History }]
+              : []),
+          ],
+        },
+      ];
+    }
+
+    // Default: Homeowner & Temporary Homeowner
+    const homeownerDashboardItems: NavSubItem[] = [
+      { href: '/dashboard', label: 'Property Overview', icon: Home },
+      { href: '/dashboard/ownership', label: ownershipLabel, icon: OwnershipIcon },
+    ];
+    if (ownershipType === 'company') {
+      homeownerDashboardItems.push({ href: '/dashboard/company', label: 'Company Properties', icon: Building2 });
+    }
+    homeownerDashboardItems.push({ href: '/dashboard/occupancy', label: "Who's On Property", icon: Users });
+
+    return [
+      {
+        title: 'Dashboard',
+        href: '/dashboard',
+        icon: Home,
+        subItems: homeownerDashboardItems,
+      },
+      {
+        title: 'People & Access',
+        href: '/dashboard/delegation',
+        icon: UserCheck,
+        subItems: [
+          { href: '/dashboard/delegation', label: 'People & Delegates', icon: UserCheck },
+          { href: '/dashboard/renters', label: 'Renters & Leases', icon: KeyRound },
+          { href: '/dashboard/visitors', label: 'Expected Visitors', icon: User },
+        ],
+      },
+      {
+        title: 'Credentials & Gate',
+        href: '/dashboard/wallet',
+        icon: BadgeCheck,
+        subItems: [
+          { href: '/dashboard/wallet', label: 'Access Wallet', icon: Wallet },
+          { href: '/dashboard/gate-pass', label: 'My Gate Pass', icon: BadgeCheck },
+          { href: '/dashboard/vehicles', label: 'Vehicles & Parking', icon: Car },
+          { href: '/dashboard/parking', label: 'Parking Passes', icon: SquareParking },
+        ],
+      },
+      {
+        title: 'Payments & Community',
+        href: '/dashboard/billing',
+        icon: CreditCard,
+        subItems: [
+          { href: '/dashboard/billing', label: 'Dues & Payments', icon: CreditCard },
+          { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank },
+          { href: '/dashboard/map', label: 'Community Map', icon: Map },
+          { href: '/dashboard/calendar', label: 'Calendar & Events', icon: Calendar },
+          { href: '/dashboard/updates', label: 'Community Updates', icon: ClipboardList },
+          { href: '/dashboard/deals', label: 'Perks & Savings', icon: Gift },
+          { href: '/dashboard/guidelines', label: 'Guidelines', icon: BookUser },
+        ],
+      },
+      {
+        title: 'Emergency & Safety',
+        href: '/dashboard/safety',
+        icon: LifeBuoy,
+        subItems: [
+          { href: '/dashboard/safety', label: 'Safety & Contacts', icon: LifeBuoy },
+          { href: '/dashboard/silent-assistance', label: 'Silent Assistance', icon: ShieldAlert },
+          { href: '/dashboard/warnings', label: 'Safety Alerts', icon: Siren },
+        ],
+      },
+    ];
+  }, [user, ownershipLabel, ownershipType, OwnershipIcon]);
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    navSections.forEach((section) => {
+      const isCurrentSection =
+        section.href === pathname ||
+        section.subItems?.some((sub) => sub.href.split('?')[0] === pathname);
+
+      if (isCurrentSection) {
+        setOpenSections((prev) => ({ ...prev, [section.title]: true }));
+      }
+    });
+  }, [pathname, navSections]);
+
+  const toggleSection = (title: string) => {
+    setOpenSections((prev) => ({
+      ...prev,
+      [title]: !prev[title],
+    }));
+  };
 
   if (!isClient || loading || !user) {
     return <div className="flex h-screen w-full items-center justify-center">Loading...</div>;
@@ -218,19 +465,92 @@ export default function DashboardLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {menuItems.map(({ href, label, icon: Icon }) => (
-              <SidebarMenuItem key={href}>
-                 <Link href={href} className="w-full">
-                  <SidebarMenuButton
-                    isActive={pathname === href}
-                    tooltip={label}
-                  >
-                    <Icon />
-                    <span>{label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
+            {navSections.map((section) => {
+              const hasSubItems = Boolean(section.subItems && section.subItems.length > 0);
+              const isSectionActive =
+                pathname === section.href ||
+                Boolean(section.subItems?.some((sub) => sub.href.split('?')[0] === pathname));
+              const isOpen = openSections[section.title] ?? isSectionActive;
+              const SectionIcon = section.icon;
+
+              if (!hasSubItems) {
+                return (
+                  <SidebarMenuItem key={section.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === section.href}
+                      tooltip={section.title}
+                    >
+                      <Link href={section.href}>
+                        <SectionIcon className="h-4 w-4" />
+                        <span className="font-medium">{section.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              }
+
+              return (
+                <Collapsible
+                  key={section.title}
+                  open={isOpen}
+                  onOpenChange={() => toggleSection(section.title)}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <div className="flex items-center w-full">
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isSectionActive}
+                        tooltip={section.title}
+                        className="flex-1"
+                      >
+                        <Link href={section.href}>
+                          <SectionIcon className="h-4 w-4" />
+                          <span className="font-medium truncate">{section.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:hidden shrink-0"
+                          aria-label={`Toggle ${section.title}`}
+                        >
+                          <ChevronDown
+                            className={cn(
+                              "h-3.5 w-3.5 transition-transform duration-200",
+                              isOpen && "rotate-180"
+                            )}
+                          />
+                        </Button>
+                      </CollapsibleTrigger>
+                    </div>
+
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {section.subItems?.map((sub) => {
+                          const isSubActive = pathname === sub.href.split('?')[0];
+                          const SubIcon = sub.icon;
+                          return (
+                            <SidebarMenuSubItem key={sub.href}>
+                              <SidebarMenuSubButton asChild isActive={isSubActive}>
+                                <Link href={sub.href} className="flex items-center gap-2">
+                                  {SubIcon && (
+                                    <SubIcon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                  )}
+                                  <span className="truncate">{sub.label}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              );
+            })}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-3 border-t border-border/40">

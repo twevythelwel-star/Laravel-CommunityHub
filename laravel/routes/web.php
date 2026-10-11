@@ -2,38 +2,44 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmPasswordController;
+use App\Http\Controllers\Dashboard\AccessGovernanceController;
 use App\Http\Controllers\Dashboard\AccessLogController;
 use App\Http\Controllers\Dashboard\BillingController;
 use App\Http\Controllers\Dashboard\BlocklistController;
 use App\Http\Controllers\Dashboard\BoundaryController;
 use App\Http\Controllers\Dashboard\CalendarController;
 use App\Http\Controllers\Dashboard\ChangelogController;
+use App\Http\Controllers\Dashboard\CompanyDashboardController;
 use App\Http\Controllers\Dashboard\DeactivationController;
 use App\Http\Controllers\Dashboard\DealsController;
+use App\Http\Controllers\Dashboard\DelegatedAccessController;
+use App\Http\Controllers\Dashboard\DigitalAccessWalletController;
 use App\Http\Controllers\Dashboard\DirectoryController;
 use App\Http\Controllers\Dashboard\FeedbackController;
 use App\Http\Controllers\Dashboard\FundraisingController;
 use App\Http\Controllers\Dashboard\GatePass\ScanGatePassController;
 use App\Http\Controllers\Dashboard\GatePassController;
+use App\Http\Controllers\Dashboard\GateSensorEventController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
+use App\Http\Controllers\Dashboard\HouseholdController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
-use App\Http\Controllers\Dashboard\DelegatedAccessController;
 use App\Http\Controllers\Dashboard\OccupancyController;
-use App\Http\Controllers\Dashboard\HouseholdController;
-use App\Http\Controllers\Dashboard\ParkingPassController;
-use App\Http\Controllers\Dashboard\VehicleController;
-use App\Http\Controllers\Dashboard\AccessGovernanceController;
-use App\Http\Controllers\Dashboard\DigitalAccessWalletController;
-use App\Http\Controllers\Dashboard\GateSensorEventController;
 use App\Http\Controllers\Dashboard\OverviewController;
+use App\Http\Controllers\Dashboard\OwnershipEntityController;
+use App\Http\Controllers\Dashboard\OwnershipModuleController;
+use App\Http\Controllers\Dashboard\ParkingPassController;
 use App\Http\Controllers\Dashboard\PaymentReturnController;
 use App\Http\Controllers\Dashboard\ProfileController;
 use App\Http\Controllers\Dashboard\RenterController;
+use App\Http\Controllers\Dashboard\ResidentEmergencyController;
 use App\Http\Controllers\Dashboard\ReviewFeedbackController;
+use App\Http\Controllers\Dashboard\SafetyController;
 use App\Http\Controllers\Dashboard\SettingsController;
+use App\Http\Controllers\Dashboard\SilentAssistanceController;
 use App\Http\Controllers\Dashboard\StripeCheckoutController;
 use App\Http\Controllers\Dashboard\UpdateController;
+use App\Http\Controllers\Dashboard\VehicleController;
 use App\Http\Controllers\Dashboard\VisitorController;
 use App\Http\Controllers\Dashboard\WarningController;
 use App\Http\Controllers\EventRsvpController;
@@ -66,6 +72,8 @@ Route::get('/terms', [PublicPageController::class, 'terms'])->name('terms');
 Route::get('/refunds', [PublicPageController::class, 'refunds'])->name('refunds');
 Route::get('/cookies', [PublicPageController::class, 'cookies'])->name('cookies');
 Route::get('/guest/pass/{token}', [GuestPassController::class, 'show'])->name('guest-pass.show');
+Route::get('/guest/pass/{token}/safety', [SafetyController::class, 'showCredential'])->middleware('throttle:30,1')->name('credential.safety.show');
+Route::post('/guest/pass/{token}/safety/assist', [SafetyController::class, 'requestCredentialAssistance'])->middleware('throttle:10,1')->name('credential.safety.assist');
 Route::get('/guest/pass/{token}/code', [GuestPassController::class, 'code'])
     ->middleware('throttle:30,1')
     ->name('guest-pass.code');
@@ -203,6 +211,98 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->name('gate-pass.revoke');
     Route::get('/gate-pass/pdf/{gatePass}', [PdfController::class, 'downloadGatePass'])->name('gate-pass.pdf');
 
+    // ── Digital Access Wallet (QR + NFC + Mobile Wallet Integrations) ──
+    Route::get('/wallet', [DigitalAccessWalletController::class, 'index'])->name('wallet');
+    Route::get('/wallet/credentials', [DigitalAccessWalletController::class, 'credentials'])->name('wallet.credentials');
+    Route::get('/wallet/apple-pass/{pass}', [DigitalAccessWalletController::class, 'downloadApplePass'])->name('wallet.apple-pass');
+    Route::get('/wallet/google-pass/{pass}', [DigitalAccessWalletController::class, 'googlePassPayload'])->name('wallet.google-pass');
+    Route::get('/wallet/samsung-pass/{pass}', [DigitalAccessWalletController::class, 'samsungPassPayload'])->name('wallet.samsung-pass');
+    Route::post('/wallet/report-lost', [DigitalAccessWalletController::class, 'reportLost'])->name('wallet.report-lost');
+
+    // ── Access Risk Engine & Governance (Suspicious Detection, Expirations, Workflows, Leases, Timelines) ──
+    Route::get('/access-governance', [AccessGovernanceController::class, 'index'])->middleware('can:manageSecurity')->name('access-governance');
+    Route::post('/access-governance/approvals/{id}/approve', [AccessGovernanceController::class, 'approveRequest'])->middleware('can:manageUsers')->name('access-governance.approve');
+    Route::post('/access-governance/approvals/{id}/reject', [AccessGovernanceController::class, 'rejectRequest'])->middleware('can:manageUsers')->name('access-governance.reject');
+    Route::post('/access-governance/incidents/{id}/lockdown', [AccessGovernanceController::class, 'lockdownIncident'])->middleware('can:manageSecurity')->name('access-governance.lockdown');
+    Route::post('/access-governance/incidents/{id}/resolve', [AccessGovernanceController::class, 'resolveIncident'])->middleware('can:manageSecurity')->name('access-governance.resolve');
+    Route::get('/access-governance/timeline/{pass_id}', [AccessGovernanceController::class, 'getPassTimeline'])->middleware('can:manageSecurity')->name('access-governance.timeline');
+    Route::post('/access-governance/passes/expire-sweep', [AccessGovernanceController::class, 'sweepExpiredPasses'])->middleware('can:manageUsers')->name('access-governance.sweep');
+    Route::post('/access-governance/documents/audit', [AccessGovernanceController::class, 'auditDocuments'])->middleware('can:manageUsers')->name('access-governance.audit-docs');
+    Route::post('/access-governance/documents/attach', [AccessGovernanceController::class, 'attachDocument'])->middleware('can:manageUsers')->name('access-governance.attach-doc');
+
+    // ── Delegated Access Center: My Property → Access & People ──
+    Route::get('/delegation', [DelegatedAccessController::class, 'index'])->name('delegation');
+    Route::post('/delegation', [DelegatedAccessController::class, 'store'])->name('delegation.store');
+    Route::patch('/delegation/{delegation}/rules', [DelegatedAccessController::class, 'updateRules'])->name('delegation.rules.update');
+    Route::post('/delegation/{delegation}/reissue-pass', [DelegatedAccessController::class, 'reissuePass'])->name('delegation.reissue-pass');
+    Route::post('/delegation/{delegation}/emergency/activate', [DelegatedAccessController::class, 'activateEmergency'])->name('delegation.emergency.activate');
+    Route::post('/delegation/{delegation}/emergency/deactivate', [DelegatedAccessController::class, 'deactivateEmergency'])->name('delegation.emergency.deactivate');
+    Route::post('/delegation/{delegation}/revoke', [DelegatedAccessController::class, 'revoke'])->name('delegation.revoke');
+    Route::post('/delegation/{delegation}/approve', [DelegatedAccessController::class, 'approve'])->name('delegation.approve');
+    Route::post('/delegation/{delegation}/reject', [DelegatedAccessController::class, 'reject'])->name('delegation.reject');
+    Route::post('/delegation/accept/{token}', [DelegatedAccessController::class, 'accept'])->middleware('throttle:10,1')->name('delegation.accept');
+    Route::post('/delegation/continuity-plan', [DelegatedAccessController::class, 'saveContinuityPlan'])->name('delegation.continuity-plan');
+    Route::get('/delegation/{delegation}/audit-events', [DelegatedAccessController::class, 'auditEvents'])->name('delegation.audit-events');
+
+    // ── Company-Owned Property Dashboard ──
+    Route::get('/company', [CompanyDashboardController::class, 'index'])->name('company');
+    Route::get('/company/{entity}', [CompanyDashboardController::class, 'show'])->name('company.show');
+
+    // ── Dynamic Ownership & Representation / Household / Trustees Module ──
+    Route::get('/ownership', [OwnershipModuleController::class, 'index'])->name('ownership');
+    Route::post('/ownership/representatives', [OwnershipModuleController::class, 'storeRepresentative'])->name('ownership.representatives.store');
+    Route::post('/ownership/representatives/{person}/revoke', [OwnershipModuleController::class, 'revokeRepresentative'])->name('ownership.representatives.revoke');
+
+    // ── Enterprise Ownership Entities & Representatives ──
+    Route::prefix('/ownership-entities')->name('ownership-entities.')->group(function () {
+        Route::get('/{entity}', [OwnershipEntityController::class, 'show'])->name('show');
+        Route::post('/', [OwnershipEntityController::class, 'store'])->name('store');
+        Route::post('/{entity}/verify', [OwnershipEntityController::class, 'verify'])->name('verify');
+        Route::get('/{entity}/beneficial-ownership', [OwnershipEntityController::class, 'beneficialOwnership'])->name('beneficial-ownership');
+        Route::post('/{entity}/beneficial-ownership', [OwnershipEntityController::class, 'updateBeneficialOwnership'])->name('beneficial-ownership.update');
+        Route::post('/{entity}/representatives', [OwnershipEntityController::class, 'addRepresentative'])->name('representatives.store');
+        Route::post('/{entity}/representatives/{person}/revoke', [OwnershipEntityController::class, 'revokeRepresentative'])->name('representatives.revoke');
+        Route::delete('/{entity}/representatives/{person}', [OwnershipEntityController::class, 'revokeRepresentative'])->name('representatives.destroy');
+        Route::post('/{entity}/properties/{property}', [OwnershipEntityController::class, 'assignProperty'])->name('properties.assign');
+    });
+
+    // ── Family & Household Management ──
+    Route::get('/household', [HouseholdController::class, 'index'])->name('household');
+    Route::post('/household/members', [HouseholdController::class, 'store'])->name('household.members.store');
+    Route::match(['put', 'patch'], '/household/members/{member}', [HouseholdController::class, 'update'])->name('household.members.update');
+    Route::delete('/household/members/{member}', [HouseholdController::class, 'destroy'])->name('household.members.destroy');
+
+    // ── Vehicle Management & ANPR Plate Recognition ──
+    Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles');
+    Route::get('/vehicles/anpr/lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr.lookup');
+    Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
+    Route::match(['put', 'patch'], '/vehicles/{vehicle}', [VehicleController::class, 'update'])
+        ->whereNumber('vehicle')
+        ->name('vehicles.update');
+    Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
+        ->whereNumber('vehicle')
+        ->name('vehicles.destroy');
+
+    // ── Parking Passes (Resident, Visitor, Contractor, Temporary, Accessible, Loading Zone) ──
+    Route::get('/parking', [ParkingPassController::class, 'index'])->name('parking');
+    Route::post('/parking', [ParkingPassController::class, 'store'])->name('parking.store');
+    Route::match(['get', 'post'], '/parking/verify', [ParkingPassController::class, 'verify'])->middleware('can:scanPasses')->name('parking.verify');
+
+    // ── Gate Sensor & Tailgating Detection ──
+    // Readings come from gate hardware (POST /api/gate-devices/sensor-events); guards review them here.
+    Route::post('/gate-sensor/resolve', [GateSensorEventController::class, 'resolve'])->middleware('can:manageSecurity')->name('gate-sensor.resolve');
+    Route::get('/gate-sensor/recent', [GateSensorEventController::class, 'recent'])->middleware('can:manageSecurity')->name('gate-sensor.recent');
+
+    // ── Live "Who's On Property?" & Community Occupancy ──
+    Route::get('/occupancy', [OccupancyController::class, 'index'])->name('occupancy');
+    Route::get('/occupancy/unit/{unit}', [OccupancyController::class, 'unit'])->name('occupancy.unit');
+    Route::get('/occupancy/hierarchy', [OccupancyController::class, 'hierarchy'])->name('occupancy.hierarchy');
+    Route::get('/occupancy/export', [OccupancyController::class, 'exportRoster'])->name('occupancy.export');
+    Route::post('/occupancy/muster/start', [OccupancyController::class, 'startMuster'])->name('occupancy.muster.start');
+    Route::post('/occupancy/muster/status', [OccupancyController::class, 'updateMusterStatus'])->name('occupancy.muster.status');
+    Route::post('/occupancy/muster/resolve', [OccupancyController::class, 'resolveMuster'])->name('occupancy.muster.resolve');
+    Route::get('/occupancy/muster/export', [OccupancyController::class, 'exportMusterRoster'])->name('occupancy.muster.export');
+
     // ── Visitors & directory ──
     Route::middleware('can:accessEstateInformation')->group(function () {
         Route::get('/visitors', [VisitorController::class, 'index'])->name('visitors');
@@ -245,6 +345,34 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::delete('/directory/properties/{property}', [DirectoryController::class, 'destroyProperty'])
         ->middleware(['can:manageUsers', 'password.confirm'])
         ->name('directory.properties.destroy');
+
+    // ── Discreet distress / silent assistance ──
+    // The resident's side checks residency in the controller; security's is behind manageSecurity.
+    Route::get('/safety', [SafetyController::class, 'show'])->name('safety');
+    Route::patch('/safety/profile', [SafetyController::class, 'updateProfile'])->name('safety.profile');
+    Route::put('/safety/duress-pin', [SafetyController::class, 'setDuressPin'])
+        ->middleware('password.confirm')
+        ->name('safety.duress-pin');
+    Route::delete('/safety/duress-pin', [SafetyController::class, 'clearDuressPin'])
+        ->middleware('password.confirm')
+        ->name('safety.duress-pin.clear');
+    Route::post('/safety/assist', [SafetyController::class, 'requestAssistance'])
+        ->middleware('throttle:10,1')
+        ->name('safety.assist');
+    Route::get('/safety/credential', [SafetyController::class, 'credentialSafety'])->name('safety.credential');
+    Route::post('/safety/account-credential/assist', [SafetyController::class, 'requestAccountCredentialAssistance'])
+        ->middleware('throttle:10,1')
+        ->name('safety.account-credential.assist');
+    Route::post('/safety/hold', [SafetyController::class, 'hold'])
+        ->middleware('throttle:10,1')
+        ->name('safety.hold');
+    Route::middleware('can:manageSecurity')->group(function () {
+        Route::get('/silent-assistance', [SilentAssistanceController::class, 'index'])->name('silent-assistance');
+        Route::post('/silent-assistance/{alert}/acknowledge', [SilentAssistanceController::class, 'acknowledge'])->name('silent-assistance.acknowledge');
+        Route::post('/silent-assistance/{alert}/resolve', [SilentAssistanceController::class, 'resolve'])->name('silent-assistance.resolve');
+        Route::post('/silent-assistance/{alert}/escalate-security', [SilentAssistanceController::class, 'escalateToSecurity'])->name('silent-assistance.escalate-security');
+        Route::post('/silent-assistance/{alert}/escalate-emergency', [SilentAssistanceController::class, 'escalateToEmergencyServices'])->name('silent-assistance.escalate-emergency');
+    });
 
     Route::get('/renters', [RenterController::class, 'index'])->name('renters');
     Route::post('/renters', [RenterController::class, 'store'])->name('renters.store');
@@ -348,76 +476,10 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->middleware('can:broadcastNotices')
         ->name('notifications.broadcast');
 
-    // ── Live "Who's On Property?" & Community Occupancy ──
-    Route::get('/occupancy', [OccupancyController::class, 'index'])->name('occupancy');
-    Route::get('/occupancy/unit/{unit}', [OccupancyController::class, 'unit'])->name('occupancy.unit');
-    Route::get('/occupancy/hierarchy', [OccupancyController::class, 'hierarchy'])->name('occupancy.hierarchy');
-    Route::get('/occupancy/export', [OccupancyController::class, 'exportRoster'])->name('occupancy.export');
-    Route::post('/occupancy/muster/start', [OccupancyController::class, 'startMuster'])->name('occupancy.muster.start');
-    Route::post('/occupancy/muster/status', [OccupancyController::class, 'updateMusterStatus'])->name('occupancy.muster.status');
-    Route::post('/occupancy/muster/resolve', [OccupancyController::class, 'resolveMuster'])->name('occupancy.muster.resolve');
-    Route::get('/occupancy/muster/export', [OccupancyController::class, 'exportMusterRoster'])->name('occupancy.muster.export');
-
-    // ── Delegated Access Center: My Property → Access & People ──
-    Route::get('/delegation', [DelegatedAccessController::class, 'index'])->name('delegation');
-    Route::post('/delegation', [DelegatedAccessController::class, 'store'])->name('delegation.store');
-    Route::patch('/delegation/{delegation}/rules', [DelegatedAccessController::class, 'updateRules'])->name('delegation.rules.update');
-    Route::post('/delegation/{delegation}/reissue-pass', [DelegatedAccessController::class, 'reissuePass'])->name('delegation.reissue-pass');
-    Route::post('/delegation/{delegation}/emergency/activate', [DelegatedAccessController::class, 'activateEmergency'])->name('delegation.emergency.activate');
-    Route::post('/delegation/{delegation}/emergency/deactivate', [DelegatedAccessController::class, 'deactivateEmergency'])->name('delegation.emergency.deactivate');
-    Route::post('/delegation/{delegation}/revoke', [DelegatedAccessController::class, 'revoke'])->name('delegation.revoke');
-    Route::post('/delegation/{delegation}/approve', [DelegatedAccessController::class, 'approve'])->name('delegation.approve');
-    Route::post('/delegation/{delegation}/reject', [DelegatedAccessController::class, 'reject'])->name('delegation.reject');
-    Route::post('/delegation/accept/{token}', [DelegatedAccessController::class, 'accept'])->middleware('throttle:10,1')->name('delegation.accept');
-    Route::post('/delegation/continuity-plan', [DelegatedAccessController::class, 'saveContinuityPlan'])->name('delegation.continuity-plan');
-    Route::get('/delegation/{delegation}/audit-events', [DelegatedAccessController::class, 'auditEvents'])->name('delegation.audit-events');
-
-    // ── Family & Household Management ──
-    Route::get('/household', [HouseholdController::class, 'index'])->name('household');
-    Route::post('/household/members', [HouseholdController::class, 'store'])->name('household.members.store');
-    Route::match(['put', 'patch'], '/household/members/{member}', [HouseholdController::class, 'update'])->name('household.members.update');
-    Route::delete('/household/members/{member}', [HouseholdController::class, 'destroy'])->name('household.members.destroy');
-
-    // ── Vehicle Management & ANPR Plate Recognition ──
-    Route::get('/vehicles', [VehicleController::class, 'index'])->name('vehicles');
-    Route::get('/vehicles/anpr/lookup', [VehicleController::class, 'anprLookup'])->name('vehicles.anpr.lookup');
-    Route::post('/vehicles', [VehicleController::class, 'store'])->name('vehicles.store');
-    Route::match(['put', 'patch'], '/vehicles/{vehicle}', [VehicleController::class, 'update'])
-        ->whereNumber('vehicle')
-        ->name('vehicles.update');
-    Route::delete('/vehicles/{vehicle}', [VehicleController::class, 'destroy'])
-        ->whereNumber('vehicle')
-        ->name('vehicles.destroy');
-
-    // ── Parking Passes (Resident, Visitor, Contractor, Temporary, Accessible, Loading Zone) ──
-    Route::get('/parking', [ParkingPassController::class, 'index'])->name('parking');
-    Route::post('/parking', [ParkingPassController::class, 'store'])->name('parking.store');
-    Route::match(['get', 'post'], '/parking/verify', [ParkingPassController::class, 'verify'])->middleware('can:scanPasses')->name('parking.verify');
-
-    // ── Digital Access Wallet (QR + NFC + Mobile Wallet Integrations) ──
-    Route::get('/wallet', [DigitalAccessWalletController::class, 'index'])->name('wallet');
-    Route::get('/wallet/credentials', [DigitalAccessWalletController::class, 'credentials'])->name('wallet.credentials');
-    Route::get('/wallet/apple-pass/{pass}', [DigitalAccessWalletController::class, 'downloadApplePass'])->name('wallet.apple-pass');
-    Route::get('/wallet/google-pass/{pass}', [DigitalAccessWalletController::class, 'googlePassPayload'])->name('wallet.google-pass');
-    Route::get('/wallet/samsung-pass/{pass}', [DigitalAccessWalletController::class, 'samsungPassPayload'])->name('wallet.samsung-pass');
-    Route::post('/wallet/simulate-nfc-tap', [DigitalAccessWalletController::class, 'simulateNfcTap'])->middleware('can:scanPasses')->name('wallet.simulate-nfc-tap');
-    Route::post('/wallet/report-lost', [DigitalAccessWalletController::class, 'reportLost'])->name('wallet.report-lost');
-
-    // ── Access Risk Engine & Governance (Suspicious Detection, Expirations, Workflows, Leases, Timelines) ──
-    Route::get('/access-governance', [AccessGovernanceController::class, 'index'])->middleware('can:manageSecurity')->name('access-governance');
-    Route::post('/access-governance/approvals/{id}/approve', [AccessGovernanceController::class, 'approveRequest'])->middleware('can:manageUsers')->name('access-governance.approve');
-    Route::post('/access-governance/approvals/{id}/reject', [AccessGovernanceController::class, 'rejectRequest'])->middleware('can:manageUsers')->name('access-governance.reject');
-    Route::post('/access-governance/incidents/{id}/lockdown', [AccessGovernanceController::class, 'lockdownIncident'])->middleware('can:manageSecurity')->name('access-governance.lockdown');
-    Route::post('/access-governance/incidents/{id}/resolve', [AccessGovernanceController::class, 'resolveIncident'])->middleware('can:manageSecurity')->name('access-governance.resolve');
-    Route::get('/access-governance/timeline/{pass_id}', [AccessGovernanceController::class, 'getPassTimeline'])->middleware('can:manageSecurity')->name('access-governance.timeline');
-    Route::post('/access-governance/passes/expire-sweep', [AccessGovernanceController::class, 'sweepExpiredPasses'])->middleware('can:manageUsers')->name('access-governance.sweep');
-    Route::post('/access-governance/documents/audit', [AccessGovernanceController::class, 'auditDocuments'])->middleware('can:manageUsers')->name('access-governance.audit-docs');
-    Route::post('/access-governance/documents/attach', [AccessGovernanceController::class, 'attachDocument'])->middleware('can:manageUsers')->name('access-governance.attach-doc');
-
-    // ── Gate Sensor & Tailgating Detection ──
-    // Readings come from gate hardware (POST /api/gate-devices/sensor-events); guards review them here.
-    Route::post('/gate-sensor/resolve', [GateSensorEventController::class, 'resolve'])->middleware('can:manageSecurity')->name('gate-sensor.resolve');
-    Route::get('/gate-sensor/recent', [GateSensorEventController::class, 'recent'])->middleware('can:manageSecurity')->name('gate-sensor.recent');
+    // ── Resident Emergency SOS Dispatch ──
+    Route::post('/emergency/panic', [ResidentEmergencyController::class, 'panic'])
+        ->middleware(['can:triggerEmergencyPanic', 'throttle:5,1'])
+        ->name('emergency.panic');
 
     Route::get('/updates', [UpdateController::class, 'index'])
         ->middleware('can:accessCommunityLife')

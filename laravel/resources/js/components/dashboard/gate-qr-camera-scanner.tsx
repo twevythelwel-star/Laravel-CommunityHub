@@ -35,6 +35,7 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { GateId, GatePassValidationReport, ScanDecision } from '@/lib/gate-pass-engine/types';
+import { SilentAssistanceBanner } from '@/components/dashboard/silent-assistance-banner';
 import { describeRequestError } from '@/lib/gate-pass-engine/api';
 import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
 import { useToast } from '@/hooks/use-toast';
@@ -699,6 +700,9 @@ export function GateQrCameraScanner({
 
           {report && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-5">
+              {/* A resident's silent request for help, for the guard's eyes only. */}
+              <SilentAssistanceBanner signal={report.silentAssistance} />
+
               {/* STATE 1: CHECK IN (✓ VALID PASS) */}
               {decision === 'CHECK_IN' && !completed && (
                 <div className="border-4 border-emerald-600 rounded-3xl overflow-hidden shadow-2xl bg-card">

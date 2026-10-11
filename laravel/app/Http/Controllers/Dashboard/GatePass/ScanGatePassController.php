@@ -28,7 +28,11 @@ class ScanGatePassController extends Controller
         $result = $action->execute(
             $request->validated('token'),
             $request->validated('gate'),
-            $request->user()
+            $request->user(),
+            $request->validated('direction') ?? 'in',
+            $request->validated('method') ?? 'Digital Pass',
+            (bool) $request->validated('override_passback', false),
+            $request->validated('override_reason')
         );
 
         return response()->json($result);

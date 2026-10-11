@@ -86,3 +86,8 @@ Broadcast::channel('operations-center', function (User $user) {
 
     return false;
 });
+
+// Highly sensitive resident distress events are visible to responders only.
+Broadcast::channel('security-dispatch', function (User $user) {
+    return $user->isActive() && ($user->role->isAdministrative() || $user->role->isSecurity());
+});

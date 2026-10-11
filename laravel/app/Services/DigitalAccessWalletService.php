@@ -210,20 +210,9 @@ class DigitalAccessWalletService
     }
 
     /**
-     * Simulate an NFC Tap against an estate gate reader.
-     * Validates through GateScanner and returns real-time decision.
-     *
-     * @return array<string, mixed>
-     */
-    public function simulateNfcTap(string $nfcPayloadOrUid, GateId $gate, User $guardOrResident): array
-    {
-        return $this->scanner->scan($nfcPayloadOrUid, $gate, $guardOrResident, 'NFC Contactless Tap');
-    }
-
-    /**
      * One-button Lost/Stolen Credential Protocol:
      * 1. Immediately transitions the existing pass to REVOKED, recording timestamp and reason.
-     *    All prior screenshots, exported pkpass files, and NFC keys are permanently dead at all gates.
+     *    Connected scanners reject old credentials; queued offline scans are revalidated on sync.
      * 2. Immediately generates a fresh replacement credential with a new pass ID, incremented rotation
      *    sequence, new cryptographic keys, and updated offline keypad PIN.
      *
@@ -348,7 +337,7 @@ class DigitalAccessWalletService
                 'revocation_reason' => $oldPass->revocation_reason,
             ],
             'replacement_pass' => $replacementFormatted,
-            'message' => "Credential {$oldPass->pass_id} has been permanently REVOKED. All prior screenshots and physical cards are now invalid at all gates. Replacement credential {$newPass->pass_id} is active.",
+            'message' => "Credential {$oldPass->pass_id} has been permanently REVOKED and replacement credential {$newPass->pass_id} is active. Connected gate scanners reject the old credential immediately; scans queued during a network outage are revalidated when synced.",
         ];
     }
 

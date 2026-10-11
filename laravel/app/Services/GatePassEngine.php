@@ -636,7 +636,7 @@ class GatePassEngine
                 sprintf('Physical boundary enforcement: designated gate is %s.', $tokenGate->value)];
         }
 
-        if (! in_array($currentGate->value, $policy['allowed_gates'], true)) {
+        if (! in_array($currentGate->value, $policy['allowed_gates'], true) && ! in_array(GateId::Any->value, $policy['allowed_gates'], true)) {
             return [DenyReason::UnauthorizedGate,
                 sprintf('Category %s is not cleared for %s.', $pass->category->value, $currentGate->value),
                 'Category gate clearance does not include this portal.'];

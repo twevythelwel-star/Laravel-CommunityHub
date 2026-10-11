@@ -29,12 +29,16 @@ class AuthServiceProvider extends ServiceProvider
     protected array $policies = [
         Visitor::class => VisitorPolicy::class,
         GatePass::class => GatePassPolicy::class,
+        \App\Models\HouseholdMember::class => \App\Policies\HouseholdMemberPolicy::class,
+        \App\Models\Renter::class => \App\Policies\RenterPolicy::class,
     ];
 
     public function boot(): void
     {
         Gate::policy(Visitor::class, VisitorPolicy::class);
         Gate::policy(GatePass::class, GatePassPolicy::class);
+        Gate::policy(\App\Models\HouseholdMember::class, \App\Policies\HouseholdMemberPolicy::class);
+        Gate::policy(\App\Models\Renter::class, \App\Policies\RenterPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {
@@ -130,9 +134,10 @@ class AuthServiceProvider extends ServiceProvider
 
         Gate::define('manageFundraisers', fn (User $user) => $user->role->isAdministrative());
 
-        // Residents register their own visitors and household staff.
+        // Residents and authorized entity representatives register their own visitors and household staff.
         Gate::define('registerVisitors', fn (User $user) => $user->role->isResident()
-            || $user->role->isAdministrative());
+            || $user->role->isAdministrative()
+            || $user->canManageVisitorsForAnyProperty());
 
         Gate::define('registerStaff', fn (User $user) => $user->role->isResident()
             || $user->role->isAdministrative());
@@ -140,6 +145,10 @@ class AuthServiceProvider extends ServiceProvider
         // Only deeded homeowners get homeowner-only functions; the pass policy
         // marks renters as restricted_from_homeowner_functions.
         Gate::define('accessHomeownerFunctions', fn (User $user) => $user->role === UserRole::Homeowner
+            || $user->role->isAdministrative());
+
+        // Residents in distress (and admins on their behalf) can trigger emergency panic dispatch.
+        Gate::define('triggerEmergencyPanic', fn (User $user) => $user->role->isResident()
             || $user->role->isAdministrative());
     }
 }

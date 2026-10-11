@@ -8,10 +8,12 @@ use App\Services\Messaging\PhoneNumber;
 use App\Services\SmsService;
 use App\Services\WhatsAppService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Collection;
 use Laravel\Scout\Searchable;
 
 class Visitor extends Model
@@ -34,6 +36,27 @@ class Visitor extends Model
                 $visitor->share_token = bin2hex(random_bytes(16));
             }
         });
+    }
+
+    /**
+     * A host's visitors: those they registered, and those registered to the
+     * given properties (ones they own or manage for an owner).
+     *
+     * @param  Collection<int, int>  $propertyIds
+     */
+    public function scopeManageableBy(Builder $query, User $host, Collection $propertyIds): void
+    {
+        $query->where(fn (Builder $q) => $q->where('homeowner_id', $host->id)
+            ->when($propertyIds->isNotEmpty(), fn (Builder $q) => $q->orWhereIn('property_id', $propertyIds)));
+    }
+
+    /**
+     * Where the visit is: the property it was registered to (a representative's
+     * account may cover several), else the host's own.
+     */
+    public function hostPropertyLabel(): string
+    {
+        return $this->property?->label() ?: ($this->homeowner?->propertyLabel() ?? 'Residential Lot');
     }
 
     public function guestPassUrl(): string

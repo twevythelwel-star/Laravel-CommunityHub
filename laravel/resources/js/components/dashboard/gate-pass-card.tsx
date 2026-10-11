@@ -18,6 +18,7 @@ import {
   describeRequestError,
 } from '@/lib/gate-pass-engine/api';
 import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
+import { useDiscreetHold } from '@/lib/silent-assistance';
 import { ProfileCustomQRCode } from './ProfileCustomQRCode';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,6 +116,7 @@ export function GatePassCard({
   const [isRotating, setIsRotating] = useState(false);
   const [visualSeq, setVisualSeq] = useState(initialRotationSeq);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  const discreetHold = useDiscreetHold(isOwnPass && status === 'ACTIVE');
 
   const resolvedPassId = passId || formatPassIdForDisplay(category, userId);
   const config = getCategoryConfig(category);
@@ -341,7 +343,9 @@ export function GatePassCard({
 
       {/* ── Central QR Code Framed in Profile-Specific Custom Design ── */}
       <div className="py-4 flex flex-col items-center justify-center relative z-10">
-        <div className="relative">
+        {/* Holding your own QR code raises silent assistance. Nothing on
+            screen changes, so someone beside you cannot tell. */}
+        <div className="relative select-none touch-manipulation" {...discreetHold}>
           <ProfileCustomQRCode
             value={currentToken}
             category={category}

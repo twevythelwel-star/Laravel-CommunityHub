@@ -33,6 +33,7 @@ import {
   Users,
   UserCheck,
   Shield,
+  ShieldCheck,
   HardHat,
   HeartHandshake,
   User,
@@ -192,6 +193,17 @@ export type CommunityPropertyNode = {
   unit: string;
   lot: string;
   address: string;
+  owner?: string;
+  ownershipType?: string;
+  isCorporate?: boolean;
+  representatives?: Array<{
+    id: number;
+    name: string;
+    role: string;
+    role_key?: string;
+    is_primary?: boolean;
+    permissions?: string[];
+  }>;
   insideCount: number;
   expectedCount: number;
   categoriesInside: Record<string, number>;
@@ -1075,6 +1087,57 @@ export default function OccupancyPage({
                         </div>
                       </div>
 
+                      {/* Property Ownership & Occupancy Summary */}
+                      <div className="py-2 border-b text-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Ownership:</span>
+                          <span className="font-bold text-foreground truncate max-w-[170px]" title={prop.owner}>
+                            {prop.owner || 'Unassigned'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Type:</span>
+                          <Badge variant="outline" className="text-[10px] font-semibold py-0 px-1.5 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10">
+                            {prop.ownershipType || 'Individual'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Occupancy:</span>
+                          <span className="font-medium text-foreground truncate max-w-[170px]" title={prop.primaryOccupant || 'Not Specified'}>
+                            {prop.primaryOccupant || 'Not Specified'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-muted-foreground">Status:</span>
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-[10px] font-semibold py-0 px-1.5",
+                              prop.isOwnerOccupied
+                                ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/30"
+                                : "bg-amber-500/10 text-amber-600 border border-amber-500/30"
+                            )}
+                          >
+                            {prop.isOwnerOccupied ? 'Owner-Occupied' : (prop.isCorporate ? 'Entity-Owned' : 'Tenant / Non-Owner Occupied')}
+                          </Badge>
+                        </div>
+                        {prop.representatives && prop.representatives.length > 0 && (
+                          <div className="pt-1 border-t border-border/30">
+                            <span className="text-[11px] font-semibold text-muted-foreground block mb-1">
+                              Owner Representatives ({prop.representatives.length}):
+                            </span>
+                            <div className="space-y-0.5">
+                              {prop.representatives.map((rep: any) => (
+                                <div key={rep.id} className="text-[11px] text-muted-foreground truncate">
+                                  <span className="font-medium text-foreground">{rep.name}</span>
+                                  <span className="text-muted-foreground/80"> — {rep.role}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       {/* Category Breakdown Tree List */}
                       <div className="py-2.5 space-y-1 font-mono text-xs">
                         {(prop.breakdown ?? []).map((item: any, idx: number) => (
@@ -1381,6 +1444,179 @@ export default function OccupancyPage({
                       ────────────────────────────
                     </div>
                   </div>
+
+                  {/* Property Legal Owner & Authorized Representatives Card */}
+                  {drillDownData?.ownership && (
+                    <div className="p-3.5 rounded-lg bg-neutral-900 border border-neutral-800 font-sans space-y-3">
+                      <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+                        <div>
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400">Architecture</span>
+                          <h4 className="text-xs font-bold text-white uppercase tracking-wide">
+                            Ownership &amp; Occupancy Decoupled
+                          </h4>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] font-semibold py-0.5 px-2",
+                            drillDownData.ownership.isOwnerOccupied
+                              ? "border-emerald-500/40 text-emerald-400 bg-emerald-500/10"
+                              : "border-indigo-500/40 text-indigo-400 bg-indigo-500/10"
+                          )}
+                        >
+                          {drillDownData.ownership.isOwnerOccupied
+                            ? "Owner-Occupied"
+                            : (drillDownData.ownership.isCorporate ? "Corporate Owned" : "Tenant / Entity Occupied")}
+                        </Badge>
+                      </div>
+
+                      {/* Decoupled 7-Branch Architecture Tree */}
+                      <div className="font-mono text-xs space-y-2 text-neutral-300">
+                        <div>
+                          <span className="text-indigo-400 font-bold">PROPERTY</span>
+                          <span className="text-neutral-400"> ({drillDownData.unit})</span>
+                        </div>
+
+                        <div className="pl-2 border-l border-neutral-700 space-y-1">
+                          {/* Branch 1: OWNERSHIP */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-neutral-500">├──</span>
+                            <span className="text-purple-400 font-semibold">OWNERSHIP</span>
+                          </div>
+                          <div className="pl-6 space-y-0.5 text-[11px]">
+                            <div className="text-white font-medium flex items-center gap-2">
+                              <span>└── {drillDownData.ownership.owner}</span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-400">
+                                {drillDownData.ownership.ownershipType}
+                              </span>
+                            </div>
+                            {drillDownData.ownership.representatives && drillDownData.ownership.representatives.length > 0 && (
+                              <div className="pl-4 pt-1 text-[10px] text-neutral-400 space-y-0.5">
+                                <div className="text-neutral-400 uppercase tracking-wider font-semibold">Authorized Representatives:</div>
+                                {drillDownData.ownership.representatives.map((rep: any) => (
+                                  <div key={rep.id} className="text-neutral-300 flex items-center gap-1.5">
+                                    <span className="text-neutral-600">•</span>
+                                    <span className="text-white">{rep.name}</span>
+                                    <span className="text-neutral-400">({rep.role})</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Branch 2: OCCUPANCY */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-neutral-500">├──</span>
+                            <span className="text-emerald-400 font-semibold">OCCUPANCY</span>
+                          </div>
+                          <div className="pl-6 text-[11px] text-white">
+                            <span>└── {drillDownData.ownership.primaryOccupant || 'Vacant / Unspecified'}</span>
+                            <span className="text-neutral-400 text-[10px] ml-2">
+                              {drillDownData.ownership.isOwnerOccupied ? '(Owner-Occupied)' : '(Primary Resident)'}
+                            </span>
+                          </div>
+
+                          {/* Branch 3: LONG-TERM RENTAL */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-neutral-500">├──</span>
+                            <span className="text-cyan-400 font-semibold">LONG-TERM RENTAL</span>
+                          </div>
+                          <div className="pl-6 text-[11px] text-neutral-300">
+                            {drillDownData.propertyEcosystem?.long_term_rental && drillDownData.propertyEcosystem.long_term_rental.length > 0 ? (
+                              drillDownData.propertyEcosystem.long_term_rental.map((r: any, idx: number) => (
+                                <div key={idx} className="text-white">
+                                  └── {r.name} {r.type ? `(${r.type})` : ''}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-neutral-400">└── None registered</div>
+                            )}
+                          </div>
+
+                          {/* Branch 4: SHORT-TERM RENTAL */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-neutral-500">├──</span>
+                            <span className="text-amber-400 font-semibold">SHORT-TERM RENTAL</span>
+                          </div>
+                          <div className="pl-6 text-[11px] text-neutral-300">
+                            {drillDownData.propertyEcosystem?.short_term_rental && drillDownData.propertyEcosystem.short_term_rental.length > 0 ? (
+                              drillDownData.propertyEcosystem.short_term_rental.map((r: any, idx: number) => (
+                                <div key={idx} className="text-white">
+                                  └── {r.name} {r.type ? `(${r.type})` : ''}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-neutral-400">└── None registered</div>
+                            )}
+                          </div>
+
+                          {/* Branch 5: STAFF */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-neutral-500">├──</span>
+                            <span className="text-blue-400 font-semibold">STAFF</span>
+                          </div>
+                          <div className="pl-6 text-[11px] text-neutral-300">
+                            {drillDownData.propertyEcosystem?.staff && drillDownData.propertyEcosystem.staff.length > 0 ? (
+                              drillDownData.propertyEcosystem.staff.map((s: any, idx: number) => (
+                                <div key={idx} className="text-white">
+                                  └── {s.name} {s.role ? `(${s.role})` : ''}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-neutral-400">└── None registered</div>
+                            )}
+                          </div>
+
+                          {/* Branch 6: CONTRACTORS */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-neutral-500">├──</span>
+                            <span className="text-orange-400 font-semibold">CONTRACTORS</span>
+                          </div>
+                          <div className="pl-6 text-[11px] text-neutral-300">
+                            {drillDownData.propertyEcosystem?.contractors && drillDownData.propertyEcosystem.contractors.length > 0 ? (
+                              drillDownData.propertyEcosystem.contractors.map((c: any, idx: number) => (
+                                <div key={idx} className="text-white">
+                                  └── {c.name} {c.trade ? `(${c.trade})` : ''}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-neutral-400">└── None registered</div>
+                            )}
+                          </div>
+
+                          {/* Branch 7: LEGACY CONTACTS */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span className="text-neutral-500">└──</span>
+                            <span className="text-rose-400 font-semibold">LEGACY CONTACTS</span>
+                          </div>
+                          <div className="pl-6 text-[11px] text-neutral-300">
+                            {drillDownData.propertyEcosystem?.legacy_contacts && drillDownData.propertyEcosystem.legacy_contacts.length > 0 ? (
+                              drillDownData.propertyEcosystem.legacy_contacts.map((l: any, idx: number) => (
+                                <div key={idx} className="text-white">
+                                  └── {l.name} {l.relationship ? `(${l.relationship})` : ''}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-neutral-400">└── None registered</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Security Directive: Ownership ≠ Presence */}
+                  {drillDownData?.ownership && (
+                    <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-xs space-y-1 font-sans">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold tracking-wide uppercase text-[11px]">
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>Security Directive: Ownership ≠ Presence</span>
+                      </div>
+                      <p className="text-neutral-300 text-[11px] leading-relaxed">
+                        <strong className="text-white">{drillDownData.ownership.owner}</strong> is the registered titleholder, not a physical human inside the property. Real-time presence below reflects living individuals holding active gate credentials currently verified on-site.
+                      </p>
+                    </div>
+                  )}
 
                   {/* 7 Categories */}
                   {categoriesList.map((cat) => {

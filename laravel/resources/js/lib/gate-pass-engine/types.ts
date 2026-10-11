@@ -159,7 +159,20 @@ export interface ValidationStageResult {
   timestamp: string;
 }
 
+/**
+ * A resident's silent request for help, raised by a duress PIN or a credential
+ * they armed with the discreet QR gesture. Shown to the guard only.
+ */
+export interface SilentAssistanceSignal {
+  alertId: number;
+  assistance: 'police' | 'medical' | 'fire' | 'security' | 'contact';
+  channel: string;
+  instruction: string;
+}
+
 export interface GatePassValidationReport {
+  /** Present only when the passholder has silently asked for help. */
+  silentAssistance?: SilentAssistanceSignal;
   status: ValidationStatus;
   /** What the guard should do. Decided by the server from the pass's state. */
   decision?: ScanDecision;

@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Services\AccessExpirationPolicyService;
+use App\Services\DigitalAuthorizationDocumentService;
 use App\Services\GatePassEngine;
 use App\Services\Messaging\MessageNotSent;
 use App\Services\SmsService;
@@ -85,6 +87,16 @@ Schedule::command('visitors:expire-no-shows')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->name('visitors:expire-no-shows');
+
+/*
+ | Generate monthly HOA assessments, payment links, and resident notifications.
+ | Runs automatically on the 1st of every month at 00:05 UTC.
+ */
+Schedule::command('billing:generate-assessments')
+    ->monthlyOn(1, '00:05')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('billing:generate-assessments');
 
 /*
  | Local seeding convenience only.
@@ -194,11 +206,35 @@ Schedule::command('horizon:snapshot')
     ->description('horizon:snapshot');
 
 /*
- | Generate the month's HOA assessments: one invoice per owned property,
- | with payment links and owner notifications. Runs on the 1st at 00:05.
+ |--------------------------------------------------------------------------
+ | Compliance & Access Governance Sweeps
+ |--------------------------------------------------------------------------
  */
-Schedule::command('billing:generate-assessments')
-    ->monthlyOn(1, '00:05')
-    ->withoutOverlapping()
+Schedule::call(function (DigitalAuthorizationDocumentService $service) {
+    $service->auditDocumentExpirations();
+})->hourly()->name('compliance:audit-documents');
+
+Schedule::call(function (AccessExpirationPolicyService $service) {
+    $service->sweepExpiredPasses();
+})->hourly()->name('gatepass:sweep-expired');
+
+Artisan::command('compliance:audit', function (DigitalAuthorizationDocumentService $service) {
+    $res = $service->auditDocumentExpirations();
+    $this->info("Compliance audit completed: {$res['expired_count']} expired documents detected, {$res['suspended_passes']} gate passes suspended.");
+})->purpose('Audit all digital leases and compliance documents, suspending passes for lapsed documentation');
+
+Schedule::command('privacy:prune-identifications', ['--days' => 30])
+    ->dailyAt('04:50')
     ->onOneServer()
-    ->name('billing:generate-assessments');
+    ->description('privacy:prune-visitor-identifications-jdpa');
+
+Schedule::command('safety:escalate-unacknowledged')
+    ->everyMinute()
+    ->name('safety:escalate-unacknowledged')
+    ->description('safety:escalate-unacknowledged-alerts');
+
+Artisan::command('gatepass:expire-sweep', function (AccessExpirationPolicyService $service) {
+    $count = $service->sweepExpiredPasses();
+    $this->info("Mandatory expiration sweep completed: {$count} stale gate passes revoked.");
+})->purpose('Sweep and revoke gate passes past their mandatory expiration deadline');
+

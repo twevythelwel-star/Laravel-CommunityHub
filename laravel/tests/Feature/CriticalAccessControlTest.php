@@ -15,10 +15,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Access governance, the wallet's NFC simulator and the gate sensor log had
- * no permission checks: any signed-in account could approve access requests
- * (each minting a gate pass), lock down any credential, sweep passes, run
- * gate scans as itself, or dismiss a tailgating violation.
+ * Access governance and the gate sensor log had no permission checks:
+ * any signed-in account could approve access requests (each minting a gate pass),
+ * lock down any credential, sweep passes, or dismiss a tailgating violation.
  */
 class CriticalAccessControlTest extends TestCase
 {
@@ -37,7 +36,6 @@ class CriticalAccessControlTest extends TestCase
             'sweep expired passes' => ['post', '/dashboard/access-governance/passes/expire-sweep'],
             'audit documents' => ['post', '/dashboard/access-governance/documents/audit'],
             'attach a document' => ['post', '/dashboard/access-governance/documents/attach'],
-            'simulate an NFC tap' => ['post', '/dashboard/wallet/simulate-nfc-tap'],
             'resolve a sensor event' => ['post', '/dashboard/gate-sensor/resolve'],
             'read sensor events' => ['get', '/dashboard/gate-sensor/recent'],
         ];

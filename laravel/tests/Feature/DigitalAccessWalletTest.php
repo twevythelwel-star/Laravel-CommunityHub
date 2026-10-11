@@ -2,10 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Enums\GateId;
 use App\Enums\UserRole;
 use App\Models\Household;
 use App\Models\User;
 use App\Services\DigitalAccessWalletService;
+use App\Services\GateScanner;
 use App\Services\HouseholdManagementService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -149,14 +151,13 @@ class DigitalAccessWalletTest extends TestCase
         $walletService = app(DigitalAccessWalletService::class);
         $cred = $walletService->formatWalletPass($pass, 'Homeowner');
 
-        $response = // The tap is a gate officer's: the simulator runs the real scanner (can:scanPasses).
-        $this->actingAs(User::factory()->create(['role' => UserRole::Security]))->postJson('/dashboard/wallet/simulate-nfc-tap', [
-            'payload' => $cred['nfc']['payload'],
-            'gate' => 'GATE-01',
-        ]);
+        // Test the GateScanner service directly
+        $scanner = app(GateScanner::class);
+        $guard = User::factory()->create(['role' => UserRole::Security]);
 
-        $response->assertOk()
-            ->assertJsonPath('decision', 'CHECK_IN');
+        $result = $scanner->scan($cred['nfc']['payload'], GateId::Gate01, $guard, 'NFC Contactless Tap');
+
+        $this->assertEquals('CHECK_IN', $result['decision']);
 
         // Verify access log records method as 'NFC Contactless Tap'
         $this->assertDatabaseHas('access_log_entries', [
@@ -185,17 +186,15 @@ class DigitalAccessWalletTest extends TestCase
         // fixed past date: household passes are valid from when they are issued.
         Carbon::setTestNow(now()->addDay()->setTime(22, 30));
 
-        $response = // The tap is a gate officer's: the simulator runs the real scanner (can:scanPasses).
-        $this->actingAs(User::factory()->create(['role' => UserRole::Security]))->postJson('/dashboard/wallet/simulate-nfc-tap', [
-            'payload' => $cred['nfc']['payload'],
-            'gate' => 'GATE-01',
-        ]);
+        // Test the GateScanner service directly
+        $scanner = app(GateScanner::class);
+        $guard = User::factory()->create(['role' => UserRole::Security]);
 
-        $response->assertOk()
-            ->assertJsonPath('decision', 'REJECT')
-            ->assertJsonPath('report.status', 'REJECTED');
+        $result = $scanner->scan($cred['nfc']['payload'], GateId::Gate01, $guard, 'NFC Contactless Tap');
 
-        $this->assertStringContainsString('Curfew restriction', $response->json('report.primaryReason'));
+        $this->assertEquals('REJECT', $result['decision']);
+        $this->assertEquals('REJECTED', $result['report']['status']);
+        $this->assertStringContainsString('Curfew restriction', $result['report']['primaryReason']);
 
         Carbon::setTestNow(); // reset
     }
@@ -220,17 +219,15 @@ class DigitalAccessWalletTest extends TestCase
         // or before today is refused as not yet valid instead.
         Carbon::setTestNow(now()->next(Carbon::SATURDAY)->setTime(10, 0));
 
-        $response = // The tap is a gate officer's: the simulator runs the real scanner (can:scanPasses).
-        $this->actingAs(User::factory()->create(['role' => UserRole::Security]))->postJson('/dashboard/wallet/simulate-nfc-tap', [
-            'payload' => $cred['nfc']['payload'],
-            'gate' => 'GATE-01',
-        ]);
+        // Test the GateScanner service directly
+        $scanner = app(GateScanner::class);
+        $guard = User::factory()->create(['role' => UserRole::Security]);
 
-        $response->assertOk()
-            ->assertJsonPath('decision', 'REJECT')
-            ->assertJsonPath('report.status', 'REJECTED');
+        $result = $scanner->scan($cred['nfc']['payload'], GateId::Gate01, $guard, 'NFC Contactless Tap');
 
-        $this->assertStringContainsString('Access not permitted on Saturday', $response->json('report.primaryReason'));
+        $this->assertEquals('REJECT', $result['decision']);
+        $this->assertEquals('REJECTED', $result['report']['status']);
+        $this->assertStringContainsString('Access not permitted on Saturday', $result['report']['primaryReason']);
 
         Carbon::setTestNow(); // reset
     }

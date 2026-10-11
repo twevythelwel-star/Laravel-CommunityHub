@@ -36,6 +36,7 @@ return [
     'gates' => [
         'GATE-01' => 'Main Gate',
         'GATE-02' => 'Service Gate',
+        'GATE-SOUTH' => 'South Gate',
     ],
 
     /*
@@ -51,6 +52,10 @@ return [
         'GATE-02' => [
             'ZONE-ROOT-CORE', 'ZONE-ALL-PERIMETER', 'ZONE-ADMIN-COMMON',
             'ZONE-FACILITIES-WORKSHOP', 'ZONE-RESIDENTIAL-AMENITIES',
+        ],
+        'GATE-SOUTH' => [
+            'ZONE-ROOT-CORE', 'ZONE-ALL-PERIMETER', 'ZONE-ADMIN-COMMON',
+            'ZONE-FACILITIES-WORKSHOP', 'ZONE-RESIDENTIAL-AMENITIES', 'ZONE-HOST-RESIDENCE',
         ],
     ],
 

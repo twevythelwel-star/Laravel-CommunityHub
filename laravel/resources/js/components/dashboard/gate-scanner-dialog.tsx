@@ -42,6 +42,7 @@ import {
 import { CategoryShapeIcon } from '@/lib/gate-pass-engine/shapes';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { SilentAssistanceBanner } from '@/components/dashboard/silent-assistance-banner';
 
 interface GateScannerDialogProps {
   open: boolean;
@@ -326,6 +327,9 @@ export function GateScannerDialog({
               <code className="font-mono">config/gatepass.php</code>.
             </p>
           </div>
+
+          {/* A resident's silent request for help, for the guard's eyes only. */}
+          <SilentAssistanceBanner signal={report?.silentAssistance} />
 
           {/* ── VALIDATION DECISION DISPLAY ── */}
           {report && (

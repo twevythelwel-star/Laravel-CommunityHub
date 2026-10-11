@@ -11,12 +11,14 @@ use App\Events\VisitorCheckedInEvent;
 use App\Exceptions\InvalidPassTransition;
 use App\Exceptions\ScanNotConfirmable;
 use App\Models\AccessLogEntry;
+use App\Models\AuthorizedPerson;
 use App\Models\BlocklistEntry;
 use App\Models\DelegatedAccess;
 use App\Models\GatePass;
 use App\Models\InAppNotification;
 use App\Models\User;
 use App\Services\Credentials\WalletCredentialCode;
+use App\Services\Safety\SilentAssistanceService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -39,6 +41,7 @@ class GateScanner
         private readonly GatePassEngine $engine,
         private readonly AccessRiskEngine $riskEngine,
         private readonly AccessAuditTimelineService $timelineService,
+        private readonly SilentAssistanceService $safety,
         private readonly WalletCredentialCode $walletCodes,
     ) {}
 
@@ -55,6 +58,25 @@ class GateScanner
         ?string $overrideReason = null
     ): array {
         $trimmed = trim(str_replace('-', '', $token));
+
+        // A duress PIN is taken exactly like the resident's normal offline PIN
+        // (same method, same outcome) and raises silent assistance below.
+        $duressProfile = preg_match('/^\d{6}$/', $trimmed) ? $this->safety->profileForDuressPin($trimmed) : null;
+        if ($duressProfile?->user) {
+            $candidate = $duressProfile->user->gatePasses()
+                ->whereNull('visitor_id')
+                ->whereNull('delegated_access_id')
+                ->whereIn('status', [PassStatus::Active, PassStatus::CheckedIn])
+                ->latest('id')
+                ->first();
+
+            if ($candidate) {
+                $token = $this->engine->issueToken($candidate, $gate)['token'];
+                $method = 'Offline Gate PIN';
+                $trimmed = '';
+            }
+        }
+
         // A PIN is six digits derived from the pass, so two active passes can
         // share one. Then it names no one: taking the first match would check
         // in the wrong person, so the guard is asked for the QR code instead.
@@ -259,6 +281,41 @@ class GateScanner
             'occurred_at' => now(),
         ]);
 
+        // ── Silent assistance ──
+        // A duress PIN, or a credential armed by the resident's discreet QR
+        // gesture. Added to what the guard sees after the access log is
+        // written, so the log reads exactly like a normal entry.
+        $silentAlert = null;
+        if ($pass?->user) {
+            $silentAlert = $duressProfile && (int) $pass->user_id === (int) $duressProfile->user_id
+                ? $this->safety->raise($pass->user, 'duress_pin', null, $this->safety->scanContext($pass, $gate, $direction))
+                : $this->safety->consumeArmedScan($pass, $gate, $direction);
+        }
+        if ($silentAlert) {
+            $report['silentAssistance'] = [
+                'alertId' => $silentAlert->id,
+                'person' => $silentAlert->personName(),
+                'capacity' => $silentAlert->capacityLabel(),
+                'representativeRole' => $silentAlert->representativeRole(),
+                'ownerEntity' => $silentAlert->ownerEntityName(),
+                'ownerEntityType' => $silentAlert->ownerEntityType(),
+                'property' => $silentAlert->propertyLabel(),
+                'assistance' => $silentAlert->assistance_type,
+                'assistanceLabel' => $silentAlert->assistanceLabel(),
+                'severity' => $silentAlert->severity_level,
+                'severityLabel' => $silentAlert->severityLabel(),
+                'channel' => $silentAlert->channelLabel(),
+                'status' => in_array($silentAlert->status, ['open', 'acknowledged'], true) ? 'ACTIVE' : 'SECURITY ALERTED',
+                'event' => $silentAlert->event_type ? strtoupper(str_replace('_', ' ', $silentAlert->event_type)) : null,
+                'gate' => $silentAlert->gate ? $this->gateName(GateId::tryFrom($silentAlert->gate) ?? $gate) : null,
+                'triggeredAt' => $silentAlert->triggered_at->toIso8601String(),
+                'eventAt' => $silentAlert->event_at?->toIso8601String(),
+                'credentialReference' => $silentAlert->credential_reference,
+                'vehicles' => $silentAlert->vehicle_context ?? [],
+                'instruction' => 'Act normally. Do not acknowledge this to anyone present. Security has been alerted.',
+            ];
+        }
+
         // ── Access Risk Engine & Forensic Timeline Analysis ──
         $detectedIncident = $this->riskEngine->analyzeScanAttempt($token, $gate, $guard, [
             'report' => $report,
@@ -323,6 +380,29 @@ class GateScanner
                 'Verify Photo ID' => $rules['verify_id'] ?? false,
             ];
             $report['requiresIdVerification'] = (bool) ($rules['verify_id'] ?? false);
+
+            $repAppointment = $pass->user_id ? AuthorizedPerson::with('ownershipEntity')
+                ->where('user_id', $pass->user_id)
+                ->current()
+                ->first() : null;
+
+            if ($repAppointment && $repAppointment->ownershipEntity) {
+                $entity = $repAppointment->ownershipEntity;
+                $report['isEntityRepresentative'] = true;
+                $report['representedEntity'] = $entity->legal_name;
+                $report['representativeRole'] = $repAppointment->role->label();
+                $report['roleLabel'] = "Authorized Representative of {$entity->legal_name}";
+                $report['actingFor'] = $entity->legal_name;
+                $report['authorizedBy'] = $entity->legal_name;
+                $report['relationship'] = "Authorized Representative ({$repAppointment->role->label()})";
+                $report['accessTier'] = 'ENTITY REPRESENTATIVE';
+                $report['delegatedTitle'] = strtoupper($repAppointment->role->label());
+                $report['authorizationType'] = 'AUTHORIZED REPRESENTATIVE';
+                $report['permissionSummary'] = 'Property Access';
+                if (empty($report['property']) || $report['property'] === 'Unassigned') {
+                    $report['property'] = $repAppointment->authorizedProperties()->first()?->label() ?? $report['property'];
+                }
+            }
 
             if ($isLongTerm) {
                 $report['isDelegated'] = true;

@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Enums\GateId;
+use App\Enums\OwnershipEntityType;
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
-use App\Models\DelegatedAccess;
 use App\Models\GatePass;
+use App\Models\OwnershipEntity;
+use App\Models\Property;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GatePassEngine;
@@ -367,5 +369,63 @@ class LiveWhosOnPropertyTest extends TestCase
         $this->assertStringContainsString('Unit 14', $content);
         $this->assertStringContainsString('Bruce Wayne', $content);
         $this->assertStringContainsString('Residents', $content);
+    }
+
+    public function test_ownership_does_not_equal_presence_and_entity_is_never_counted_as_human_occupant(): void
+    {
+        // Property owned by ABC Holdings Ltd
+        $company = OwnershipEntity::create([
+            'legal_name' => 'ABC Holdings Limited',
+            'entity_type' => OwnershipEntityType::Company,
+            'status' => 'active',
+        ]);
+
+        $property = Property::create([
+            'property_code' => 'UNIT-14',
+            'lot_number' => '14',
+            'ownership_entity_id' => $company->id,
+            'status' => 'occupied',
+        ]);
+
+        // Mary Brown (Authorized Representative) enters
+        GatePass::create([
+            'pass_id' => 'GP-REP-001',
+            'category' => PassCategory::Delegate,
+            'holder_name' => 'Mary Brown',
+            'property' => 'Unit 14',
+            'status' => PassStatus::CheckedIn,
+            'checked_in_at' => now()->subMinutes(45),
+            'metadata' => [
+                'authorization_type' => 'authorized_representative',
+                'relationship' => 'Property Manager',
+                'access_level' => 'Property Delegate',
+            ],
+        ]);
+
+        // Sarah Smith (Long-Term Renter) enters
+        GatePass::create([
+            'pass_id' => 'GP-REN-002',
+            'category' => PassCategory::Renter,
+            'holder_name' => 'Sarah Smith',
+            'property' => 'Unit 14',
+            'status' => PassStatus::CheckedIn,
+            'checked_in_at' => now()->subHours(2),
+        ]);
+
+        $occupancyService = app(PropertyOccupancyService::class);
+        $drilldown = $occupancyService->getUnitDrilldown('Unit 14');
+
+        // Total physical humans present inside Unit 14 = 2 (Mary Brown, Sarah Smith)
+        $this->assertEquals(2, $drilldown['totalCurrentlyInside']);
+
+        // ABC Holdings Limited is the Legal Owner, but NEVER a physical occupant
+        $occupantNames = collect($drilldown['occupants'])->pluck('name')->all();
+        $this->assertContains('Mary Brown', $occupantNames);
+        $this->assertContains('Sarah Smith', $occupantNames);
+        $this->assertNotContains('ABC Holdings Limited', $occupantNames);
+
+        // Ownership info confirms ABC Holdings Limited as owner
+        $this->assertSame('ABC Holdings Limited', $drilldown['ownership']['owner']);
+        $this->assertSame('Company', $drilldown['ownership']['ownershipType']);
     }
 }

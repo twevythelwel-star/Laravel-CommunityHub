@@ -21,6 +21,8 @@ class DatabaseSeeder extends Seeder
             CommunicationsSeeder::class,
             CommerceSeeder::class,
             RevenueEngineSeeder::class,
+            CompanyPropertySeeder::class,
+            RentalPortfolioSeeder::class,
         ]);
     }
 }

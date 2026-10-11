@@ -39,7 +39,7 @@ class EnterpriseSpreadsheetModuleTest extends TestCase
         $this->assertArrayHasKey('residents', $exportBlueprints);
         $this->assertArrayHasKey('transactions', $exportBlueprints);
         $this->assertArrayHasKey('gate_passes', $exportBlueprints);
-        $this->assertArrayHasKey('large_dataset_benchmark', $exportBlueprints);
+        $this->assertArrayNotHasKey('large_dataset_benchmark', $exportBlueprints);
 
         $importBlueprints = $service->getImportBlueprints();
         $this->assertArrayHasKey('residents', $importBlueprints);

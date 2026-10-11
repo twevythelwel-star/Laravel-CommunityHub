@@ -87,7 +87,7 @@ class DigitalAccessWalletController extends Controller
         ]);
 
         $pass = GatePass::where('pass_id', $validated['pass_id'])->firstOrFail();
-        $this->authorizePassAccess($request->user(), $pass);
+        $this->authorize('view', $pass);
 
         $result = $this->walletService->reportLostAndReplace(
             $pass,
@@ -105,7 +105,7 @@ class DigitalAccessWalletController extends Controller
     public function downloadApplePass(Request $request, string $passId): Response
     {
         $pass = GatePass::where('pass_id', $passId)->firstOrFail();
-        $this->authorizePassAccess($request->user(), $pass);
+        $this->authorize('view', $pass);
 
         $pkpass = $this->walletService->generateApplePkpass($pass);
 
@@ -125,7 +125,7 @@ class DigitalAccessWalletController extends Controller
     public function googlePassPayload(Request $request, string $passId): JsonResponse
     {
         $pass = GatePass::where('pass_id', $passId)->firstOrFail();
-        $this->authorizePassAccess($request->user(), $pass);
+        $this->authorize('view', $pass);
 
         $saveUrl = $this->walletService->googleWalletSaveUrl($pass);
 
@@ -139,43 +139,5 @@ class DigitalAccessWalletController extends Controller
     public function samsungPassPayload(Request $request, string $passId): JsonResponse
     {
         throw new WalletPassUnavailable('Samsung Wallet is not available.');
-    }
-
-    /**
-     * Interactive Gate NFC Tap Simulation:
-     * Resident or security guard taps contactless phone against the virtual gate antenna.
-     */
-    public function simulateNfcTap(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'payload' => ['required', 'string'],
-            'gate' => ['nullable', 'string'],
-        ]);
-
-        $gate = GateId::tryFrom($validated['gate'] ?? '') ?? GateId::Gate01;
-        $user = $request->user();
-
-        $result = $this->walletService->simulateNfcTap($validated['payload'], $gate, $user);
-
-        return response()->json($result);
-    }
-
-    /**
-     * Ensure the requesting user owns the pass, is head of household for the pass, or is administrative.
-     */
-    private function authorizePassAccess($user, GatePass $pass): void
-    {
-        if ($user->role->isAdministrative() || $pass->user_id === $user->id) {
-            return;
-        }
-
-        // Check if pass belongs to user's household
-        $household = Household::where('primary_homeowner_id', $user->id)
-            ->whereHas('members', fn ($q) => $q->where('gate_pass_id', $pass->id))
-            ->exists();
-
-        if (! $household) {
-            abort(403, 'Unauthorized access to this digital credential.');
-        }
     }
 }

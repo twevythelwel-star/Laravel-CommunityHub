@@ -1131,7 +1131,7 @@ export default function DigitalAccessWalletPage({
                 Once confirmed, <strong>{currentPass.holder_name}</strong>'s current QR pass (<code className="font-mono text-amber-300">{currentPass.pass_id}</code>) will be permanently <strong className="text-red-400">REVOKED</strong> in the estate security directory.
               </p>
               <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 font-mono text-[11px] text-amber-200">
-                ⚠️ Any previous screenshots, forwarded QR codes, or cloned NFC cards will immediately fail and reject at all estate gates.
+                ⚠️ Connected gate scanners reject previous screenshots, forwarded QR codes, and cloned NFC cards immediately. Scans queued during a network outage are revalidated when they sync.
               </div>
             </div>
 

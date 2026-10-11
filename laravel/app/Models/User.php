@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Enums\PassCategory;
+use App\Enums\RepresentativePermission;
 use App\Enums\UserRole;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -124,6 +126,86 @@ class User extends Authenticatable implements HasMedia
         return $this->hasMany(Property::class, 'owner_user_id');
     }
 
+    public function authorizedAppointments(): HasMany
+    {
+        return $this->hasMany(AuthorizedPerson::class);
+    }
+
+    public function activeAuthorizedAppointments(): HasMany
+    {
+        return $this->hasMany(AuthorizedPerson::class)->current();
+    }
+
+    /**
+     * All ownership entities this user currently represents.
+     *
+     * @return Collection<int, OwnershipEntity>
+     */
+    public function representedEntities(): Collection
+    {
+        return OwnershipEntity::whereHas('authorizedPeople', fn ($q) => $q->where('user_id', $this->id)->current())->get();
+    }
+
+    /**
+     * Properties this user owns directly, plus those of each entity they
+     * currently represent, within that appointment's property scope.
+     *
+     * @return Collection<int, Property>
+     */
+    public function allAuthorizedProperties(): Collection
+    {
+        $entityProperties = $this->activeAuthorizedAppointments()->with('ownershipEntity.properties')->get()
+            ->flatMap(fn (AuthorizedPerson $person) => $person->authorizedProperties());
+
+        return $this->properties()->get()->concat($entityProperties)->unique('id')->values();
+    }
+
+    /**
+     * Retrieve the properties of a specific OwnershipEntity that this user is authorized to manage.
+     *
+     * @return Collection<int, Property>
+     */
+    public function authorizedPropertiesForEntity(OwnershipEntity $entity): Collection
+    {
+        if ($this->role->isAdministrative()) {
+            return $entity->properties()->get();
+        }
+
+        $person = $entity->activeAuthorizedPeople()->where('user_id', $this->id)->first();
+        if (! $person) {
+            return new Collection;
+        }
+
+        return $person->authorizedProperties();
+    }
+
+    /**
+     * Properties whose visitors this user may manage: their own, and those an
+     * appointment in force lets them manage visitors for, within its scope.
+     *
+     * @return Collection<int, Property>
+     */
+    public function propertiesForVisitorManagement(): Collection
+    {
+        $entityProperties = $this->activeAuthorizedAppointments()->with('ownershipEntity.properties')->get()
+            ->filter(fn (AuthorizedPerson $person) => $person->hasPermission(RepresentativePermission::ManageVisitors->value))
+            ->flatMap(fn (AuthorizedPerson $person) => $person->authorizedProperties());
+
+        return $this->properties()->get()->concat($entityProperties)->unique('id')->values();
+    }
+
+    public function canManageVisitorsForProperty(Property|int $property): bool
+    {
+        $propertyId = $property instanceof Property ? $property->id : $property;
+
+        return $this->propertiesForVisitorManagement()->contains('id', $propertyId);
+    }
+
+    public function canManageVisitorsForAnyProperty(): bool
+    {
+        return $this->propertiesForVisitorManagement()->isNotEmpty();
+    }
+
     public function donations(): HasMany
     {
         return $this->hasMany(Donation::class);
@@ -147,6 +229,11 @@ class User extends Authenticatable implements HasMedia
     public function autoPaySetting(): HasOne
     {
         return $this->hasOne(AutoPaySetting::class);
+    }
+
+    public function safetyProfile(): HasOne
+    {
+        return $this->hasOne(SafetyProfile::class);
     }
 
     public function delegatedAccessesGranted(): HasMany
@@ -249,7 +336,17 @@ class User extends Authenticatable implements HasMedia
     /** Property label used on passes and in the directory, e.g. "Lot 42, Royal Palm Drive". */
     public function propertyLabel(): string
     {
-        return collect([$this->lot, $this->street])->filter()->implode(', ') ?: 'Unassigned';
+        $direct = collect([$this->lot, $this->street])->filter()->implode(', ');
+        if ($direct !== '') {
+            return $direct;
+        }
+
+        $authorizedProperty = $this->allAuthorizedProperties()->first();
+        if ($authorizedProperty) {
+            return $authorizedProperty->label();
+        }
+
+        return 'Unassigned';
     }
 
     public function scopeActive($query)

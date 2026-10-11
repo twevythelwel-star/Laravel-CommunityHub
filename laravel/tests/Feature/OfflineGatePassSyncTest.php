@@ -7,8 +7,10 @@ use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Models\AccessLogEntry;
+use App\Models\DistressAlert;
 use App\Models\GatePass;
 use App\Models\User;
+use App\Services\Safety\SilentAssistanceService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -174,6 +176,43 @@ class OfflineGatePassSyncTest extends TestCase
         ]);
 
         $response->assertForbidden();
+    }
+
+    private function residentPass(User $resident): GatePass
+    {
+        return GatePass::create([
+            'pass_id' => 'GP-DURESS-'.$resident->id,
+            'user_id' => $resident->id,
+            'category' => PassCategory::Homeowner,
+            'holder_name' => $resident->name,
+            'property' => 'Lot 3',
+            'access_zone' => PassCategory::Homeowner->defaultZone(),
+            'designated_gate' => GateId::Any,
+            'rotation_seq' => 1,
+            'status' => PassStatus::Active,
+            'valid_from' => now()->subDay(),
+            'valid_until' => now()->addMonth(),
+            'max_uses' => 100,
+            'uses_count' => 0,
+            'metadata' => [],
+        ]);
+    }
+
+    /** A duress PIN keyed in while offline is admitted like the real PIN and raises the alert on sync. */
+    public function test_a_duress_pin_synced_from_offline_raises_silent_assistance(): void
+    {
+        $guard = User::factory()->role(UserRole::Security)->create();
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $pass = $this->residentPass($resident);
+        app(SilentAssistanceService::class)->setDuressPin($resident, '271828');
+
+        $this->actingAs($guard)->postJson('/dashboard/gate-pass/sync-offline-scans', [
+            'gate' => GateId::Gate01->value,
+            'scans' => [['offline_id' => 'OFF-DURESS-1', 'token_or_pin' => '271828', 'action' => 'check_in']],
+        ])->assertOk()->assertJsonPath('accepted', 1);
+
+        $this->assertSame(PassStatus::CheckedIn, $pass->fresh()->status);
+        $this->assertTrue(DistressAlert::where('user_id', $resident->id)->where('channel', 'duress_pin')->exists());
     }
 
     public function test_a_scan_dated_in_the_future_is_refused(): void

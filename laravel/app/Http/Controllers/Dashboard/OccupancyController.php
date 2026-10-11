@@ -177,6 +177,7 @@ class OccupancyController extends Controller
             'occupants' => $drilldown['occupants'],
             'expected' => $drilldown['expected'],
             'rosterByCategory' => $drilldown['rosterByCategory'],
+            'ownership' => $drilldown['ownership'] ?? null,
             'timestamp' => now()->toIso8601String(),
         ]);
     }

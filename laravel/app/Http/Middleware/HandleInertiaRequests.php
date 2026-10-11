@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\BillingSetting;
 use App\Models\BrandingSetting;
 use App\Models\Community;
+use App\Models\User;
 use App\Models\Warning;
 use App\Services\GeofenceService;
 use App\Services\Payments\Providers\ProviderRegistry;
@@ -68,6 +69,8 @@ class HandleInertiaRequests extends Middleware
             ],
 
             'branding' => fn () => $this->branding($user?->preferences?->theme_preset),
+
+            'ownershipNav' => fn () => $user ? $this->resolveOwnershipNav($user) : null,
 
             /*
              | Published community boundary.
@@ -208,6 +211,36 @@ class HandleInertiaRequests extends Middleware
             'defaultTheme' => $branding?->default_theme ?? 'system',
             'themeTokens' => $tokens,
             'userThemePreset' => $userThemePreset,
+        ];
+    }
+
+    private function resolveOwnershipNav(User $user): array
+    {
+        // 1. Check if user is appointed to a company, trust, or estate
+        $firstEntity = $user->representedEntities()->first();
+        if (! $firstEntity) {
+            $directProp = $user->properties()->with('ownershipEntity')->first();
+            $firstEntity = $directProp?->ownershipEntity;
+        }
+
+        $type = $firstEntity?->entity_type?->value ?? ($firstEntity?->entity_type ?? 'individual');
+        if (! $firstEntity && $user->role->isResident()) {
+            $type = 'individual';
+        }
+
+        $label = match ($type) {
+            'company' => 'Ownership & Representatives',
+            'individual' => 'Ownership & Household',
+            'trust' => 'Trustees & Representatives',
+            'estate' => 'Executors & Representatives',
+            default => 'Ownership & Representatives',
+        };
+
+        return [
+            'type' => $type,
+            'label' => $label,
+            'entity_name' => $firstEntity?->legal_name ?? $user->name,
+            'href' => '/dashboard/ownership',
         ];
     }
 }

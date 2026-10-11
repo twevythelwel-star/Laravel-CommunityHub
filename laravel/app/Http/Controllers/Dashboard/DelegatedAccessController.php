@@ -19,6 +19,7 @@ use App\Models\Visitor;
 use App\Services\AccessVisibilityService;
 use App\Services\Delegation\DelegatedAccessService;
 use App\Services\GatePassEngine;
+use App\Services\People\PropertyPeopleService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,7 +31,8 @@ use Inertia\Response;
 class DelegatedAccessController extends Controller
 {
     public function __construct(
-        protected GatePassEngine $engine
+        protected GatePassEngine $engine,
+        protected PropertyPeopleService $propertyPeopleService
     ) {}
 
     /**
@@ -68,28 +70,13 @@ class DelegatedAccessController extends Controller
         $isAdmin = $user->role->isAdministrative();
 
         // Determine dynamic property & unit label (e.g. Unit 14)
-        $rawLot = $user->lot
-            ?? $user->properties()->first()?->lot_number
-            ?? $renterRecord?->lot;
-        // No lot anywhere is no lot: it used to be "14", which then matched
-        // whichever property is numbered 14.
-        $lotNumber = $rawLot ? preg_replace('/^(unit|lot)\s+/i', '', trim($rawLot)) : null;
-        $unitLabel = $lotNumber ? "Unit {$lotNumber}" : 'Your property';
+        $unitLabel = $this->propertyPeopleService->resolveUnitLabel($user, $renterRecord);
 
         // The property whose staff and contractors this page lists. Only ever
         // one the user is tied to: their stay's, their own, or (for a renter)
         // the one of their homeowner's that they rent. Matching any property
         // by lot number showed a renter another household's people.
-        $property = null;
-        if ($renterRecord?->property_id) {
-            $property = Property::find($renterRecord->property_id);
-        }
-        if (! $property && $user->properties()->exists()) {
-            $property = $user->properties()->orderBy('id')->first();
-        }
-        if (! $property && $renterRecord?->homeowner_id) {
-            $property = $this->rentedProperty($renterRecord->homeowner_id, $renterRecord->lot ?: $user->lot);
-        }
+        $property = $this->propertyPeopleService->resolvePrimaryProperty($user, $renterRecord);
         $propertyId = $property?->id;
 
         if ($isShortTerm) {
@@ -1126,6 +1113,23 @@ class DelegatedAccessController extends Controller
             'continuityVerifications' => EmergencyContinuityPlan::VERIFICATIONS,
             'continuityActions' => EmergencyContinuityPlan::ACTIONS,
             'durationTypes' => DelegatedAccess::DURATION_TYPES,
+            'ownershipEntity' => $property?->ownershipEntity ? [
+                'id' => $property->ownershipEntity->id,
+                'legal_name' => $property->ownershipEntity->legal_name,
+                'entity_type' => $property->ownershipEntity->entity_type->value,
+                'jurisdiction' => $property->ownershipEntity->jurisdiction,
+                'ownerLabel' => $property->ownerName(),
+                'authorizedPeople' => $property->ownershipEntity->activeAuthorizedPeople()->with('user')->get()->map(fn ($p) => [
+                    'id' => $p->id,
+                    'user_id' => $p->user_id,
+                    'name' => $p->full_name ?: $p->user?->name,
+                    'role' => $p->role->label(),
+                    'role_key' => $p->role->value,
+                    'permissions' => $p->permissions,
+                    'is_primary' => $p->is_primary_contact,
+                    'is_current_user' => $p->user_id === $user->id,
+                ])->values(),
+            ] : null,
         ];
 
         if ($request->wantsJson()) {
@@ -1658,22 +1662,5 @@ class DelegatedAccessController extends Controller
         return $request->wantsJson()
             ? response()->json(['success' => true, 'delegation_id' => $delegation->id])
             : redirect()->route('dashboard.delegation')->with('success', "You are now linked to {$delegation->grantor?->name}'s authorization.");
-    }
-
-    /**
-     * Which of a homeowner's properties a renter rents: the one matching the
-     * renter's lot, or the only one the homeowner has. An owner of several
-     * with no lot to go on gives none, rather than a guess at the first.
-     */
-    private function rentedProperty(int $homeownerId, ?string $renterLot): ?Property
-    {
-        $owned = Property::where('owner_user_id', $homeownerId)->orderBy('id')->get();
-        $bare = fn (?string $lot) => strtolower(preg_replace('/^(unit|lot|#)\s*/i', '', trim((string) $lot)));
-
-        if (filled($renterLot)) {
-            return $owned->first(fn (Property $p) => $bare($p->lot_number) === $bare($renterLot));
-        }
-
-        return $owned->count() === 1 ? $owned->first() : null;
     }
 }

@@ -848,6 +848,13 @@ class PropertyOccupancyService
         $insideSummary['total'] = $inside->count();
         $expectedSummary['total'] = $expected->count();
 
+        preg_match('/(\d+)/', $normalized, $m);
+        $lotNumber = $m[1] ?? '0';
+        $prop = Property::where('lot_number', $lotNumber)
+            ->orWhere('lot_number', $normalized)
+            ->orWhere('lot_number', "Unit {$lotNumber}")
+            ->first();
+
         return [
             'unit' => $normalized,
             'requestedQuery' => $unit,
@@ -859,6 +866,8 @@ class PropertyOccupancyService
             'occupants' => $inside->values()->all(),
             'expected' => $expected->values()->all(),
             'rosterByCategory' => $rosterByCategory,
+            'ownership' => $prop ? $prop->ownershipDetails() : null,
+            'propertyEcosystem' => $prop ? $prop->propertyEcosystemTree() : null,
         ];
     }
 
@@ -950,11 +959,26 @@ class PropertyOccupancyService
             preg_match('/(\d+)/', $unitName, $m);
             $lotNumber = $m[1] ?? '0';
 
+            $prop = Property::where('lot_number', $lotNumber)
+                ->orWhere('lot_number', $unitName)
+                ->orWhere('lot_number', "Unit {$lotNumber}")
+                ->first();
+            $ownerName = $prop ? $prop->ownerName() : 'Unassigned';
+            $ownershipType = $prop ? $prop->ownershipType() : 'Individual';
+            $representatives = $prop ? $prop->ownershipDetails()['representatives'] : [];
+
             $propertyNodes[] = [
                 'id' => 'prop_'.strtolower(str_replace(' ', '_', $unitName)),
                 'unit' => $unitName,
                 'lot' => $lotNumber,
                 'address' => $addresses[$unitName] ?? $unitName,
+                'owner' => $ownerName,
+                'ownershipType' => $ownershipType,
+                'isCorporate' => $prop?->ownershipEntity?->entity_type?->value === 'company',
+                'primaryOccupant' => $prop ? $prop->occupantName() : null,
+                'isOwnerOccupied' => $prop ? ($prop->owner_user_id !== null && $prop->primary_occupant_id === $prop->owner_user_id) : false,
+                'ecosystem' => $prop ? $prop->propertyEcosystemTree() : null,
+                'representatives' => $representatives,
                 'insideCount' => $insideForUnit->count(),
                 'expectedCount' => $expectedForUnit->count() + $insideForUnit->count(),
                 'categoriesInside' => $insideCounts,

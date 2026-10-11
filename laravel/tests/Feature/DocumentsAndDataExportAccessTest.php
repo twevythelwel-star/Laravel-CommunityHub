@@ -67,7 +67,6 @@ class DocumentsAndDataExportAccessTest extends TestCase
         // blueprint, a role refused, a role allowed
         return [
             'roster' => ['residents', UserRole::Security, UserRole::Admin],
-            'benchmark (also users)' => ['large_dataset_benchmark', UserRole::Security, UserRole::Admin],
             'ledger' => ['transactions', UserRole::Security, UserRole::Admin],
             'passes' => ['gate_passes', UserRole::Homeowner, UserRole::Security],
         ];

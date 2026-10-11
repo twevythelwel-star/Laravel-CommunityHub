@@ -10,12 +10,14 @@ use App\Models\GateDevice;
 use App\Models\GatePass;
 use App\Models\User;
 use App\Services\GatePassEngine;
+use App\Services\Safety\SilentAssistanceService;
 use Carbon\Carbon;
 
 class SyncOfflineScansAction
 {
     public function __construct(
         protected GatePassEngine $engine,
+        protected SilentAssistanceService $safety,
     ) {}
 
     /**
@@ -55,6 +57,7 @@ class SyncOfflineScansAction
             $action = strtolower($scan['action'] ?? 'check_in');
 
             $candidatePass = null;
+            $duressProfile = null;
             $offlinePinScan = false;
             $ambiguousPin = false;
             $tokenRejected = false;
@@ -80,6 +83,19 @@ class SyncOfflineScansAction
                 // the first match would record (and move) the wrong person's pass.
                 $candidatePass = $pinMatches->count() === 1 ? $pinMatches->first() : null;
                 $ambiguousPin = $pinMatches->count() > 1;
+
+                // A duress PIN keyed in while the gate was offline: it opened the
+                // gate like the resident's own PIN, and raises silent assistance
+                // now that the scan reaches us.
+                if (! $candidatePass && ! $ambiguousPin && ($duressProfile = $this->safety->profileForDuressPin($pinClean))?->user) {
+                    $candidatePass = $duressProfile->user->gatePasses()
+                        ->with(['user', 'visitor'])
+                        ->whereNull('visitor_id')
+                        ->whereNull('delegated_access_id')
+                        ->whereIn('status', [PassStatus::Active, PassStatus::CheckedIn])
+                        ->latest('id')
+                        ->first();
+                }
             } else {
                 // Try validating as token or pass_id
                 $report = $this->engine->validate($rawToken, $gate);
@@ -150,6 +166,13 @@ class SyncOfflineScansAction
                 'occurred_at' => $scannedAt,
             ]);
 
+            if ($duressProfile && $candidatePass?->user) {
+                $this->safety->raise($candidatePass->user, 'duress_pin', null, [
+                    ...$this->safety->scanContext($candidatePass, $gate, $action === 'check_out' ? 'out' : 'in'),
+                    'offline_synced' => true,
+                    'offline_scanned_at' => $scannedAt->toIso8601String(),
+                ]);
+            }
 
             $entries[] = [
                 'offline_id' => $offlineId,
