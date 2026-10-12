@@ -1,28 +1,34 @@
 Files sharing copied blocks,Overlapping 12-line windows
-app/Http/Controllers/Dashboard/DelegatedAccessController.php | app/Services/People/PropertyPeopleService.php,55
-app/Http/Controllers/Dashboard/VisitorController.php | app/Repositories/VisitorRepository.php,55
-app/Http/Controllers/Dashboard/DelegatedAccessController.php,9
+resources/js/Pages/Dashboard/Occupancy.tsx | resources/js/components/dashboard/occupancy/occupancy-types.ts,10
+app/Http/Requests/Delegation/StoreDelegatedAccessRequest.php | app/Http/Requests/Delegation/UpdateDelegationRulesRequest.php,9
 app/Services/GIS/LocationService.php | app/Services/GeofenceService.php,8
 resources/js/Pages/Dashboard/Overview.tsx | resources/js/components/dashboard/overview-at-a-glance.tsx,8
-resources/js/Pages/Dashboard/Delegation/Index.tsx,8
 app/Console/Commands/StripeTestTransactionCommand.php,7
 app/Http/Controllers/Dashboard/HouseholdController.php | app/Services/Properties/OwnershipPagePresenter.php,7
 resources/js/components/dashboard/event-form.tsx,7
 config/excel.php,6
+resources/js/components/dashboard/boundary/boundary-community-info-card.tsx | resources/js/components/dashboard/boundary/boundary-map-preview-card.tsx,6
 app/Http/Controllers/Api/GatePassApiController.php | app/Http/Controllers/Dashboard/GatePassController.php,5
 resources/js/components/dashboard/blocklist-form.tsx | resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/staff-form.tsx,5
 resources/js/components/dashboard/create-user-form.tsx | resources/js/components/dashboard/donate-form.tsx,5
-resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/GatePass.tsx | resources/js/Pages/Dashboard/Visitors.tsx,5
+resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/GatePass.tsx | resources/js/components/dashboard/visitors/visitor-table.tsx,5
+resources/js/Pages/Dashboard/Delegation/Index.tsx,5
+app/Http/Requests/Delegation/RevokeDelegationRequest.php | app/Http/Requests/Delegation/SaveContinuityPlanRequest.php | app/Http/Requests/Delegation/StoreDelegatedAccessRequest.php | app/Http/Requests/Delegation/UpdateDelegationRulesRequest.php,4
 resources/js/components/dashboard/add-fundraiser-update-dialog.tsx | resources/js/components/dashboard/request-removal-form.tsx,4
-app/Services/PropertyOccupancyService.php,3
+app/Services/Occupancy/OccupancyCensusQueryService.php,3
 resources/js/components/dashboard/blocklist-form.tsx | resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/create-fundraiser-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/food-app-form.tsx | resources/js/components/dashboard/guideline-form.tsx | resources/js/components/dashboard/staff-form.tsx | resources/js/components/dashboard/voucher-form.tsx,3
+resources/js/Pages/Dashboard/Delegation/Index.tsx | resources/js/components/dashboard/delegation/delegation-person-card.tsx,3
+app/Services/People/DelegationPeopleMapper.php,2
 resources/js/components/dashboard/admin-billing.tsx | resources/js/components/dashboard/billing-summary.tsx,2
-resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/Company.tsx | resources/js/Pages/Dashboard/Fundraising.tsx | resources/js/Pages/Dashboard/GatePass.tsx | resources/js/Pages/Dashboard/Occupancy.tsx | resources/js/Pages/Dashboard/Overview.tsx | resources/js/Pages/Dashboard/Renters.tsx | resources/js/Pages/Dashboard/Visitors.tsx | resources/js/components/dashboard/billing-summary.tsx,2
+resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/Fundraising.tsx | resources/js/Pages/Dashboard/GatePass.tsx | resources/js/Pages/Dashboard/Overview.tsx | resources/js/Pages/Dashboard/Renters.tsx | resources/js/components/dashboard/billing-summary.tsx | resources/js/components/dashboard/company/company-operations-tab.tsx | resources/js/components/dashboard/company/company-people-tab.tsx | resources/js/components/dashboard/visitors/visitor-table.tsx,2
 resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/staff-form.tsx,2
 resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/staff-form.tsx,2
 resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/components/dashboard/transactions-ledger.tsx,2
+resources/js/components/dashboard/delegation/delegation-action-modals.tsx | resources/js/components/dashboard/delegation/delegation-authorize-modal.tsx | resources/js/components/dashboard/governance/governance-dialogs.tsx | resources/js/components/dashboard/ownership/ownership-dialogs.tsx | resources/js/components/dashboard/visitors/visitor-bulk-event-dialog.tsx,2
 resources/js/Pages/Dashboard/AccessLog.tsx | resources/js/Pages/Dashboard/BlockList.tsx,2
 resources/js/Pages/Dashboard/BlockList.tsx | resources/js/Pages/Dashboard/GatePass.tsx,2
+app/Http/Requests/Delegation/RevokeDelegationRequest.php | app/Http/Requests/Delegation/SaveContinuityPlanRequest.php,1
+app/Services/People/DelegatedAccessPresenter.php,1
 resources/js/components/dashboard/blocklist-form.tsx | resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/food-app-form.tsx | resources/js/components/dashboard/guideline-form.tsx | resources/js/components/dashboard/staff-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1
 resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/food-app-form.tsx | resources/js/components/dashboard/guideline-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1
 resources/js/components/dashboard/community-update-form.tsx | resources/js/components/dashboard/event-form.tsx | resources/js/components/dashboard/voucher-form.tsx,1

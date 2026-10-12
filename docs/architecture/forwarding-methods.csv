@@ -1,7 +1,66 @@
 File,Method,Body
+app/Http/Controllers/Dashboard/BillingController.php,pay,"return $this->paymentService->executePay($request->user(), $request->validated(), $providers);"
+app/Http/Controllers/Dashboard/BillingController.php,initiatePayment,"return $this->paymentService->initiatePayment($request->user(), $request->validated(), $this->orchestrator, $providers);"
+app/Http/Controllers/Dashboard/BillingController.php,processCardPayment,"return $this->paymentService->processCardPayment($request->user(), $request->validated(), $stripe);"
+app/Services/GatePassEngine.php,validate,"return $this->validator->validate($rawQr, $currentGate, $now, $bypassReplayCheck);"
+app/Services/GatePassEngine.php,pruneNonces,return $this->signer->pruneNonces();
+app/Services/GatePassEngine.php,variantFor,return $this->policyResolver->variantFor($pass);
+app/Services/GatePassEngine.php,assignedColorVariant,"return $this->policyResolver->assignedColorVariant($category, $seed, $rotationSeq);"
+app/Services/GatePassEngine.php,randomApprovedColor,"return $this->policyResolver->randomApprovedColor($category, $excludeColorIds);"
+app/Services/GatePassEngine.php,rotateVisualIdentity,return $this->policyResolver->rotateVisualIdentity($pass);
+app/Services/GatePassEngine.php,formatPassId,"return $this->policyResolver->formatPassId($category, $rawId);"
+app/Services/GatePassEngine.php,policyFor,return $this->policyResolver->policyFor($category);
+app/Services/GatePassEngine.php,categoryConfig,return $this->policyResolver->categoryConfig($category);
+app/Services/PropertyOccupancyService.php,resolveCategory,return $this->categoryResolver->resolveCategory($entity);
+app/Services/PropertyOccupancyService.php,categoryLabel,return $this->categoryResolver->categoryLabel($categoryKey);
+app/Services/PropertyOccupancyService.php,normalizeUnit,return $this->categoryResolver->normalizeUnit($raw);
+app/Services/PropertyOccupancyService.php,buildRelationshipChain,return $this->categoryResolver->buildRelationshipChain($item);
+app/Services/PropertyOccupancyService.php,getSummary,return $this->metricsService->getSummary($unit);
+app/Services/PropertyOccupancyService.php,getExpectedTodaySummary,return $this->metricsService->getExpectedTodaySummary($unit);
+app/Services/PropertyOccupancyService.php,getDualSummary,return $this->metricsService->getDualSummary($unit);
+app/Services/PropertyOccupancyService.php,getAllCurrentOccupants,"return $this->censusQueryService->getAllCurrentOccupants($unitFilter, $categoryFilter, $search, $includeStale);"
+app/Services/PropertyOccupancyService.php,getAllExpectedToday,"return $this->censusQueryService->getAllExpectedToday($unitFilter, $categoryFilter, $search);"
+app/Services/PropertyOccupancyService.php,getUnitsSummary,return $this->metricsService->getUnitsSummary();
+app/Services/PropertyOccupancyService.php,getUnitDrilldown,return $this->hierarchyBuilder->getUnitDrilldown($unit);
+app/Services/PropertyOccupancyService.php,getCommunityHierarchy,return $this->hierarchyBuilder->getCommunityHierarchy($scopedUnit);
+app/Services/PropertyOccupancyService.php,getEnclosureZonesSummary,return $this->metricsService->getEnclosureZonesSummary();
+app/Services/PropertyOccupancyService.php,staleCheckIns,return $this->metricsService->staleCheckIns($unitFilter);
+app/Services/StripePaymentService.php,completePayment,"return $this->checkoutSessionService->completePayment($invoice, $sessionId, $this->secretKey);"
+app/Services/StripePaymentService.php,settleSession,"return $this->settlementService->settleSession($session, $this->eventSource);"
+app/Services/StripePaymentService.php,settlePaymentIntent,"return $this->settlementService->settlePaymentIntent($paymentIntent, $this->eventSource);"
+app/Services/StripePaymentService.php,handleIntentProgress,"return $this->settlementService->handleIntentProgress($paymentIntent, $state, $this->eventSource);"
+app/Services/StripePaymentService.php,handleReaderAction,"return $this->disputeService->handleReaderAction($reader, $eventType, $this->eventSource);"
+app/Services/StripePaymentService.php,handlePaymentFailure,"return $this->disputeService->handlePaymentFailure($object, $eventType, $this->eventSource);"
+app/Services/StripePaymentService.php,handleDispute,"return $this->disputeService->handleDispute($dispute, $eventType, $this->eventSource);"
+app/Services/StripePaymentService.php,handlePayout,"return $this->refundAndPayoutService->handlePayout($payout, $eventType, $this->secretKey);"
+app/Services/StripePaymentService.php,syncRefunds,"return $this->refundAndPayoutService->syncRefunds($charge, $this->eventSource);"
+app/Services/StripePaymentService.php,refundableMinor,return $this->refundAndPayoutService->refundableMinor($payment);
 app/Services/NotificationEngine/Channels/SmsChannel.php,isConfigured,return $this->twilio->hasCredentials() && filled(config('services.twilio.from'));
 app/Services/NotificationEngine/Channels/WhatsAppChannel.php,isConfigured,return $this->twilio->hasCredentials() && filled(config('services.twilio.whatsapp_from'));
+app/Services/Occupancy/OccupancyMetricsService.php,staleCheckIns,"return $this->censusQueryService->getAllCurrentOccupants(unitFilter: $unitFilter, includeStale: true) ->where('stale', true) ->values();"
 app/Services/Payments/Providers/Stripe/StripeProvider.php,isAvailable,return $this->stripe->isLive();
 app/Services/Payments/Providers/Stripe/StripeProvider.php,handleWebhook,"return $this->stripe->handleWebhook($request->getContent(), $request->header('Stripe-Signature'));"
 app/Services/Payments/Providers/Stripe/StripeProvider.php,refundPayment,"$this->stripe->refund($ledgerPayment, $amountMinor, $actor, $note);"
 app/Services/Payments/Providers/StripeTerminal/StripeTerminalProvider.php,isAvailable,return $this->stripe->isLive();
+app/Services/Safety/DuressCredentialService.php,clearDuressPin,$this->contextResolver->profileFor($user)->forceFill(['duress_pin_hash' => null])->save();
+app/Services/Safety/SilentAssistanceService.php,profileFor,return $this->contextResolver->profileFor($user);
+app/Services/Safety/SilentAssistanceService.php,configuredOptions,return $this->contextResolver->configuredOptions($holderType);
+app/Services/Safety/SilentAssistanceService.php,accessContextFor,return $this->contextResolver->accessContextFor($user);
+app/Services/Safety/SilentAssistanceService.php,accessContextForPass,return $this->contextResolver->accessContextForPass($pass);
+app/Services/Safety/SilentAssistanceService.php,allowsAssistance,"return $this->contextResolver->allowsAssistance($user, $assistance);"
+app/Services/Safety/SilentAssistanceService.php,optionsForUser,return $this->contextResolver->optionsForUser($user);
+app/Services/Safety/SilentAssistanceService.php,guestContextForPass,return $this->contextResolver->guestContextForPass($pass);
+app/Services/Safety/SilentAssistanceService.php,passForVisitorToken,return $this->contextResolver->passForVisitorToken($token);
+app/Services/Safety/SilentAssistanceService.php,passForCredentialToken,"return $this->contextResolver->passForCredentialToken($rawToken, $engine);"
+app/Services/Safety/SilentAssistanceService.php,guestProfile,"return $this->contextResolver->guestProfile($pass, $context);"
+app/Services/Safety/SilentAssistanceService.php,scanContext,"return $this->credentialService->scanContext($pass, $gate, $direction);"
+app/Services/Safety/SilentAssistanceService.php,setDuressPin,"$this->credentialService->setDuressPin($user, $pin);"
+app/Services/Safety/SilentAssistanceService.php,clearDuressPin,$this->credentialService->clearDuressPin($user);
+app/Services/Safety/SilentAssistanceService.php,profileForDuressPin,return $this->credentialService->profileForDuressPin($pin);
+app/Services/Safety/SilentAssistanceService.php,rotateCredential,return $this->credentialService->rotateCredential($user);
+app/Services/Safety/SilentAssistanceService.php,acknowledge,"$this->escalationService->acknowledge($alert, $responder);"
+app/Services/Safety/SilentAssistanceService.php,resolve,"$this->escalationService->resolve($alert, $responder, $outcome, $notes);"
+app/Services/Safety/SilentAssistanceService.php,escalateToSecurity,"$this->escalationService->escalateToSecurity($alert, $responder, $notes);"
+app/Services/Safety/SilentAssistanceService.php,escalateOnAcknowledgmentTimeout,"$this->escalationService->escalateOnAcknowledgmentTimeout($alert, $reason);"
+app/Services/Safety/SilentAssistanceService.php,escalateUnacknowledgedAlerts,return $this->escalationService->escalateUnacknowledgedAlerts();
+app/Services/Safety/SilentAssistanceService.php,escalateToEmergencyServices,"$this->escalationService->escalateToEmergencyServices($alert, $responder, $confirmedService, $notes);"

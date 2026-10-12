@@ -25,7 +25,10 @@ class VisitorRepository
      */
     public function getSecurityStats(User $user, bool $isStaff): array
     {
-        $countsQuery = Visitor::query()->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id));
+        $manageableProperties = $user->propertiesForVisitorManagement();
+        $scopeForResidentOrRep = fn ($q) => $q->manageableBy($user, $manageableProperties->pluck('id'));
+
+        $countsQuery = Visitor::query()->when(! $isStaff, $scopeForResidentOrRep);
 
         $todayQuery = (clone $countsQuery)->where(function ($q) {
             $q->whereDate('expected_at', today())
@@ -79,7 +82,9 @@ class VisitorRepository
      */
     public function getTabCounts(User $user, bool $isStaff, array $securityStats): array
     {
-        $countsQuery = Visitor::query()->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id));
+        $manageableProperties = $user->propertiesForVisitorManagement();
+        $scopeForResidentOrRep = fn ($q) => $q->manageableBy($user, $manageableProperties->pluck('id'));
+        $countsQuery = Visitor::query()->when(! $isStaff, $scopeForResidentOrRep);
 
         return [
             'scan' => 0,
@@ -96,9 +101,12 @@ class VisitorRepository
      */
     public function getPaginatedVisitors(Request $request, User $user, bool $isStaff, string $tab): LengthAwarePaginator
     {
+        $manageableProperties = $user->propertiesForVisitorManagement();
+        $scopeForResidentOrRep = fn ($q) => $q->manageableBy($user, $manageableProperties->pluck('id'));
+
         $query = Visitor::query()
             ->with(['homeowner:id,name,display_name,lot,street', 'gatePass'])
-            ->when(! $isStaff, fn ($q) => $q->where('homeowner_id', $user->id))
+            ->when(! $isStaff, $scopeForResidentOrRep)
             ->when(
                 $request->string('search')->isNotEmpty(),
                 fn ($q) => $q->where('name', 'like', '%'.$request->string('search').'%')
@@ -182,6 +190,13 @@ class VisitorRepository
             'checkedOutAt' => $v->checked_out_at?->toIso8601String(),
             'shareToken' => $v->share_token,
             'guestPassUrl' => $v->share_token ? route('guest-pass.show', $v->share_token) : null,
+            'arrivalWindow' => $v->arrivalWindowLabel(),
+            'arrivalWindowStart' => $v->arrival_window_start,
+            'arrivalWindowEnd' => $v->arrival_window_end,
+            'parkingInstructions' => $v->parkingInstructions(),
+            'communityRules' => $v->communityRules(),
+            'emergencyInfo' => $v->emergencyInfo(),
+            'notes' => $v->notes,
             'notify_email' => $v->notify_email,
             'notify_sms' => $v->notify_sms,
             'notify_whatsapp' => $v->notify_whatsapp,
@@ -200,7 +215,7 @@ class VisitorRepository
         $manual = [PassStatus::Approved, PassStatus::Rejected, PassStatus::Suspended, PassStatus::Active, PassStatus::Cancelled, PassStatus::Revoked];
 
         $actions = array_values(array_filter($manual, fn (PassStatus $to) => $pass->canTransitionTo($to)
-            && ($isSecurity || ($to === PassStatus::Cancelled && $pass->visitor?->homeowner_id === $viewer->id))));
+            && ($isSecurity || ($to === PassStatus::Cancelled && ($pass->visitor?->homeowner_id === $viewer->id || ($pass->visitor?->property_id && $viewer->canManageVisitorsForProperty($pass->visitor->property_id)))))));
 
         return [
             'id' => $pass->id,

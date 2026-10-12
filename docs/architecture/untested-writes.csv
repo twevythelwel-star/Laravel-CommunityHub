@@ -1,6 +1,12 @@
 Route,Name,Gate
-POST api/gate-pass/rotate,,(in controller or none)
 POST api/map/check-position,,(in controller or none)
+POST api/v1/features/check,api.v1.features.check,(in controller or none)
+POST api/v1/features/deactivate,api.v1.features.deactivate,operatePlatform
+POST api/v1/features/purge,api.v1.features.purge,operatePlatform
+POST api/v1/features/simulate,api.v1.features.simulate,operatePlatform
+POST api/v1/notifications/read-all,api.v1.notifications.public-mark-all-read,(in controller or none)
+POST api/v1/observability/errors/{id}/resolve,api.v1.observability.resolve-error,operatePlatform
+POST api/v1/pdf/download/{type},api.v1.pdf.download,issueDocuments
 POST api/visitors,,(in controller or none)
 POST api/visitors/{visitor}/check-in,,manageSecurity
 POST api/visitors/{visitor}/check-out,,manageSecurity
@@ -13,3 +19,4 @@ POST dashboard/ownership/household-members,dashboard.ownership.household-members
 DELETE dashboard/ownership/household-members/{member},dashboard.ownership.household-members.destroy,(in controller or none)
 POST dashboard/profile/avatar,dashboard.profile.avatar,(in controller or none)
 POST dashboard/safety/account-credential/assist,dashboard.safety.account-credential.assist,(in controller or none)
+POST dashboard/wallet/simulate-nfc-tap,dashboard.wallet.simulate-nfc-tap,scanPasses

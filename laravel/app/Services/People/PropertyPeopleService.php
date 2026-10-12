@@ -16,6 +16,10 @@ use Illuminate\Support\Collection;
  */
 class PropertyPeopleService
 {
+    public function __construct(
+        protected DelegationPeopleMapper $mapper = new DelegationPeopleMapper()
+    ) {}
+
     /**
      * Determine the primary property for a user.
      */
@@ -74,76 +78,7 @@ class PropertyPeopleService
         foreach ($households as $hh) {
             foreach ($hh->members as $member) {
                 $isMemberActive = ($member->status === 'active') && (! $member->valid_until || ! $member->valid_until->isPast());
-                $mPass = $member->gatePass;
-
-                $mCatCode = match ($member->pass_category) {
-                    'HOMEOWNER' => 'GP-HO',
-                    'RENTER' => 'GP-RNT',
-                    'LONG_TERM_OCCUPANT' => 'GP-LTO',
-                    'DELEGATE' => 'GP-DEL',
-                    'HOMEOWNER_STAFF' => 'GP-HST',
-                    default => 'GP-RES',
-                };
-
-                $mShape = match ($member->pass_category) {
-                    'HOMEOWNER' => 'Hexagon',
-                    'RENTER' => 'Squircle',
-                    'LONG_TERM_OCCUPANT' => 'HouseHex',
-                    'DELEGATE' => 'Octagon',
-                    'HOMEOWNER_STAFF' => 'HouseHex',
-                    default => 'RoundedSquare',
-                };
-
-                $memberItem = [
-                    'id' => 'household-member-'.$member->id,
-                    'sourceType' => 'household_member',
-                    'sourceId' => $member->id,
-                    'categoryKey' => $isMemberActive ? 'residents' : 'former_occupants',
-                    'categoryLabel' => $isMemberActive ? ('Household Member ('.ucfirst($member->role_in_household).')') : 'Former Household Member',
-                    'categoryBadgeColor' => $isMemberActive ? $member->roleBadgeColor() : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30',
-                    'name' => $member->name,
-                    'email' => $member->email,
-                    'phone' => $member->phone,
-                    'relationship' => $member->relationship_label ?: ucfirst($member->role_in_household),
-                    'roleOrTitle' => 'Household Member • '.ucfirst($member->role_in_household),
-                    'propertyLabel' => $unitLabel,
-                    'propertyId' => null,
-                    'status' => $isMemberActive ? 'active' : 'expired',
-                    'startsAt' => $member->created_at?->toIso8601String(),
-                    'expiresAt' => $member->valid_until?->toIso8601String(),
-                    'activationMethod' => 'household_sponsorship',
-                    'approvalStatus' => $isMemberActive ? 'approved' : 'expired',
-                    'permissions' => $member->permissions ?? ['gate_access'],
-                    'accessRules' => $member->access_schedule ?? [
-                        'gate_access' => true,
-                        'pool_access' => true,
-                        'gym_access' => true,
-                        'clubhouse_access' => true,
-                        'allowed_days' => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                        'entry_start_time' => '00:00',
-                        'entry_end_time' => '23:59',
-                    ],
-                    'credential' => $mPass ? [
-                        'passId' => $mPass->pass_id,
-                        'category' => $mPass->category->value,
-                        'categoryCode' => $mCatCode,
-                        'shape' => $mShape,
-                        'status' => $mPass->status->value,
-                        'isActive' => $mPass->isActive() && $isMemberActive,
-                        'validFrom' => $mPass->valid_from?->toIso8601String(),
-                        'validUntil' => $mPass->valid_until?->toIso8601String(),
-                    ] : [
-                        'passId' => 'GP-HHM-'.$member->id,
-                        'category' => $member->pass_category ?: 'RESIDENT',
-                        'categoryCode' => $mCatCode,
-                        'shape' => $mShape,
-                        'status' => $isMemberActive ? 'ACTIVE' : 'EXPIRED',
-                        'isActive' => $isMemberActive,
-                        'validFrom' => $member->created_at?->toIso8601String(),
-                        'validUntil' => $member->valid_until?->toIso8601String(),
-                    ],
-                    'raw' => $member,
-                ];
+                $memberItem = $this->mapper->mapHouseholdMember($member, $unitLabel, $isMemberActive);
 
                 if ($isMemberActive) {
                     $members->push($memberItem);
