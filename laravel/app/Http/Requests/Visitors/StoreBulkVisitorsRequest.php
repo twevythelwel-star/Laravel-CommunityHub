@@ -17,7 +17,10 @@ class StoreBulkVisitorsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'expected_at' => ['required', 'date', 'after:-1 hour'],
+            'expected_at' => ['required', 'string'],
+            'expected_date' => ['nullable', 'date_format:Y-m-d'],
+            'expected_time' => ['nullable', 'string'],
+            'timezone' => ['nullable', 'string', 'timezone:all'],
             'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
             'visitors' => ['required', 'array', 'min:1', 'max:50'],
             'visitors.*.name' => ['required', 'string', 'max:120'],

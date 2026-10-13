@@ -27,7 +27,27 @@ class RegisterBulkVisitorsAction
     public function execute(array $validated, User $user): array
     {
         $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
-        $expectedAt = Carbon::parse($validated['expected_at']);
+
+        // 1. Resolve intended timezone: request > property > user > app default
+        $property = $user->property ?? $user->properties()->first();
+        $targetTimezone = $validated['timezone'] ?? $property?->timezone ?? $user->timezone ?? config('app.timezone', 'America/Jamaica');
+
+        // 2. Parse intended local date & time in that specific timezone
+        if (! empty($validated['expected_date']) && ! empty($validated['expected_time'])) {
+            $timePart = strlen($validated['expected_time']) === 5 ? $validated['expected_time'].':00' : $validated['expected_time'];
+            $localCarbon = Carbon::createFromFormat('Y-m-d H:i:s', "{$validated['expected_date']} {$timePart}", $targetTimezone);
+        } else {
+            $raw = (string) $validated['expected_at'];
+            if (! preg_match('/(Z|[+-]\d{2}:?\d{2})$/', $raw)) {
+                $clean = str_replace('T', ' ', substr($raw, 0, 19));
+                $localCarbon = Carbon::parse($clean, $targetTimezone);
+            } else {
+                $localCarbon = Carbon::parse($raw)->setTimezone($targetTimezone);
+            }
+        }
+
+        // 3. Convert to UTC exactly once at the persistence boundary
+        $expectedAtUtc = $localCarbon->copy()->setTimezone('UTC');
 
         // Check stay timeframe for temporary residents
         if ($user->role === UserRole::TemporaryHomeowner) {
@@ -38,9 +58,9 @@ class RegisterBulkVisitorsAction
                 ]);
             }
 
-            $stayStart = $stay->lease_start->startOfDay();
-            $stayEnd = $stay->lease_end->endOfDay();
-            if ($expectedAt->lt($stayStart) || $expectedAt->gt($stayEnd)) {
+            $stayStart = $stay->lease_start->startOfDay()->setTimezone('UTC');
+            $stayEnd = $stay->lease_end->endOfDay()->setTimezone('UTC');
+            if ($expectedAtUtc->lt($stayStart) || $expectedAtUtc->gt($stayEnd)) {
                 throw ValidationException::withMessages([
                     'expected_at' => "Visitors can only be scheduled within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
                 ]);
@@ -50,7 +70,7 @@ class RegisterBulkVisitorsAction
         $createdCount = 0;
         $blockedNames = [];
 
-        DB::transaction(function () use ($validated, $user, $expectedAt, $passCategory, &$createdCount, &$blockedNames) {
+        DB::transaction(function () use ($validated, $user, $expectedAtUtc, $passCategory, &$createdCount, &$blockedNames) {
             foreach ($validated['visitors'] as $item) {
                 $name = trim($item['name']);
                 if (BlocklistEntry::blocks($name)) {
@@ -66,7 +86,7 @@ class RegisterBulkVisitorsAction
                     'contact' => $item['contact'] ?? null,
                     'vehicle' => $item['vehicle'] ?? null,
                     'type' => 'One-time',
-                    'expected_at' => $expectedAt,
+                    'expected_at' => $expectedAtUtc,
                     'status' => 'Expected',
                     'is_blocked' => false,
                     'notify_email' => $validated['notify_email'] ?? false,
