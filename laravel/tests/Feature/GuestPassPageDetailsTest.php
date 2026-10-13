@@ -18,14 +18,29 @@ class GuestPassPageDetailsTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function tearDown(): void
+    {
+        config([
+            'visitor_pass.parking_instructions' => null,
+            'visitor_pass.community_rules' => [],
+            'visitor_pass.emergency_info' => [],
+        ]);
+
+        parent::tearDown();
+    }
+
     private function visitor(array $attributes = []): Visitor
     {
         $host = User::factory()->role(UserRole::Homeowner)->create(['lot' => '14']);
 
         return Visitor::create($attributes + [
-            'name' => 'Michael Chang', 'type' => 'One-time',
-            'homeowner_id' => $host->id, 'homeowner_name' => $host->name,
-            'status' => VisitorStatus::Expected, 'expected_at' => now()->addHours(2),
+            'name' => 'Michael Chang',
+            'type' => 'One-time',
+            'share_token' => 'guest_pass_token_details_test_safe',
+            'homeowner_id' => $host->id,
+            'homeowner_name' => $host->name,
+            'status' => VisitorStatus::Expected,
+            'expected_at' => now()->addHours(2),
         ]);
     }
 
@@ -38,7 +53,12 @@ class GuestPassPageDetailsTest extends TestCase
         $this->assertSame([], $visitor->communityRules());
         $this->assertSame([], $visitor->emergencyInfo());
 
-        $page = $this->get(route('guest-pass.show', ['token' => $visitor->share_token]))->assertOk()->getContent();
+        $response = $this->get(route('guest-pass.show', ['token' => $visitor->share_token]))->assertOk();
+        $response->assertDontSee('Parking Instructions')
+            ->assertDontSee('Community Rules & Courtesy')
+            ->assertDontSee('Emergency & Safety Assistance');
+
+        $page = $response->getContent();
         foreach (['555', '911', 'Central Park', 'Grass Verge', '15 MPH', 'Area C'] as $invented) {
             $this->assertStringNotContainsString($invented, $page);
         }

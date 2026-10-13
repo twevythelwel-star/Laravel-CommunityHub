@@ -22,6 +22,14 @@ abstract class TestCase extends BaseTestCase
         $this->withoutVite();
     }
 
+    protected function tearDown(): void
+    {
+        \Carbon\Carbon::setTestNow();
+        \Carbon\CarbonImmutable::setTestNow();
+
+        parent::tearDown();
+    }
+
     /**
      * Mark the session's password as just confirmed, for tests of an action
      * behind `password.confirm` that are about the action, not the prompt
