@@ -1,4 +1,3 @@
-import { type ReactNode } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import type { UserRole } from '@/types';
 
@@ -130,15 +129,4 @@ export function useAuth() {
                 phone: updates.phone,
             }, { preserveScroll: true }),
     };
-}
-
-/**
- * No-op passthrough.
- *
- * Auth state now arrives as page props, so there is nothing to provide. The
- * component is kept so `<AuthProvider>` in components/providers.tsx still
- * compiles; it can be deleted once that file is cleaned up.
- */
-export function AuthProvider({ children }: { children: ReactNode }) {
-    return <>{children}</>;
 }

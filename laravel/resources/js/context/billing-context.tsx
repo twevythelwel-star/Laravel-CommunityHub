@@ -1,4 +1,3 @@
-import { type ReactNode } from 'react';
 import { router, usePage } from '@inertiajs/react';
 
 /**
@@ -70,9 +69,4 @@ export function useBilling() {
                 { preserveScroll: true, onSuccess: options?.onSuccess },
             ),
     };
-}
-
-/** No-op passthrough; billing settings arrive as page props. */
-export function BillingProvider({ children }: { children: ReactNode }) {
-    return <>{children}</>;
 }

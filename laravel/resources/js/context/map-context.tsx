@@ -1,4 +1,3 @@
-import { type ReactNode } from 'react';
 import { router, usePage } from '@inertiajs/react';
 
 /**
@@ -105,12 +104,4 @@ export function useMap() {
                 },
             ),
     };
-}
-
-/**
- * No-op passthrough; the boundary arrives as page props. Retained so
- * components/providers.tsx still compiles.
- */
-export function MapProvider({ children }: { children: ReactNode }) {
-    return <>{children}</>;
 }
