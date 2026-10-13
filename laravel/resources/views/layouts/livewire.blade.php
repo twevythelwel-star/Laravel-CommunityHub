@@ -75,7 +75,7 @@
             <div class="flex items-center justify-between h-16">
                 <!-- Brand & Module Badge -->
                 <div class="flex items-center gap-3">
-                    <a href="{{ route('operations.hub') }}" class="flex items-center gap-2.5 group">
+                    <a href="{{ route('dashboard.index') }}" class="flex items-center gap-2.5 group">
                         <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

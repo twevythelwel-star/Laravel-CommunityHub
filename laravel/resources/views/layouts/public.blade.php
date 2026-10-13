@@ -79,13 +79,6 @@
             </a>
 
             <div class="flex items-center gap-3 text-sm">
-                {{-- Only for those who can open it: the hub is the security desk's. --}}
-                @can('manageSecurity')
-                <a href="{{ route('operations.hub') }}" class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-100 transition-colors flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                    Livewire Hub
-                </a>
-                @endcan
                 <a href="{{ route('privacy') }}" class="text-muted-foreground hover:text-foreground">Privacy</a>
                 @auth
                     <a href="{{ route('dashboard.index') }}" class="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground">Dashboard</a>

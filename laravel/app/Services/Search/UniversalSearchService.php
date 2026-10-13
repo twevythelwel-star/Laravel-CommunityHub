@@ -185,7 +185,7 @@ class UniversalSearchService
 
             $url = Route::has('dashboard.directory')
                 ? route('dashboard.directory', ['search' => $user->email])
-                : (Route::has('operations.directory') ? route('operations.directory') : '/dashboard/directory');
+                : '/dashboard/directory';
 
             return [
                 'id' => $user->id,
@@ -229,7 +229,7 @@ class UniversalSearchService
 
             $url = Route::has('dashboard.gate-pass')
                 ? route('dashboard.gate-pass', ['pass' => $pass->pass_id])
-                : (Route::has('operations.passes') ? route('operations.passes') : '/dashboard/gate-pass');
+                : '/dashboard/gate-pass';
 
             return [
                 'id' => $pass->id,
@@ -259,7 +259,7 @@ class UniversalSearchService
         return $models->map(function (Warning $warning) {
             $url = Route::has('dashboard.warnings')
                 ? route('dashboard.warnings', ['id' => $warning->id])
-                : (Route::has('operations.warnings') ? route('operations.warnings') : '/dashboard/warnings');
+                : '/dashboard/warnings';
 
             return [
                 'id' => $warning->id,

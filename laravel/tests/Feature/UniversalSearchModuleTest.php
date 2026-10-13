@@ -242,11 +242,6 @@ class UniversalSearchModuleTest extends TestCase
         $response->assertSee('Universal Search');
         $response->assertSee('Laravel Scout');
 
-        // Test Operations Hub with search tab
-        $opsResponse = $this->get('/operations?tab=search');
-        $opsResponse->assertOk();
-        $opsResponse->assertSee('Universal Search Hub');
-
         // Test Livewire component reactivity
         Livewire::test(UniversalSearch::class)
             ->set('query', 'Leonidas')

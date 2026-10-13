@@ -48,13 +48,8 @@ use App\Http\Controllers\PdfController;
 use App\Http\Controllers\PublicPageController;
 use App\Http\Controllers\UniversalPaymentLinkController;
 use App\Http\Controllers\UniversalSearchController;
-use App\Livewire\CommunityOperationsHub;
-use App\Livewire\Components\UiShowcase;
-use App\Livewire\GatePasses\PassManager;
 use App\Livewire\Realtime\RealtimeOperationsHub;
-use App\Livewire\Residents\ResidentDirectory;
 use App\Livewire\Spreadsheets\SpreadsheetOperationsHub;
-use App\Livewire\Warnings\WarningDesk;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -89,21 +84,16 @@ Route::post('/rsvp/{token}', [EventRsvpController::class, 'submit'])
 
 /*
 |--------------------------------------------------------------------------
-| Livewire Operations Hub — Livewire 4 + Alpine.js + Tailwind CSS
+| Livewire pages — Livewire 4 + Alpine.js + Tailwind CSS
 |--------------------------------------------------------------------------
-| Reactive operations center: forms, tables, search, filtering, dashboards,
-| modals, dynamic components, gate passes, residents, and security desk.
+| The features with no React screen yet: realtime operations chat and
+| alerts, spreadsheet import/export, and universal search. Passes, the
+| directory and warnings live on the React dashboard only.
 |
-| Signed-in, active accounts only: these pages list residents and passes and
-| can create, revoke and check passes in and out. Livewire re-applies this
-| middleware to each component update, not just the first page load.
+| Signed-in, active accounts only. Livewire re-applies this middleware to
+| each component update, not just the first page load.
 */
 Route::middleware(['auth', 'active'])->group(function () {
-    Route::get('/operations', CommunityOperationsHub::class)->middleware('can:manageSecurity')->name('operations.hub');
-    Route::get('/operations/passes', PassManager::class)->middleware('can:manageSecurity')->name('operations.passes');
-    Route::get('/operations/directory', ResidentDirectory::class)->middleware('can:manageUsers')->name('operations.directory');
-    Route::get('/operations/warnings', WarningDesk::class)->name('operations.warnings');
-    Route::get('/operations/ui-kit', UiShowcase::class)->name('operations.ui-kit');
     Route::get('/operations/realtime', RealtimeOperationsHub::class)->middleware('can:manageSecurity')->name('operations.realtime-hub');
     // Gated per blueprint inside the component (EnterpriseSpreadsheetService::EXPORT_GATES).
     Route::get('/operations/spreadsheets', SpreadsheetOperationsHub::class)->name('operations.spreadsheets');

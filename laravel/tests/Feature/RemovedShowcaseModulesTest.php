@@ -31,6 +31,12 @@ class RemovedShowcaseModulesTest extends TestCase
             'observability' => ['/operations/observability'],
             'feature flags' => ['/operations/features'],
             'pdf' => ['/operations/pdf'],
+            // Livewire copies of React dashboard screens, removed 2026-10-13.
+            'operations hub' => ['/operations'],
+            'livewire pass manager' => ['/operations/passes'],
+            'livewire directory' => ['/operations/directory'],
+            'livewire warning desk' => ['/operations/warnings'],
+            'livewire ui kit' => ['/operations/ui-kit'],
             'query builder' => ['/query-builder'],
             'admin panel' => ['/admin'],
             'portal' => ['/portal'],
