@@ -83,7 +83,7 @@ class GatePassRepository
             'job' => $s->job,
             'idType' => $s->id_type,
             'idExpiry' => $s->id_expiry->toIso8601String(),
-            'property' => $s->property,
+            'property' => $s->property_label,
             'status' => $s->effectiveStatus(),
             'photoUrl' => $s->photo_url,
             'category' => $s->addedBy?->role?->isResident()

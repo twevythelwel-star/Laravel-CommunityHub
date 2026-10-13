@@ -192,13 +192,13 @@ class GatePassPageTest extends TestCase
         Staff::create([
             'name' => 'Household Helper', 'job' => 'Housekeeper',
             'id_type' => 'National ID', 'id_number' => 'A1', 'id_expiry' => now()->addYear(),
-            'property' => 'Lot 42', 'added_by' => $homeowner->id, 'status' => 'Active',
+            'property_label' => 'Lot 42', 'added_by' => $homeowner->id, 'status' => 'Active',
         ]);
 
         Staff::create([
             'name' => 'Grounds Crew', 'job' => 'Gardener',
             'id_type' => 'National ID', 'id_number' => 'B2', 'id_expiry' => now()->addYear(),
-            'property' => 'Community Grounds', 'added_by' => $admin->id, 'status' => 'Active',
+            'property_label' => 'Community Grounds', 'added_by' => $admin->id, 'status' => 'Active',
         ]);
 
         $this->actingAs(User::factory()->role(UserRole::Admin)->create())
@@ -222,7 +222,7 @@ class GatePassPageTest extends TestCase
             'name' => 'Lapsed Document', 'job' => 'Gardener',
             'id_type' => 'Passport', 'id_number' => 'C3',
             'id_expiry' => now()->subMonth(),       // past
-            'property' => 'Community Grounds', 'added_by' => $admin->id,
+            'property_label' => 'Community Grounds', 'added_by' => $admin->id,
             'status' => 'Active',                    // still Active in the column
         ]);
 

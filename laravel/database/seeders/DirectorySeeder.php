@@ -140,7 +140,7 @@ class DirectorySeeder extends Seeder
                 'id_type' => 'National ID',
                 'id_number' => 'JM-8841-2290',
                 'id_expiry' => now()->addYears(2)->toDateString(),
-                'property' => 'Lot 42, Royal Palm Drive',
+                'property_label' => 'Lot 42, Royal Palm Drive',
                 'added_by' => $marcus?->id,
                 'status' => 'Active',
             ],
@@ -150,7 +150,7 @@ class DirectorySeeder extends Seeder
                 'id_type' => 'Passport',
                 'id_number' => 'A4471902',
                 'id_expiry' => now()->addMonths(8)->toDateString(),
-                'property' => 'Lot 42, Royal Palm Drive',
+                'property_label' => 'Lot 42, Royal Palm Drive',
                 'added_by' => $marcus?->id,
                 'status' => 'Active',
             ],
@@ -161,7 +161,7 @@ class DirectorySeeder extends Seeder
                 'id_number' => 'JM-2210-7741',
                 // Deliberately past, so the Expired ID state is visible.
                 'id_expiry' => now()->subMonths(2)->toDateString(),
-                'property' => 'Community Grounds',
+                'property_label' => 'Community Grounds',
                 'added_by' => $marcus?->id,
                 'status' => 'Active',
             ],
@@ -169,7 +169,7 @@ class DirectorySeeder extends Seeder
 
         foreach ($staff as $member) {
             Staff::updateOrCreate(
-                ['name' => $member['name'], 'property' => $member['property']],
+                ['name' => $member['name'], 'property_label' => $member['property_label']],
                 $member,
             );
         }

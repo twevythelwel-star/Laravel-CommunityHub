@@ -11,6 +11,7 @@ use App\Services\VehicleManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -63,7 +64,7 @@ class VehicleController extends Controller
             'color' => ['required', 'string', 'max:48'],
             'year' => ['nullable', 'integer', 'min:1950', 'max:2030'],
             'parking_location' => ['nullable', 'string', 'max:128'],
-            'household_member_id' => ['nullable', 'exists:household_members,id'],
+            'household_member_id' => ['nullable', Rule::exists('occupants', 'id')->where('type', HouseholdMember::TYPE)],
             'is_ev' => ['nullable', 'boolean'],
             'is_temporary' => ['nullable', 'boolean'],
             'valid_until' => ['nullable', 'date'],
@@ -88,7 +89,7 @@ class VehicleController extends Controller
             'color' => ['sometimes', 'string', 'max:48'],
             'year' => ['nullable', 'integer', 'min:1950', 'max:2030'],
             'parking_location' => ['nullable', 'string', 'max:128'],
-            'household_member_id' => ['nullable', 'exists:household_members,id'],
+            'household_member_id' => ['nullable', Rule::exists('occupants', 'id')->where('type', HouseholdMember::TYPE)],
             'is_ev' => ['nullable', 'boolean'],
             'is_temporary' => ['nullable', 'boolean'],
             'valid_until' => ['nullable', 'date'],

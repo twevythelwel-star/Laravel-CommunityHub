@@ -2,13 +2,19 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Renter extends Model
+/**
+ * A stay at a homeowner's property: long-term renter or short-term guest.
+ * The person is a `users` row; this is the tenancy.
+ */
+class Renter extends Occupant
 {
     use HasFactory;
+
+    public const TYPE = 'renter';
 
     protected $fillable = [
         'homeowner_id',
@@ -25,6 +31,11 @@ class Renter extends Model
         'street',
     ];
 
+    protected $attributes = [
+        'status' => 'Active',
+        'stay_type' => 'Long-term (Renter)',
+    ];
+
     protected function casts(): array
     {
         return [
@@ -33,20 +44,9 @@ class Renter extends Model
         ];
     }
 
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
     public function homeowner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'homeowner_id');
-    }
-
-    /** The property the stay is for; an owner may hold several. */
-    public function property(): BelongsTo
-    {
-        return $this->belongsTo(Property::class);
     }
 
     public function leaseHasExpired(): bool
@@ -57,5 +57,20 @@ class Renter extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'Active')->whereDate('lease_end', '>=', now()->toDateString());
+    }
+
+    public function personRole(): string
+    {
+        return (string) $this->stay_type;
+    }
+
+    public function hasCurrentAccess(): bool
+    {
+        return $this->status === 'Active' && $this->lease_end !== null && ! $this->lease_end->endOfDay()->isPast();
+    }
+
+    public function accessEndsAt(): ?CarbonInterface
+    {
+        return $this->lease_end?->copy()->endOfDay();
     }
 }

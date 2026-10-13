@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Enums\UserRole;
+use App\Models\Property;
+use App\Models\Staff;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -274,5 +276,61 @@ class DirectoryPageTest extends TestCase
         $this->actingAs(User::factory()->role(UserRole::Homeowner)->create())
             ->patch("/dashboard/directory/users/{$other->id}", ['display_name' => 'Hijacked'])
             ->assertForbidden();
+    }
+
+    // ── Staff ────────────────────────────────────────────────────────
+
+    public function test_a_resident_registers_staff_at_their_own_property(): void
+    {
+        $homeowner = User::factory()->role(UserRole::Homeowner)->create(['lot' => '42', 'street' => 'Royal Palm Drive']);
+        $property = Property::create([
+            'property_code' => 'LOT-42',
+            'lot_number' => '42',
+            'street_address' => '42 Royal Palm Drive',
+            'owner_user_id' => $homeowner->id,
+            'status' => 'occupied',
+        ]);
+
+        $this->actingAs($homeowner)
+            ->post('/dashboard/directory/staff', [
+                'name' => 'Devon Clarke',
+                'job' => 'Gardener',
+                'id_type' => 'Passport',
+                'id_number' => 'A4471902',
+                'id_expiry' => now()->addYear()->toDateString(),
+            ])
+            ->assertRedirect();
+
+        $staff = Staff::query()->sole();
+        $this->assertSame('42, Royal Palm Drive', $staff->property_label);
+        $this->assertSame($property->id, $staff->property_id);
+        $this->assertSame($homeowner->id, $staff->added_by);
+
+        $this->actingAs($this->admin())
+            ->get('/dashboard/directory')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('staff.0.name', 'Devon Clarke')
+                ->where('staff.0.property', '42, Royal Palm Drive')
+            );
+    }
+
+    public function test_editing_a_staff_members_property_updates_its_label(): void
+    {
+        $homeowner = User::factory()->role(UserRole::Homeowner)->create();
+        $staff = Staff::create([
+            'name' => 'Maria Garcia',
+            'job' => 'Housekeeper',
+            'id_type' => 'National ID',
+            'id_number' => 'JM-8841-2290',
+            'id_expiry' => now()->addYear()->toDateString(),
+            'property_label' => 'Lot 42',
+            'added_by' => $homeowner->id,
+        ]);
+
+        $this->actingAs($homeowner)
+            ->patch("/dashboard/directory/staff/{$staff->id}", ['property' => 'Lot 7, Hibiscus Crescent'])
+            ->assertRedirect();
+
+        $this->assertSame('Lot 7, Hibiscus Crescent', $staff->fresh()->property_label);
     }
 }

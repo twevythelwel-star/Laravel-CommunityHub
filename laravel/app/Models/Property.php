@@ -50,6 +50,15 @@ class Property extends Model
         return $this->hasMany(Renter::class);
     }
 
+    /**
+     * Renters, household members and staff linked to this property, each as
+     * its own model.
+     */
+    public function occupants(): HasMany
+    {
+        return $this->hasMany(AnyOccupant::class);
+    }
+
     public function visitors(): HasMany
     {
         return $this->hasMany(Visitor::class);
@@ -247,16 +256,25 @@ class Property extends Model
      */
     public function staffLayer(): Collection
     {
-        return $this->delegatedAccesses()
+        $registered = Staff::query()->where('property_id', $this->id)->orderBy('name')->get();
+
+        $delegated = $this->delegatedAccesses()
             ->whereIn('access_level', ['Domestic Staff', 'Caregiver', 'Staff', 'Housekeeper'])
-            ->get()
-            ->map(fn ($d) => [
-                'id' => $d->id,
-                'name' => $d->name,
-                'role' => $d->relationship ?: 'Domestic Staff',
-                'access_level' => $d->access_level,
-                'status' => $d->status ?? 'active',
-            ]);
+            ->get();
+
+        return $registered->map(fn (Staff $s) => [
+            'id' => $s->id,
+            'name' => $s->name,
+            'role' => $s->job ?: 'Household Staff',
+            'access_level' => 'Household Staff',
+            'status' => $s->effectiveStatus(),
+        ])->concat($delegated->map(fn ($d) => [
+            'id' => $d->id,
+            'name' => $d->name,
+            'role' => $d->relationship ?: 'Domestic Staff',
+            'access_level' => $d->access_level,
+            'status' => $d->status ?? 'active',
+        ]))->values();
     }
 
     /**

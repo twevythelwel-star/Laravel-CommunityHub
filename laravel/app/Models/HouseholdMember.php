@@ -3,15 +3,25 @@
 namespace App\Models;
 
 use App\Enums\PassCategory;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class HouseholdMember extends Model
+/**
+ * Someone on a household's roster: spouse, child, long-term occupant or
+ * caregiver, with their own gate pass and permissions.
+ */
+class HouseholdMember extends Occupant
 {
     use HasFactory;
 
-    protected $guarded = ['id'];
+    public const TYPE = 'household_member';
+
+    protected $guarded = ['id', 'type'];
+
+    protected $attributes = [
+        'status' => 'active',
+    ];
 
     protected $casts = [
         'permissions' => 'array',
@@ -19,14 +29,20 @@ class HouseholdMember extends Model
         'valid_until' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        parent::booted();
+
+        static::creating(function (HouseholdMember $member): void {
+            if ($member->property_id === null && $household = $member->household) {
+                $member->property_id = static::propertyOwnedAt($household->primary_homeowner_id, $household->property_number);
+            }
+        });
+    }
+
     public function household(): BelongsTo
     {
         return $this->belongsTo(Household::class);
-    }
-
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
     }
 
     public function gatePass(): BelongsTo
@@ -61,5 +77,20 @@ class HouseholdMember extends Model
             PassCategory::HomeownerStaff->value => 'Private Household Staff Bezel',
             default => 'Standard Digital Pass',
         };
+    }
+
+    public function personRole(): string
+    {
+        return (string) ($this->relationship_label ?: $this->role_in_household);
+    }
+
+    public function hasCurrentAccess(): bool
+    {
+        return $this->status === 'active' && ($this->valid_until === null || $this->valid_until->isFuture());
+    }
+
+    public function accessEndsAt(): ?CarbonInterface
+    {
+        return $this->valid_until;
     }
 }

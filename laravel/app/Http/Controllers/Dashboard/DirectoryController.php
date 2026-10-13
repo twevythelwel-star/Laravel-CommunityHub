@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Directory\UpdateStaffRequest;
 use App\Models\Property;
 use App\Models\Staff;
 use App\Models\User;
@@ -93,7 +94,7 @@ class DirectoryController extends Controller
                     'idNumber' => $isAdmin ? $s->id_number : null,
                     'idExpiry' => $s->id_expiry->toDateString(),
                     'idImageUrl' => $s->id_image_url,
-                    'property' => $s->property,
+                    'property' => $s->property_label,
                     'status' => $s->effectiveStatus(),
                     'photoUrl' => $s->photo_url,
                 ]),
@@ -121,7 +122,7 @@ class DirectoryController extends Controller
 
         Staff::create([
             ...$validated,
-            'property' => $user->propertyLabel(),
+            'property_label' => $user->propertyLabel(),
             'added_by' => $user->id,
             'status' => 'Active',
         ]);
@@ -131,25 +132,11 @@ class DirectoryController extends Controller
         return back()->with('success', 'Staff member registered.');
     }
 
-    public function updateStaff(Request $request, Staff $staff): RedirectResponse
+    public function updateStaff(UpdateStaffRequest $request, Staff $staff): RedirectResponse
     {
         $this->authorizeStaff($request, $staff);
 
-        // Mirrors every field the StaffForm submits, so an edit does not silently
-        // discard the ID details the form displayed.
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120'],
-            'job' => ['sometimes', 'string', 'max:120'],
-            'property' => ['sometimes', 'string', 'max:160'],
-            'id_type' => ['sometimes', 'string', 'max:60'],
-            'id_number' => ['sometimes', 'string', 'max:60'],
-            'id_expiry' => ['sometimes', 'date'],
-            'photo_url' => ['nullable', 'url', 'max:2048'],
-            // "Expired ID" is derived from id_expiry, never set directly.
-            'status' => ['sometimes', 'in:Active,Inactive'],
-        ]);
-
-        $staff->update($validated);
+        $staff->update($request->staffAttributes());
 
         return back()->with('success', 'Staff record updated.');
     }

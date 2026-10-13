@@ -4,6 +4,9 @@ namespace App\Models;
 
 use App\Enums\AuthorizedPersonRole;
 use App\Enums\RepresentativePermission;
+use App\Models\Contracts\PropertyPerson;
+use App\Traits\SummarizesPropertyPerson;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,9 +14,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class AuthorizedPerson extends Model
+class AuthorizedPerson extends Model implements PropertyPerson
 {
     use HasFactory;
+    use SummarizesPropertyPerson;
 
     protected $table = 'authorized_people';
 
@@ -94,6 +98,31 @@ class AuthorizedPerson extends Model
         }
 
         return true;
+    }
+
+    public function personType(): string
+    {
+        return 'authorized_person';
+    }
+
+    public function personName(): string
+    {
+        return (string) ($this->full_name ?: $this->user?->name);
+    }
+
+    public function personRole(): string
+    {
+        return (string) $this->role?->label();
+    }
+
+    public function hasCurrentAccess(): bool
+    {
+        return $this->isActive();
+    }
+
+    public function accessEndsAt(): ?CarbonInterface
+    {
+        return $this->valid_until?->copy()->endOfDay();
     }
 
     /**

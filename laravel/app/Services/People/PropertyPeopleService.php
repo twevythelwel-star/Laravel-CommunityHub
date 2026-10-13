@@ -2,6 +2,7 @@
 
 namespace App\Services\People;
 
+use App\Models\Contracts\PropertyPerson;
 use App\Models\Household;
 use App\Models\Property;
 use App\Models\Renter;
@@ -17,7 +18,7 @@ use Illuminate\Support\Collection;
 class PropertyPeopleService
 {
     public function __construct(
-        protected DelegationPeopleMapper $mapper = new DelegationPeopleMapper()
+        protected DelegationPeopleMapper $mapper = new DelegationPeopleMapper
     ) {}
 
     /**
@@ -145,6 +146,23 @@ class PropertyPeopleService
             'long_term' => $longTerm,
             'short_term' => $shortTerm,
         ]);
+    }
+
+    /**
+     * Everyone linked to a property, of all five kinds: renters, household
+     * members, staff, delegates and the owning entity's authorized
+     * representatives. Includes people whose access has lapsed; filter on
+     * hasCurrentAccess() for who may be there now.
+     *
+     * @return Collection<int, PropertyPerson>
+     */
+    public function everyoneAt(Property $property): Collection
+    {
+        return collect()
+            ->concat($property->occupants()->orderBy('name')->get())
+            ->concat($property->delegatedAccesses()->with('delegate')->orderBy('name')->get())
+            ->concat($property->authorizedRepresentatives())
+            ->values();
     }
 
     /**

@@ -73,7 +73,7 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
             'lease_start' => now()->toDateString(),
             'lease_end' => now()->addDays(3)->toDateString(),
         ])->assertForbidden();
-        $this->assertDatabaseMissing('renters', ['name' => 'Self-Registered Guest']);
+        $this->assertDatabaseMissing('occupants', ['type' => 'renter', 'name' => 'Self-Registered Guest']);
 
         // 2. The estate office registers a long-term renter at the homeowner's property
         $this->actingAs($admin)->get('/dashboard/renters')
@@ -92,7 +92,8 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
         $registerLongTerm->assertRedirect();
 
         // Filed under the homeowner and at their address, not the admin's.
-        $this->assertDatabaseHas('renters', [
+        $this->assertDatabaseHas('occupants', [
+            'type' => 'renter',
             'homeowner_id' => $homeowner->id,
             'name' => 'Sophia Taylor',
             'stay_type' => 'Long-term (Renter)',
@@ -113,7 +114,8 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
         ]);
         $registerShortTerm->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('renters', [
+        $this->assertDatabaseHas('occupants', [
+            'type' => 'renter',
             'homeowner_id' => $homeowner->id,
             'name' => 'Elena Rostova',
             'stay_type' => 'Short-term (Airbnb)',
@@ -135,7 +137,7 @@ class HomeownerAndTemporaryHomeownerFlowTest extends TestCase
         // 5. Homeowner removes temporary homeowner
         $deleteResponse = $this->actingAs($homeowner)->delete("/dashboard/renters/{$renter->id}");
         $deleteResponse->assertSessionHasNoErrors();
-        $this->assertDatabaseMissing('renters', ['id' => $renter->id]);
+        $this->assertDatabaseMissing('occupants', ['type' => 'renter', 'id' => $renter->id]);
     }
 
     public function test_homeowner_can_register_edit_and_delete_visitors(): void

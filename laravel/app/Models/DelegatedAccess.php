@@ -5,16 +5,20 @@ namespace App\Models;
 use App\Enums\GateId;
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
+use App\Models\Contracts\PropertyPerson;
 use App\Services\GatePassEngine;
+use App\Traits\SummarizesPropertyPerson;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class DelegatedAccess extends Model
+class DelegatedAccess extends Model implements PropertyPerson
 {
     use HasFactory;
+    use SummarizesPropertyPerson;
 
     protected $table = 'delegated_accesses';
 
@@ -195,6 +199,31 @@ class DelegatedAccess extends Model
         }
 
         return true;
+    }
+
+    public function personType(): string
+    {
+        return 'delegate';
+    }
+
+    public function personName(): string
+    {
+        return (string) ($this->name ?: $this->delegate?->name);
+    }
+
+    public function personRole(): string
+    {
+        return (string) ($this->relationship ?: $this->access_level);
+    }
+
+    public function hasCurrentAccess(): bool
+    {
+        return $this->isActive();
+    }
+
+    public function accessEndsAt(): ?CarbonInterface
+    {
+        return $this->duration_type === 'manual_revocation' ? null : $this->expires_at;
     }
 
     public function isExpired(): bool

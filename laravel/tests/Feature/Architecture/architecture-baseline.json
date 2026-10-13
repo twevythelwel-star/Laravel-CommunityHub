@@ -4,7 +4,6 @@
         "PATCH dashboard/block-list/requests/{removalRequest}": "Dashboard\\BlocklistController@reviewRemoval",
         "PATCH dashboard/block-list/{blocklistEntry}": "Dashboard\\BlocklistController@update",
         "PATCH dashboard/calendar/{communityEvent}": "Dashboard\\CalendarController@update",
-        "PATCH dashboard/directory/staff/{staff}": "Dashboard\\DirectoryController@updateStaff",
         "PATCH dashboard/directory/users/{user}": "Dashboard\\DirectoryController@updateUser",
         "PATCH dashboard/fundraising/{fundraiser}": "Dashboard\\FundraisingController@update",
         "PATCH dashboard/guidelines/{guideline}": "Dashboard\\GuidelinesController@update",

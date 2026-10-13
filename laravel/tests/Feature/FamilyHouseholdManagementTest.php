@@ -35,7 +35,8 @@ class FamilyHouseholdManagementTest extends TestCase
         ]);
 
         // Verify John Smith is registered as head of household
-        $this->assertDatabaseHas('household_members', [
+        $this->assertDatabaseHas('occupants', [
+            'type' => 'household_member',
             'name' => 'John Smith',
             'role_in_household' => 'homeowner',
             'pass_category' => PassCategory::Homeowner->value,
@@ -128,7 +129,8 @@ class FamilyHouseholdManagementTest extends TestCase
 
         $response->assertCreated();
 
-        $this->assertDatabaseHas('household_members', [
+        $this->assertDatabaseHas('occupants', [
+            'type' => 'household_member',
             'name' => 'Robert Walker',
             'role_in_household' => 'caregiver',
             'pass_category' => PassCategory::Delegate->value,
@@ -173,7 +175,7 @@ class FamilyHouseholdManagementTest extends TestCase
         $delResp = $this->actingAs($homeowner)->deleteJson("/dashboard/household/members/{$caregiver->id}");
         $delResp->assertOk();
 
-        $this->assertDatabaseMissing('household_members', ['id' => $caregiver->id]);
+        $this->assertDatabaseMissing('occupants', ['type' => 'household_member', 'id' => $caregiver->id]);
         $this->assertDatabaseHas('gate_passes', [
             'id' => $gatePassId,
             'status' => PassStatus::Revoked->value,
