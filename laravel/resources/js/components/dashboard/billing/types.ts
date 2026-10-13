@@ -10,6 +10,9 @@ export type OutstandingItem = {
   dueOn: string;
   daysOverdue: number;
   status: string;
+  lastRemindedAt?: string | null;
+  reminderCount?: number;
+  reminderStatus?: 'queued' | 'sent' | 'delivered' | 'failed' | null;
 };
 
 export type PaymentPlanItem = {

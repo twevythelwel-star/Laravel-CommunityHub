@@ -588,6 +588,9 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         Route::post('/billing/invoices/{invoice}/pay', [BillingController::class, 'markPaid'])
             ->middleware('can:manageBilling')
             ->name('billing.invoices.pay');
+        Route::post('/billing/invoices/{invoice}/remind', [BillingController::class, 'sendReminder'])
+            ->middleware('can:manageBilling')
+            ->name('billing.invoices.remind');
         Route::get('/billing/invoices/{invoice}/pdf', [PdfController::class, 'downloadInvoice'])->name('billing.invoice.pdf');
         Route::post('/billing/invoices/{invoice}/stripe-checkout', [StripeCheckoutController::class, 'checkout'])->name('billing.stripe.checkout');
         Route::get('/billing/invoices/{invoice}/stripe-success', [StripeCheckoutController::class, 'success'])->name('billing.stripe.success');

@@ -15,6 +15,7 @@ class Invoice extends Model
     protected $fillable = [
         'user_id', 'property_id', 'reference', 'stripe_session_id', 'stripe_payment_intent',
         'amount_minor', 'currency', 'period_start', 'period_end', 'due_on', 'status', 'paid_at',
+        'last_reminded_at', 'reminder_count',
     ];
 
     protected function casts(): array
@@ -24,6 +25,8 @@ class Invoice extends Model
             'period_end' => 'date',
             'due_on' => 'date',
             'paid_at' => 'datetime',
+            'last_reminded_at' => 'datetime',
+            'reminder_count' => 'integer',
             'amount_minor' => 'integer',
         ];
     }
@@ -58,6 +61,17 @@ class Invoice extends Model
     {
         return $this->hasMany(PaymentLink::class);
     }
+
+    public function reminderDeliveries(): HasMany
+    {
+        return $this->hasMany(NotificationDelivery::class);
+    }
+
+    public function latestReminderDelivery(): HasOne
+    {
+        return $this->hasOne(NotificationDelivery::class)->latestOfMany();
+    }
+
 
     /**
      * Generate a secure, opaque-token payment link for this invoice.

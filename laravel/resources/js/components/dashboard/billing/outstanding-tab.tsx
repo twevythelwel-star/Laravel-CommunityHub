@@ -1,8 +1,10 @@
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { AlertCircle, Calendar, CheckCircle2, Send } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle2, RefreshCw, Send, AlertTriangle } from 'lucide-react';
 import type { OutstandingItem } from './types';
 
 type Props = {
@@ -14,6 +16,35 @@ type Props = {
 
 export function OutstandingTab({ outstanding, isAdmin, onCreatePlan }: Props) {
   const { toast } = useToast();
+  const [remindingId, setRemindingId] = useState<number | null>(null);
+
+  const handleRemind = (item: OutstandingItem) => {
+    if (!isAdmin) return;
+
+    setRemindingId(item.id);
+    router.post(
+      `/dashboard/billing/invoices/${item.id}/remind`,
+      {},
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setRemindingId(null);
+          toast({
+            title: 'Payment Reminder Dispatched',
+            description: `Digital statement reminder queued for ${item.homeowner} (Lot ${item.lot}) via email, SMS, and in-app.`,
+          });
+        },
+        onError: (errors) => {
+          setRemindingId(null);
+          toast({
+            variant: 'destructive',
+            title: 'Reminder Dispatch Failed',
+            description: (Object.values(errors)[0] as string) || 'Could not send payment reminder.',
+          });
+        },
+      }
+    );
+  };
 
   return (
     <Card className="border shadow-sm">
@@ -51,6 +82,7 @@ export function OutstandingTab({ outstanding, isAdmin, onCreatePlan }: Props) {
                   <th className="p-3">Amount Due</th>
                   <th className="p-3">Due Date</th>
                   <th className="p-3">Overdue Aging</th>
+                  <th className="p-3">Reminder Status</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -58,25 +90,55 @@ export function OutstandingTab({ outstanding, isAdmin, onCreatePlan }: Props) {
                 {outstanding.map((item) => (
                   <tr key={item.id} className="hover:bg-muted/30 transition-colors">
                     <td className="p-3 font-mono font-bold text-foreground">{item.reference}</td>
-                    <td className="p-3 font-medium text-foreground">{item.homeowner}</td>
-                    <td className="p-3 font-mono">Lot {item.lot}</td>
+                    <td className="p-3 font-medium">{item.homeowner}</td>
+                    <td className="p-3 font-mono text-muted-foreground">{item.lot}</td>
                     <td className="p-3 font-mono font-bold text-foreground">
-                      {item.currency} {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {item.currency}
                     </td>
-                    <td className="p-3 font-mono text-muted-foreground">{item.dueOn}</td>
+                    <td className="p-3 text-muted-foreground">{item.dueOn}</td>
                     <td className="p-3">
-                      <Badge
-                        variant="outline"
-                        className={`font-mono text-[10px] ${
-                          item.daysOverdue > 60
-                            ? 'border-red-500/40 text-red-600 bg-red-500/10'
-                            : item.daysOverdue > 30
-                            ? 'border-amber-500/40 text-amber-600 bg-amber-500/10'
-                            : 'border-slate-500/40 text-slate-600 bg-slate-500/10'
-                        }`}
-                      >
-                        {item.daysOverdue > 0 ? `${item.daysOverdue} Days Overdue` : 'Current Due'}
-                      </Badge>
+                      {item.daysOverdue > 0 ? (
+                        <span className="inline-flex items-center gap-1 font-semibold text-rose-600 dark:text-rose-400">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                          {item.daysOverdue}d overdue
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">Current</span>
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex flex-col gap-0.5">
+                        {item.reminderStatus === 'delivered' && (
+                          <Badge variant="outline" className="h-5 text-[10px] w-fit text-emerald-600 border-emerald-500/30 gap-1 bg-emerald-50/50 dark:bg-emerald-950/20">
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                            <span>Delivered</span>
+                          </Badge>
+                        )}
+                        {item.reminderStatus === 'sent' && (
+                          <Badge variant="outline" className="h-5 text-[10px] w-fit text-blue-600 border-blue-500/30 gap-1 bg-blue-50/50 dark:bg-blue-950/20">
+                            <span>Sent</span>
+                          </Badge>
+                        )}
+                        {item.reminderStatus === 'queued' && (
+                          <Badge variant="outline" className="h-5 text-[10px] w-fit text-amber-600 border-amber-500/30 gap-1 bg-amber-50/50 dark:bg-amber-950/20">
+                            <span>Queued</span>
+                          </Badge>
+                        )}
+                        {item.reminderStatus === 'failed' && (
+                          <Badge variant="destructive" className="h-5 text-[10px] w-fit gap-1">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            <span>Failed</span>
+                          </Badge>
+                        )}
+                        {!item.reminderStatus && (
+                          <span className="text-[11px] text-muted-foreground">None sent</span>
+                        )}
+                        {item.lastRemindedAt && (
+                          <span className="text-[10px] text-muted-foreground/80 font-mono">
+                            {item.lastRemindedAt}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
@@ -91,20 +153,45 @@ export function OutstandingTab({ outstanding, isAdmin, onCreatePlan }: Props) {
                             <span>Payment Plan</span>
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => {
-                            toast({
-                              title: 'Digital Statement Sent',
-                              description: `SMS and email reminder sent to ${item.homeowner} (Lot ${item.lot}).`,
-                            });
-                          }}
-                          className="h-7 text-xs font-semibold gap-1"
-                        >
-                          <Send className="h-3 w-3" />
-                          <span>Remind</span>
-                        </Button>
+
+                        {isAdmin ? (
+                          <Button
+                            size="sm"
+                            variant={item.reminderStatus === 'failed' ? 'destructive' : 'secondary'}
+                            disabled={remindingId === item.id}
+                            onClick={() => handleRemind(item)}
+                            className="h-7 text-xs font-semibold gap-1 cursor-pointer"
+                            title={item.reminderStatus === 'failed' ? 'Retry reminder dispatch' : 'Dispatch digital statement reminder'}
+                          >
+                            {remindingId === item.id ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                                <span>Sending...</span>
+                              </>
+                            ) : item.reminderStatus === 'failed' ? (
+                              <>
+                                <RefreshCw className="h-3 w-3" />
+                                <span>Retry</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-3 w-3" />
+                                <span>{item.reminderCount ? 'Remind Again' : 'Remind'}</span>
+                              </>
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled
+                            className="h-7 text-xs font-semibold gap-1 opacity-50 cursor-not-allowed"
+                            title="Reminders can only be dispatched by estate administration."
+                          >
+                            <Send className="h-3 w-3" />
+                            <span>Remind</span>
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

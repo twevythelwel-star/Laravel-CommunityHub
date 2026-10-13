@@ -242,7 +242,7 @@ class BillingPresenter
 
         $outstandingQuery = $isAdmin ? Invoice::outstanding() : $user->invoices()->outstanding();
         $outstandingInvoices = $outstandingQuery
-            ->with('user:id,display_name,lot')
+            ->with(['user:id,display_name,lot', 'latestReminderDelivery'])
             ->latest('due_on')
             ->take(50)
             ->get()
@@ -256,6 +256,9 @@ class BillingPresenter
                 'dueOn' => $inv->due_on->format('M d, Y'),
                 'daysOverdue' => max(0, (int) now()->diffInDays($inv->due_on, false) * -1),
                 'status' => $inv->isOverdue() ? 'Overdue' : $inv->status,
+                'lastRemindedAt' => $inv->last_reminded_at?->diffForHumans(),
+                'reminderCount' => $inv->reminder_count ?? 0,
+                'reminderStatus' => $inv->latestReminderDelivery?->status,
             ]);
 
         $plansQuery = $isAdmin ? PaymentPlan::query() : PaymentPlan::where('user_id', $user->id);

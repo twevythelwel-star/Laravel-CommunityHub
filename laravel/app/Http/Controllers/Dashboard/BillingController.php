@@ -6,6 +6,7 @@ use App\Actions\Billing\ChargeOnTerminalAction;
 use App\Actions\Billing\StoreReconciliationAction;
 use App\Enums\PaymentState;
 use App\Http\Controllers\Controller;
+use App\Jobs\SendInvoicePaymentReminderJob;
 use App\Http\Requests\Billing\CalculateProrationRequest;
 use App\Http\Requests\Billing\CancelTerminalPaymentRequest;
 use App\Http\Requests\Billing\ChargeTerminalRequest;
@@ -273,6 +274,36 @@ class BillingController extends Controller
 
         return back()->with('success', "Invoice {$invoice->reference} marked paid.");
     }
+
+    public function sendReminder(Request $request, Invoice $invoice): RedirectResponse|JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->can('manageBilling')) {
+            abort(403, 'Unauthorized to dispatch billing reminders.');
+        }
+
+        if ($invoice->status === 'Paid') {
+            return back()->with('error', "Invoice {$invoice->reference} is already settled in full.");
+        }
+
+        SendInvoicePaymentReminderJob::dispatch($invoice);
+        $user->recordActivity("Dispatched payment reminder for invoice {$invoice->reference}");
+
+        $homeownerName = $invoice->user?->display_name ?? 'Homeowner';
+        $message = "Digital statement and payment reminder dispatched to {$homeownerName} via SMS, email, and in-app channels.";
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'lastRemindedAt' => now()->toIso8601String(),
+                'reminderCount' => ($invoice->reminder_count ?? 0) + 1,
+            ]);
+        }
+
+        return back()->with('success', $message);
+    }
+
 
     public function validateChannel(ValidateChannelRequest $request, string $channel): RedirectResponse|JsonResponse
     {

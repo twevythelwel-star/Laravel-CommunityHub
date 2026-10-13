@@ -22,6 +22,11 @@ class ChannelDispatchResult
         return new self($channel, 'sent', $reference, null, $metadata);
     }
 
+    public static function delivered(string $channel, ?string $reference = null, array $metadata = []): self
+    {
+        return new self($channel, 'delivered', $reference, null, $metadata);
+    }
+
     public static function unavailable(string $channel, string $reason): self
     {
         return new self($channel, 'unavailable', null, $reason);
@@ -35,6 +40,11 @@ class ChannelDispatchResult
     public function isSent(): bool
     {
         return $this->status === 'sent';
+    }
+
+    public function isDelivered(): bool
+    {
+        return $this->status === 'delivered';
     }
 
     public function isUnavailable(): bool
