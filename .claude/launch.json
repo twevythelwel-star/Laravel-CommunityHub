@@ -12,6 +12,12 @@
         "laravel/server.php"
       ],
       "port": 8123
+    },
+    {
+      "name": "vite",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "laravel", "run", "dev"],
+      "port": 5173
     }
   ]
 }
