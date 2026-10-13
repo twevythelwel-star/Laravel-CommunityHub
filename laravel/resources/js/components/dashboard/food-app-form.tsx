@@ -1,28 +1,8 @@
-
-
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { FormDialog } from '@/components/dashboard/form-dialog';
+import { TextField } from '@/components/dashboard/text-field';
 import type { FoodApp } from '@/types';
 
 const formSchema = z.object({
@@ -35,6 +15,9 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const DEFAULT_LOGO = 'https://picsum.photos/seed/newapp/100/100';
+const DEFAULT_HINT = 'food delivery logo';
+
 type FoodAppFormProps = {
   children: React.ReactNode;
   open: boolean;
@@ -44,36 +27,7 @@ type FoodAppFormProps = {
 };
 
 export function FoodAppForm({ children, open, onOpenChange, onSave, app }: FoodAppFormProps) {
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: '',
-      websiteUrl: '',
-      logoUrl: 'https://picsum.photos/seed/newapp/100/100',
-      aiHint: 'food delivery logo'
-    },
-  });
-
-  useEffect(() => {
-    if (app) {
-      form.reset({
-        name: app.name,
-        websiteUrl: app.websiteUrl,
-        logoUrl: app.logoUrl || 'https://picsum.photos/seed/newapp/100/100',
-        aiHint: app.aiHint || 'food delivery logo',
-        couponPercentage: app.couponPercentage ?? undefined,
-      });
-    } else {
-       form.reset({
-        name: '',
-        websiteUrl: '',
-        logoUrl: 'https://picsum.photos/seed/newapp/100/100',
-        aiHint: 'food delivery logo',
-        couponPercentage: undefined,
-       });
-    }
-  }, [app, form, open]);
-
+  const form = useForm<FormValues>({ resolver: zodResolver(formSchema) });
 
   function onSubmit(values: FormValues) {
     onSave(values);
@@ -81,96 +35,36 @@ export function FoodAppForm({ children, open, onOpenChange, onSave, app }: FoodA
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>{app ? 'Edit' : 'Add'} Food Delivery Service</DialogTitle>
-              <DialogDescription>
-                Fill in the details for the delivery service.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Service Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., DoorDash" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="websiteUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Website URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://www.doordash.com" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="logoUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Logo URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://picsum.photos/seed/logo/100/100" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="aiHint"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>AI Hint for Logo</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., food delivery logo" {...field} />
-                  </FormControl>
-                   <p className="text-xs text-muted-foreground">A few keywords to help AI find a replacement image.</p>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="couponPercentage"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Coupon Percentage (Optional)</FormLabel>
-                  <FormControl>
-                    <Input type="number" placeholder="e.g., 15" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Save Service</Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      trigger={children}
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={onSubmit}
+      record={app}
+      resetValues={() => ({
+        name: app?.name ?? '',
+        websiteUrl: app?.websiteUrl ?? '',
+        logoUrl: app?.logoUrl || DEFAULT_LOGO,
+        aiHint: app?.aiHint || DEFAULT_HINT,
+        couponPercentage: app?.couponPercentage ?? undefined,
+      })}
+      title={`${app ? 'Edit' : 'Add'} Food Delivery Service`}
+      description="Fill in the details for the delivery service."
+      submitLabel="Save Service"
+    >
+      <TextField control={form.control} name="name" label="Service Name" placeholder="e.g., DoorDash" />
+      <TextField control={form.control} name="websiteUrl" label="Website URL" placeholder="https://www.doordash.com" />
+      <TextField control={form.control} name="logoUrl" label="Logo URL" placeholder="https://picsum.photos/seed/logo/100/100" />
+      <TextField
+        control={form.control}
+        name="aiHint"
+        label="AI Hint for Logo"
+        placeholder="e.g., food delivery logo"
+        description="A few keywords to help AI find a replacement image."
+        descriptionClassName="text-xs"
+      />
+      <TextField control={form.control} name="couponPercentage" label="Coupon Percentage (Optional)" type="number" placeholder="e.g., 15" />
+    </FormDialog>
   );
 }

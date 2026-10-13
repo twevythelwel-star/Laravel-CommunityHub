@@ -1,36 +1,18 @@
-
-
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { DateField } from '@/components/dashboard/date-field';
+import { FormDialog } from '@/components/dashboard/form-dialog';
+import { TextField } from '@/components/dashboard/text-field';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { CalendarIcon, Check, ChevronsUpDown } from 'lucide-react';
-import { Calendar } from '../ui/calendar';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { Textarea } from '../ui/textarea';
-import { Switch } from '../ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 
 
 const predefinedReasons = [
@@ -115,32 +97,23 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry, vis
     },
   });
 
-  useEffect(() => {
-    if (entry) {
-        const existingReason = entry.reason ?? '';
-        const isPredefined = predefinedReasons.includes(existingReason);
-
-        form.reset({
-            name: entry.name,
-            reason: isPredefined ? existingReason : 'Other',
-            customReason: isPredefined ? '' : existingReason,
-            photoUrl: entry.photoUrl ?? null,
-            isPermanent: !entry.expiryDate,
-            // The server sends an ISO string; the date picker needs a Date.
-            expiryDate: entry.expiryDate ? new Date(entry.expiryDate) : null,
-        });
-    } else {
-        form.reset({
-            name: '',
-            reason: '',
-            customReason: '',
-            photoUrl: null,
-            isPermanent: true,
-            expiryDate: null,
-        });
+  function resetValues(): FormValues {
+    if (!entry) {
+      return { name: '', reason: '', customReason: '', photoUrl: null, isPermanent: true, expiryDate: null };
     }
-  }, [entry, form]);
+    const existingReason = entry.reason ?? '';
+    const isPredefined = predefinedReasons.includes(existingReason);
 
+    return {
+      name: entry.name,
+      reason: isPredefined ? existingReason : 'Other',
+      customReason: isPredefined ? '' : existingReason,
+      photoUrl: entry.photoUrl ?? null,
+      isPermanent: !entry.expiryDate,
+      // The server sends an ISO string; the date picker needs a Date.
+      expiryDate: entry.expiryDate ? new Date(entry.expiryDate) : null,
+    };
+  }
 
   function onSubmit(values: FormValues) {
     const finalReason = values.reason === 'Other' ? values.customReason! : values.reason;
@@ -166,194 +139,129 @@ export function BlocklistForm({ children, open, onOpenChange, onSave, entry, vis
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => {
-        onOpenChange(isOpen);
-        if (!isOpen) {
-            form.reset();
-        }
-    }}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>{entry ? 'Edit Blocklist Entry' : 'Add to Blocklist'}</DialogTitle>
-              <DialogDescription>
-                Select a visitor and provide a reason to add them to the blocklist.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>Visitor Name</FormLabel>
-                   <Popover open={isVisitorPopoverOpen} onOpenChange={setVisitorPopoverOpen}>
-                        <PopoverTrigger asChild>
-                            <FormControl>
-                                <Button
-                                variant="outline"
-                                role="combobox"
-                                className={cn(
-                                    "w-full justify-between",
-                                    !field.value && "text-muted-foreground"
-                                )}
-                                >
-                                {field.value
-                                    ? visitors.find(
-                                        (visitor) => visitor.name === field.value
-                                    )?.name
-                                    : "Select visitor"}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                            <Command>
-                                <CommandInput placeholder="Search visitors..." />
-                                <CommandList>
-                                <CommandEmpty>No visitors found.</CommandEmpty>
-                                <CommandGroup>
-                                    {visitors.map((visitor) => (
-                                    <CommandItem
-                                        value={visitor.name}
-                                        key={visitor.id}
-                                        onSelect={() => {
-                                        form.setValue("name", visitor.name);
-                                        setVisitorPopoverOpen(false);
-                                        }}
-                                    >
-                                        <Check
-                                        className={cn(
-                                            "mr-2 h-4 w-4",
-                                            visitor.name === field.value
-                                            ? "opacity-100"
-                                            : "opacity-0"
-                                        )}
-                                        />
-                                        {visitor.name}
-                                    </CommandItem>
-                                    ))}
-                                </CommandGroup>
-                                </CommandList>
-                            </Command>
-                        </PopoverContent>
-                    </Popover>
+    <FormDialog
+      trigger={children}
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={onSubmit}
+      record={entry}
+      resetValues={resetValues}
+      title={entry ? 'Edit Blocklist Entry' : 'Add to Blocklist'}
+      description="Select a visitor and provide a reason to add them to the blocklist."
+      submitLabel="Save Changes"
+    >
+      <FormField
+        control={form.control}
+        name="name"
+        render={({ field }) => (
+          <FormItem className="flex flex-col">
+            <FormLabel>Visitor Name</FormLabel>
+             <Popover open={isVisitorPopoverOpen} onOpenChange={setVisitorPopoverOpen}>
+                  <PopoverTrigger asChild>
+                      <FormControl>
+                          <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                              "w-full justify-between",
+                              !field.value && "text-muted-foreground"
+                          )}
+                          >
+                          {field.value
+                              ? visitors.find(
+                                  (visitor) => visitor.name === field.value
+                              )?.name
+                              : "Select visitor"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                      </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                          <CommandInput placeholder="Search visitors..." />
+                          <CommandList>
+                          <CommandEmpty>No visitors found.</CommandEmpty>
+                          <CommandGroup>
+                              {visitors.map((visitor) => (
+                              <CommandItem
+                                  value={visitor.name}
+                                  key={visitor.id}
+                                  onSelect={() => {
+                                  form.setValue("name", visitor.name);
+                                  setVisitorPopoverOpen(false);
+                                  }}
+                              >
+                                  <Check
+                                  className={cn(
+                                      "mr-2 h-4 w-4",
+                                      visitor.name === field.value
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                  />
+                                  {visitor.name}
+                              </CommandItem>
+                              ))}
+                          </CommandGroup>
+                          </CommandList>
+                      </Command>
+                  </PopoverContent>
+              </Popover>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      
+       <FormField
+          control={form.control}
+          name="reason"
+          render={({ field }) => (
+              <FormItem>
+                  <FormLabel>Reason for Block</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                          <SelectTrigger>
+                              <SelectValue placeholder="Select a reason" />
+                          </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                          {predefinedReasons.map(reason => (
+                              <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
                   <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-             <FormField
-                control={form.control}
-                name="reason"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Reason for Block</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a reason" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {predefinedReasons.map(reason => (
-                                    <SelectItem key={reason} value={reason}>{reason}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
+              </FormItem>
+          )}
+      />
 
-            {form.watch('reason') === 'Other' && (
-                 <FormField
-                    control={form.control}
-                    name="customReason"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Custom Reason</FormLabel>
-                        <FormControl>
-                            <Textarea placeholder="Explain the specific reason..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                />
-            )}
+      {form.watch('reason') === 'Other' && (
+        <TextField control={form.control} name="customReason" label="Custom Reason" placeholder="Explain the specific reason..." multiline />
+      )}
 
-            <FormField
-              control={form.control}
-              name="isPermanent"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                  <div className="space-y-0.5">
-                    <FormLabel>Permanent Block</FormLabel>
-                     <FormMessage />
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+      <FormField
+        control={form.control}
+        name="isPermanent"
+        render={({ field }) => (
+          <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+            <div className="space-y-0.5">
+              <FormLabel>Permanent Block</FormLabel>
+               <FormMessage />
+            </div>
+            <FormControl>
+              <Switch
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
 
-            {!form.watch('isPermanent') && (
-                 <FormField
-                    control={form.control}
-                    name="expiryDate"
-                    render={({ field }) => (
-                        <FormItem className="flex flex-col">
-                        <FormLabel>Expiry Date</FormLabel>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                            <FormControl>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-full pl-3 text-left font-normal",
-                                    !field.value && "text-muted-foreground"
-                                )}
-                                >
-                                {field.value ? (
-                                    format(field.value, "PPP")
-                                ) : (
-                                    <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                            </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                                mode="single"
-                                selected={field.value || undefined}
-                                onSelect={field.onChange}
-                                disabled={(date) =>
-                                  date < new Date()
-                                }
-                                initialFocus
-                            />
-                            </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                />
-            )}
-            
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Save Changes</Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+      {!form.watch('isPermanent') && (
+        <DateField control={form.control} name="expiryDate" label="Expiry Date" disabled={(date) => date < new Date()} />
+      )}
+    </FormDialog>
   );
 }

@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { format } from 'date-fns';
+import { Target } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import { DateField } from '@/components/dashboard/date-field';
+import { TextField } from '@/components/dashboard/text-field';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,24 +17,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { Form } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { router } from '@inertiajs/react';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { CalendarIcon, Target, Image as ImageIcon } from 'lucide-react';
-import { Calendar } from '../ui/calendar';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { Textarea } from '../ui/textarea';
 
 const formSchema = z
   .object({
@@ -137,192 +126,51 @@ export function CreateFundraiserForm({ children, open, onOpenChange }: CreateFun
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Campaign Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. New Playground & Recreation Equipment" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <TextField control={form.control} name="title" label="Campaign Title" placeholder="e.g. New Playground & Recreation Equipment" />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="beneficiary"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Beneficiary / Fund</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Park Development Committee" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="goal"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Donation Target Goal (JMD)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="150000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <TextField control={form.control} name="beneficiary" label="Beneficiary / Fund" placeholder="e.g. Park Development Committee" />
+              <TextField control={form.control} name="goal" label="Donation Target Goal (JMD)" type="number" placeholder="150000" />
             </div>
 
-            <FormField
+            <TextField
               control={form.control}
               name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Campaign Purpose & Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      rows={3}
-                      placeholder="Detail why this campaign is important to our community, expected costs, and contractor timelines..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Campaign Purpose & Description"
+              placeholder="Detail why this campaign is important to our community, expected costs, and contractor timelines..."
+              multiline={3}
             />
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>Start Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={'outline'}
-                            className={cn(
-                              'pl-3 text-left font-normal',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value ? format(field.value, 'PPP') : <span>Pick start date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="endDate"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>End Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={'outline'}
-                            className={cn(
-                              'pl-3 text-left font-normal',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value ? format(field.value, 'PPP') : <span>Pick end date</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <DateField control={form.control} name="startDate" label="Start Date" placeholder="Pick start date" />
+              <DateField control={form.control} name="endDate" label="End Date" placeholder="Pick end date" />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
+              <TextField
                 control={form.control}
                 name="matchingSponsor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>1:1 Matching Sponsor (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Apex Construction Foundation" {...field} />
-                    </FormControl>
-                    <FormDescription className="text-[11px]">
-                      Sponsor matching resident gifts dollar-for-dollar.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="1:1 Matching Sponsor (Optional)"
+                placeholder="e.g. Apex Construction Foundation"
+                description="Sponsor matching resident gifts dollar-for-dollar."
+                descriptionClassName="text-[11px]"
               />
-
-              <FormField
+              <TextField
                 control={form.control}
                 name="coverImageUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cover Photo URL (Optional)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://images.unsplash.com/..." {...field} />
-                    </FormControl>
-                    <FormDescription className="text-[11px]">
-                      Hero picture featured on campaign cards.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                label="Cover Photo URL (Optional)"
+                placeholder="https://images.unsplash.com/..."
+                description="Hero picture featured on campaign cards."
+                descriptionClassName="text-[11px]"
               />
             </div>
 
-            <FormField
+            <TextField
               control={form.control}
               name="images"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Gallery Image URLs (Optional)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      rows={2}
-                      placeholder="Enter one image URL per line for the campaign photo gallery..."
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+              label="Gallery Image URLs (Optional)"
+              placeholder="Enter one image URL per line for the campaign photo gallery..."
+              multiline={2}
             />
 
             <DialogFooter className="pt-2">

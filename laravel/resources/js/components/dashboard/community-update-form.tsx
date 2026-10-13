@@ -1,36 +1,11 @@
-
-
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { DateField } from '@/components/dashboard/date-field';
+import { FormDialog } from '@/components/dashboard/form-dialog';
+import { TextField } from '@/components/dashboard/text-field';
 import { useToast } from '@/hooks/use-toast';
 import type { CommunityUpdate } from '@/types';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { CalendarIcon } from 'lucide-react';
-import { Calendar } from '../ui/calendar';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 const formSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters.'),
@@ -54,20 +29,7 @@ type CommunityUpdateFormProps = {
 
 export function CommunityUpdateForm({ children, open, onOpenChange, onSave, update }: CommunityUpdateFormProps) {
   const { toast } = useToast();
-  
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-  });
-
-  useEffect(() => {
-    if (open) {
-      if (update) {
-        form.reset(update);
-      } else {
-        form.reset({ title: '', summary: '', date: new Date() });
-      }
-    }
-  }, [open, update, form]);
+  const form = useForm<FormValues>({ resolver: zodResolver(formSchema) });
 
   async function onSubmit(values: FormValues) {
     try {
@@ -89,95 +51,29 @@ export function CommunityUpdateForm({ children, open, onOpenChange, onSave, upda
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>{update ? 'Edit' : 'Add'} Community Update</DialogTitle>
-              <DialogDescription>
-                Provide a summary for a past meeting or activity.
-              </DialogDescription>
-            </DialogHeader>
-
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Q2 2024 HOA Board Meeting" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                    <FormLabel>Date of Meeting/Activity</FormLabel>
-                    <Popover>
-                        <PopoverTrigger asChild>
-                        <FormControl>
-                            <Button
-                            variant={"outline"}
-                            className={cn(
-                                "w-full pl-3 text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                            )}
-                            >
-                            {field.value ? (
-                                format(field.value, "PPP")
-                            ) : (
-                                <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                            </Button>
-                        </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            disabled={(date) => date > new Date()}
-                            initialFocus
-                        />
-                        </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                    </FormItem>
-                )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="summary"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Summary</FormLabel>
-                  <FormControl>
-                    <Textarea rows={6} placeholder="Write a concise summary of the key points and decisions..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Save Update'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      trigger={children}
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={onSubmit}
+      record={update}
+      resetValues={() => update ?? { title: '', summary: '', date: new Date() }}
+      title={`${update ? 'Edit' : 'Add'} Community Update`}
+      description="Provide a summary for a past meeting or activity."
+      submitLabel="Save Update"
+      submittingLabel="Saving…"
+      contentClassName="sm:max-w-lg"
+    >
+      <TextField control={form.control} name="title" label="Title" placeholder="e.g., Q2 2024 HOA Board Meeting" />
+      <DateField control={form.control} name="date" label="Date of Meeting/Activity" disabled={(date) => date > new Date()} />
+      <TextField
+        control={form.control}
+        name="summary"
+        label="Summary"
+        placeholder="Write a concise summary of the key points and decisions..."
+        multiline={6}
+      />
+    </FormDialog>
   );
 }

@@ -1,29 +1,8 @@
-
-
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { FormDialog } from '@/components/dashboard/form-dialog';
+import { TextField } from '@/components/dashboard/text-field';
 import { useToast } from '@/hooks/use-toast';
 import type { Guideline } from '@/types';
 
@@ -49,20 +28,7 @@ type GuidelineFormProps = {
 
 export function GuidelineForm({ children, open, onOpenChange, onSave, guideline }: GuidelineFormProps) {
   const { toast } = useToast();
-  
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-  });
-
-  useEffect(() => {
-    if (open) {
-      if (guideline) {
-        form.reset(guideline);
-      } else {
-        form.reset({ category: '', title: '', description: '' });
-      }
-    }
-  }, [open, guideline, form]);
+  const form = useForm<FormValues>({ resolver: zodResolver(formSchema) });
 
   async function onSubmit(values: FormValues) {
     try {
@@ -84,69 +50,22 @@ export function GuidelineForm({ children, open, onOpenChange, onSave, guideline 
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <DialogHeader>
-              <DialogTitle>{guideline ? 'Edit' : 'Add'} Guideline</DialogTitle>
-              <DialogDescription>
-                Fill in the details for the community guideline.
-              </DialogDescription>
-            </DialogHeader>
-
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., General Conduct" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Noise Levels" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea placeholder="Explain the rule in detail..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving…' : 'Save Guideline'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+    <FormDialog
+      trigger={children}
+      open={open}
+      onOpenChange={onOpenChange}
+      form={form}
+      onSubmit={onSubmit}
+      record={guideline}
+      resetValues={() => guideline ?? { category: '', title: '', description: '' }}
+      title={`${guideline ? 'Edit' : 'Add'} Guideline`}
+      description="Fill in the details for the community guideline."
+      submitLabel="Save Guideline"
+      submittingLabel="Saving…"
+    >
+      <TextField control={form.control} name="category" label="Category" placeholder="e.g., General Conduct" />
+      <TextField control={form.control} name="title" label="Title" placeholder="e.g., Noise Levels" />
+      <TextField control={form.control} name="description" label="Description" placeholder="Explain the rule in detail..." multiline />
+    </FormDialog>
   );
 }

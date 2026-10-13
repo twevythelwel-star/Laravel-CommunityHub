@@ -86,7 +86,7 @@ export default function GuidelinesPage({ guidelines: groupedGuidelines, canManag
              {canManage && (
                 <GuidelineForm
                     open={isFormOpen}
-                    onOpenChange={handleCloseForm}
+                    onOpenChange={(open) => (open ? handleOpenForm() : handleCloseForm())}
                     onSave={handleSave}
                     guideline={selectedGuideline}
                 >
