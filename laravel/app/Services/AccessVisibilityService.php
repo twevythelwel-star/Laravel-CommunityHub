@@ -9,6 +9,7 @@ use App\Models\GatePass;
 use App\Models\Property;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Services\Occupancy\OccupancyCategoryResolver;
 use Illuminate\Database\Eloquent\Builder;
 
 class AccessVisibilityService
@@ -524,7 +525,7 @@ class AccessVisibilityService
      */
     private function unitSpellings(array $properties): array
     {
-        $occupancy = app(PropertyOccupancyService::class);
+        $occupancy = app(OccupancyCategoryResolver::class);
         $spellings = [];
 
         foreach ($properties as $prop) {
@@ -546,7 +547,7 @@ class AccessVisibilityService
      */
     private function matchesAnyProperty(string $target, array $userProperties): bool
     {
-        $occupancy = app(PropertyOccupancyService::class);
+        $occupancy = app(OccupancyCategoryResolver::class);
         $wanted = strtolower((string) $occupancy->normalizeUnit($target));
 
         foreach ($userProperties as $prop) {

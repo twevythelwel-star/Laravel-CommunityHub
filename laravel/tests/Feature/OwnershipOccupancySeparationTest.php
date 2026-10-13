@@ -13,7 +13,7 @@ use App\Models\Property;
 use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyHierarchyBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -192,7 +192,7 @@ class OwnershipOccupancySeparationTest extends TestCase
             'status' => 'occupied',
         ]);
 
-        $service = app(PropertyOccupancyService::class);
+        $service = app(OccupancyHierarchyBuilder::class);
 
         // 1. Drilldown Endpoint Test
         $drilldown = $service->getUnitDrilldown('Unit 14');

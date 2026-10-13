@@ -11,7 +11,7 @@ use App\Models\GatePass;
 use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyHierarchyBuilder;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -302,7 +302,7 @@ class CommunityAccessCommandCenterTest extends TestCase
     public function test_community_hierarchy_maps_properties_spatially(): void
     {
         $guard = User::factory()->create(['role' => UserRole::Security]);
-        $service = app(PropertyOccupancyService::class);
+        $service = app(OccupancyHierarchyBuilder::class);
 
         $hierarchy = $service->getCommunityHierarchy();
         $this->assertArrayHasKey('properties', $hierarchy);

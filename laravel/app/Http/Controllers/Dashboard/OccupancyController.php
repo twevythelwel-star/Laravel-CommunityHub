@@ -6,7 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\MusterSession;
 use App\Models\User;
 use App\Services\EmergencyMusterService;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyCategoryResolver;
+use App\Services\Occupancy\OccupancyCensusQueryService;
+use App\Services\Occupancy\OccupancyHierarchyBuilder;
+use App\Services\Occupancy\OccupancyMetricsService;
 use App\Support\Csv;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -30,7 +33,10 @@ use Inertia\Response as InertiaResponse;
 class OccupancyController extends Controller
 {
     public function __construct(
-        private readonly PropertyOccupancyService $occupancyService,
+        private readonly OccupancyCategoryResolver $categories,
+        private readonly OccupancyCensusQueryService $census,
+        private readonly OccupancyHierarchyBuilder $hierarchy,
+        private readonly OccupancyMetricsService $metrics,
         private readonly EmergencyMusterService $musterService,
     ) {}
 
@@ -52,20 +58,20 @@ class OccupancyController extends Controller
             ? ($request->string('unit')->trim()->toString() ?: null)
             : $ownUnit;
 
-        $communitySummary = $this->occupancyService->getSummary();
-        $expectedSummary = $this->occupancyService->getExpectedTodaySummary();
-        $unitSummary = $selectedUnit ? $this->occupancyService->getSummary($selectedUnit) : null;
-        $unitExpectedSummary = $selectedUnit ? $this->occupancyService->getExpectedTodaySummary($selectedUnit) : null;
+        $communitySummary = $this->metrics->getSummary();
+        $expectedSummary = $this->metrics->getExpectedTodaySummary();
+        $unitSummary = $selectedUnit ? $this->metrics->getSummary($selectedUnit) : null;
+        $unitExpectedSummary = $selectedUnit ? $this->metrics->getExpectedTodaySummary($selectedUnit) : null;
 
         $units = $isStaff
-            ? $this->occupancyService->getUnitsSummary()
+            ? $this->metrics->getUnitsSummary()
             : [];
 
-        $communityHierarchy = $this->occupancyService->getCommunityHierarchy($isStaff ? null : $ownUnit);
+        $communityHierarchy = $this->hierarchy->getCommunityHierarchy($isStaff ? null : $ownUnit);
 
         // No unit of their own means nothing to list, not the whole estate.
         $occupantsCollection = ($isStaff || $selectedUnit)
-            ? $this->occupancyService->getAllCurrentOccupants(
+            ? $this->census->getAllCurrentOccupants(
                 unitFilter: $selectedUnit,
                 categoryFilter: $selectedCategory,
                 search: $search
@@ -73,7 +79,7 @@ class OccupancyController extends Controller
             : collect();
 
         $expectedCollection = ($isStaff || $selectedUnit)
-            ? $this->occupancyService->getAllExpectedToday(
+            ? $this->census->getAllExpectedToday(
                 unitFilter: $selectedUnit,
                 categoryFilter: $selectedCategory,
                 search: $search
@@ -145,7 +151,7 @@ class OccupancyController extends Controller
             'canManage' => $isStaff,
             'userUnit' => $ownUnit,
             'activeMuster' => $musterData,
-            'enclosureZones' => $isStaff ? $this->occupancyService->getEnclosureZonesSummary() : [],
+            'enclosureZones' => $isStaff ? $this->metrics->getEnclosureZonesSummary() : [],
             'lastUpdated' => now()->toIso8601String(),
         ]);
     }
@@ -164,7 +170,7 @@ class OccupancyController extends Controller
             'You can only see who is at your own unit.',
         );
 
-        $drilldown = $this->occupancyService->getUnitDrilldown($unit);
+        $drilldown = $this->hierarchy->getUnitDrilldown($unit);
 
         return response()->json([
             'success' => true,
@@ -197,7 +203,7 @@ class OccupancyController extends Controller
             return response()->json(['success' => true, 'hierarchy' => []]);
         }
 
-        $hierarchy = $this->occupancyService->getCommunityHierarchy($isStaff ? null : $ownUnit);
+        $hierarchy = $this->hierarchy->getCommunityHierarchy($isStaff ? null : $ownUnit);
 
         return response()->json([
             'success' => true,
@@ -355,7 +361,7 @@ class OccupancyController extends Controller
     {
         abort_unless($this->isStaff($request->user()), 403, 'Only security and administration can export the occupancy roster.');
 
-        $occupants = $this->occupancyService->getAllCurrentOccupants();
+        $occupants = $this->census->getAllCurrentOccupants();
 
         $csv = "Unit,Name,Category,Role,CheckIn_Time,Gate,Host_Resident,Vehicle,Contact,Pass_ID\n";
 
@@ -392,11 +398,11 @@ class OccupancyController extends Controller
     /** The caller's own unit, normalised as the occupancy service does ("Lot 14" -> "Unit 14"). */
     private function ownUnit(User $user): ?string
     {
-        return $this->occupancyService->normalizeUnit($user->lot);
+        return $this->categories->normalizeUnit($user->lot);
     }
 
     private function sameUnit(?string $a, string $b): bool
     {
-        return strcasecmp((string) $this->occupancyService->normalizeUnit($a), $b) === 0;
+        return strcasecmp((string) $this->categories->normalizeUnit($a), $b) === 0;
     }
 }

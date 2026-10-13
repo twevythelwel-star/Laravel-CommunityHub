@@ -9,7 +9,7 @@ use App\Models\GatePass;
 use App\Models\MusterRollCall;
 use App\Models\MusterSession;
 use App\Models\User;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyCensusQueryService;
 use App\Support\Csv;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
@@ -62,7 +62,7 @@ class MusterSafetyTest extends TestCase
         $this->checkedIn('Gone Visitor', PassCategory::Visitor, 'Unit 14', now()->subDays(3));
         $this->checkedIn('Long-Stay Resident', PassCategory::Homeowner, 'Unit 14', now()->subDays(30));
 
-        $inside = app(PropertyOccupancyService::class)->getAllCurrentOccupants()->pluck('name')->sort()->values()->all();
+        $inside = app(OccupancyCensusQueryService::class)->getAllCurrentOccupants()->pluck('name')->sort()->values()->all();
         $this->assertSame(['Fresh Visitor', 'Long-Stay Resident'], $inside, 'residents are never stale');
 
         $this->startMuster()->assertOk();

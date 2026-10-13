@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MusterRollCall;
 use App\Models\MusterSession;
 use App\Models\User;
+use App\Services\Occupancy\OccupancyCensusQueryService;
 use App\Support\Csv;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 class EmergencyMusterService
 {
     public function __construct(
-        private readonly PropertyOccupancyService $occupancyService,
+        private readonly OccupancyCensusQueryService $census,
     ) {}
 
     /**
@@ -61,7 +62,7 @@ class EmergencyMusterService
 
             // Everyone checked in. A stale check-in is listed as unverified, not
             // missing: they have probably left, but cannot be ruled out.
-            foreach ($this->occupancyService->getAllCurrentOccupants(includeStale: true) as $occupant) {
+            foreach ($this->census->getAllCurrentOccupants(includeStale: true) as $occupant) {
                 MusterRollCall::create($this->rollCallRow($session, $occupant) + [
                     'status' => ($occupant['stale'] ?? false) ? 'unverified' : 'missing',
                 ]);
@@ -97,7 +98,7 @@ class EmergencyMusterService
         if (! $record) {
             // Someone who arrived after the muster started. Only a real
             // occupant: any other id used to become a nameless "Occupant" row.
-            $match = $this->occupancyService->getAllCurrentOccupants(includeStale: true)->firstWhere('id', $occupantId);
+            $match = $this->census->getAllCurrentOccupants(includeStale: true)->firstWhere('id', $occupantId);
             if (! $match) {
                 throw new DomainException('That person is not on the property roll.');
             }

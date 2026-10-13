@@ -15,7 +15,7 @@ use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyHierarchyBuilder;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -313,7 +313,7 @@ class LiveWhosOnPropertyTest extends TestCase
         $engine = app(GatePassEngine::class);
         $pass = $engine->issueGuestPass($visitor, $homeowner);
         $scanner = app(GateScanner::class);
-        $occupancyService = app(PropertyOccupancyService::class);
+        $occupancyService = app(OccupancyHierarchyBuilder::class);
 
         // Before scan: 0 inside Unit 14
         $beforeDrilldown = $occupancyService->getUnitDrilldown('Unit 14');
@@ -412,7 +412,7 @@ class LiveWhosOnPropertyTest extends TestCase
             'checked_in_at' => now()->subHours(2),
         ]);
 
-        $occupancyService = app(PropertyOccupancyService::class);
+        $occupancyService = app(OccupancyHierarchyBuilder::class);
         $drilldown = $occupancyService->getUnitDrilldown('Unit 14');
 
         // Total physical humans present inside Unit 14 = 2 (Mary Brown, Sarah Smith)

@@ -7,7 +7,8 @@ use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Models\GatePass;
 use App\Models\User;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyCategoryResolver;
+use App\Services\Occupancy\OccupancyCensusQueryService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -108,11 +109,11 @@ class OccupancyAccessTest extends TestCase
     public function test_a_unit_filter_matches_that_unit_exactly(): void
     {
         // It was a substring match: "Unit 1" also returned Unit 14.
-        $names = app(PropertyOccupancyService::class)->getAllCurrentOccupants(unitFilter: 'Unit 1')->pluck('name')->all();
+        $names = app(OccupancyCensusQueryService::class)->getAllCurrentOccupants(unitFilter: 'Unit 1')->pluck('name')->all();
 
         $this->assertSame(['Ana Own-Home'], $names);
 
-        $service = app(PropertyOccupancyService::class);
+        $service = app(OccupancyCategoryResolver::class);
         foreach (['Unit 14', 'Lot 14', '#14', '14', '14, Royal Palm Way'] as $label) {
             $this->assertSame('Unit 14', $service->normalizeUnit($label), $label);
         }

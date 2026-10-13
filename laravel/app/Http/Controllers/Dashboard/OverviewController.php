@@ -16,7 +16,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GeofenceService;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyMetricsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -264,7 +264,7 @@ class OverviewController extends Controller
      */
     private function occupancyStats(): array
     {
-        $summary = app(PropertyOccupancyService::class)->getDualSummary();
+        $summary = app(OccupancyMetricsService::class)->getDualSummary();
 
         $card = fn (array $counts): array => [
             'total' => $counts['total'],

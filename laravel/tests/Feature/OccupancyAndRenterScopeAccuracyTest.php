@@ -12,7 +12,8 @@ use App\Models\Renter;
 use App\Models\User;
 use App\Services\DigitalAccessWalletService;
 use App\Services\HouseholdManagementService;
-use App\Services\PropertyOccupancyService;
+use App\Services\Occupancy\OccupancyCensusQueryService;
+use App\Services\Occupancy\OccupancyHierarchyBuilder;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -30,7 +31,7 @@ class OccupancyAndRenterScopeAccuracyTest extends TestCase
 
     private function hierarchy(): array
     {
-        return app(PropertyOccupancyService::class)->getCommunityHierarchy();
+        return app(OccupancyHierarchyBuilder::class)->getCommunityHierarchy();
     }
 
     private function checkedIn(User $holder, ?string $property = null): GatePass
@@ -107,8 +108,8 @@ class OccupancyAndRenterScopeAccuracyTest extends TestCase
 
         $units = collect($this->hierarchy()['properties'])->keyBy('unit');
 
-        $this->assertEqualsCanonicalizing([PropertyOccupancyService::ESTATE_OPERATIONS, 'Unit 101'], $units->keys()->all());
-        $this->assertSame(2, $units[PropertyOccupancyService::ESTATE_OPERATIONS]['insideCount']);
+        $this->assertEqualsCanonicalizing([OccupancyCensusQueryService::ESTATE_OPERATIONS, 'Unit 101'], $units->keys()->all());
+        $this->assertSame(2, $units[OccupancyCensusQueryService::ESTATE_OPERATIONS]['insideCount']);
         $this->assertSame(1, $units['Unit 101']['insideCount']);
     }
 
@@ -132,7 +133,7 @@ class OccupancyAndRenterScopeAccuracyTest extends TestCase
         $owner = User::factory()->role(UserRole::Homeowner)->create(['lot' => 'Lot 42']);
         Renter::create(['homeowner_id' => $owner->id, 'name' => 'Lease Tenant', 'status' => 'Active', 'lease_start' => '2026-10-01', 'lease_end' => '2027-03-31']);
 
-        $expected = app(PropertyOccupancyService::class)->getAllExpectedToday()->firstWhere('name', 'Lease Tenant');
+        $expected = app(OccupancyCensusQueryService::class)->getAllExpectedToday()->firstWhere('name', 'Lease Tenant');
 
         // It defaulted to "Unit 14".
         $this->assertSame('Unit 42', $expected['unit']);

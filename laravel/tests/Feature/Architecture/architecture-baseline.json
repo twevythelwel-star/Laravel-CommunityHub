@@ -229,7 +229,6 @@
         "HouseholdManagementService.php": true,
         "NotificationTargetingService.php": true,
         "ParkingPassService.php": true,
-        "PropertyOccupancyService.php": true,
         "PropertyOwnershipService.php": true,
         "QrCodePng.php": true,
         "SmsService.php": true,
