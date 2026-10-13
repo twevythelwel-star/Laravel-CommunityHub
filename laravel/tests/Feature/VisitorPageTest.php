@@ -477,4 +477,42 @@ class VisitorPageTest extends TestCase
         $this->assertDatabaseHas('visitors', ['name' => 'Allowed Person']);
         $this->assertDatabaseMissing('visitors', ['name' => 'Blocked Person']);
     }
+
+    public function test_visitors_page_renders_dialog_state_props_for_homeowner(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($resident)
+            ->get('/dashboard/visitors')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dashboard/Visitors')
+                ->has('visitors')
+                ->has('filters')
+                ->has('tabCounts')
+                ->has('securityStats')
+                ->has('hostProperties')
+                ->where('canRegister', true)
+                ->where('canManage', false)
+                ->where('graceHours', 12)
+            );
+    }
+
+    public function test_visitors_page_renders_security_scanner_props_for_staff(): void
+    {
+        $guard = User::factory()->role(UserRole::Security)->create();
+
+        $this->actingAs($guard)
+            ->get('/dashboard/visitors')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dashboard/Visitors')
+                ->has('visitors')
+                ->has('filters')
+                ->has('tabCounts')
+                ->has('securityStats')
+                ->where('canManage', true)
+            );
+    }
 }
+

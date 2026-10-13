@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import DashboardLayout from '@/Layouts/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { ProfileCustomQRCode } from '@/components/dashboard/ProfileCustomQRCode';
-import type { PassCategory } from '@/lib/gate-pass-engine/types';
 import { isWebNfcSupported, nfcErrorMessage, writeNfcText } from '@/lib/web-nfc';
 import {
   Wallet,
@@ -17,106 +14,30 @@ import {
   Smartphone,
   ShieldCheck,
   ShieldAlert,
-  Clock,
-  Sparkles,
   Share2,
-  Download,
-  Copy,
   CheckCircle2,
-  AlertCircle,
-  ExternalLink,
-  Users,
-  ChevronRight,
   Radio,
-  Lock,
-  Unlock,
-  KeyRound,
-  RefreshCw,
-  PhoneCall,
-  Calendar,
-  Layers,
-  Check
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import axios from 'axios';
 
-type WalletCredential = {
-  id: number;
-  pass_id: string;
-  holder_name: string;
-  relationship_label: string;
-  role_in_household: string;
-  category: string;
-  category_label: string;
-  shape: string;
-  variant: {
-    id: string;
-    label: string;
-    colors: {
-      background: string;
-      foreground: string;
-      accent: string;
-      border: string;
-    };
-  };
-  property: string;
-  status: string;
-  status_label: string;
-  is_active: boolean;
-  offline_pin: string;
-  qr: {
-    token: string | null;
-    valid_until: string | null;
-    seconds_remaining: number;
-    envelope_prefix: string;
-    standard: string;
-  };
-  nfc: {
-    card_uid: string;
-    payload: string;
-    protocol: string;
-    frequency: string;
-    status: string;
-    ndef_mime: string;
-  };
-  wallet_integrations: {
-    apple_wallet: {
-      available: boolean;
-      file_name: string;
-      download_url: string;
-      badge_label: string;
-    };
-    google_wallet: {
-      available: boolean;
-      save_url: string;
-      badge_label: string;
-    };
-  };
-  schedule?: {
-    curfew_enabled?: boolean;
-    curfew_hours?: string;
-    days?: string[];
-    hours?: string;
-    valid_until?: string;
-  } | null;
-  permissions?: string[];
-  designated_gate: string;
-  expiry_date: string;
-};
+import type { WalletCredential, RevokedCredential } from '@/components/dashboard/wallet/types';
+import { 
+  WalletPassRoster, 
+  WalletQrPresentation, 
+  WalletCardFooter 
+} from '@/components/dashboard/wallet/wallet-pass-display';
+import { 
+  WalletMobileWalletsTab, 
+  WalletIncidentBanner, 
+  ShareMemberPassDialog, 
+  ReportLostDialog 
+} from '@/components/dashboard/wallet/wallet-provisioning';
+import { 
+  WalletNfcTab, 
+  WalletRevocationHistory 
+} from '@/components/dashboard/wallet/wallet-device-status';
 
-type RevokedCredential = {
-  id: number;
-  pass_id: string;
-  holder_name: string;
-  category: string;
-  category_label: string;
-  property: string;
-  status: string;
-  revoked_at?: string;
-  revoked_at_formatted?: string;
-  revocation_reason?: string;
-  offline_pin?: string;
-};
+export type { WalletCredential, RevokedCredential };
 
 type Props = {
   credentials: WalletCredential[];
@@ -127,8 +48,8 @@ type Props = {
     property_number: string;
     members_count: number;
   } | null;
-  gates: Array<{ id: string; name: string }>;
-  user: {
+  gates?: Array<{ id: string; name: string }>;
+  user?: {
     id: number;
     name: string;
     role: string;
@@ -140,8 +61,6 @@ export default function DigitalAccessWalletPage({
   credentials = [],
   revokedHistory = [],
   household,
-  gates = [],
-  user,
 }: Props) {
   const { toast } = useToast();
   const [credentialsList, setCredentialsList] = useState<WalletCredential[]>(credentials);
@@ -174,14 +93,13 @@ export default function DigitalAccessWalletPage({
     return credentialsList.find((c) => c.pass_id === selectedPassId) || credentialsList[0];
   }, [credentialsList, selectedPassId]);
 
-  // Web NFC (Chrome on Android) can write a keycard; stop any pending write on leave.
+  // Web NFC support
   useEffect(() => {
     setWebNfcSupported(isWebNfcSupported());
-
     return () => nfcWriteAbortRef.current?.abort();
   }, []);
 
-  // A keycard written for one pass says nothing about the next one selected.
+  // Invalidate pending write on pass change
   useEffect(() => {
     nfcWriteAbortRef.current?.abort();
     setNfcWrittenFor(null);
@@ -195,7 +113,6 @@ export default function DigitalAccessWalletPage({
     const interval = setInterval(() => {
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
-          // Token refresh
           return 30;
         }
         return prev - 1;
@@ -227,18 +144,18 @@ export default function DigitalAccessWalletPage({
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-      osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.1); // A5
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+      osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.1);
       gain.gain.setValueAtTime(0.2, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
       osc.start();
       osc.stop(ctx.currentTime + 0.35);
     } catch {
-      // Audio not permitted or supported
+      // Audio not permitted
     }
   }, []);
 
-  // Write this pass's signed NFC code onto a keycard or fob held to the phone.
+  // Write this pass's signed NFC code onto a keycard or fob
   const handleWriteNfcKeycard = async () => {
     if (!currentPass?.is_active) return;
 
@@ -266,7 +183,7 @@ export default function DigitalAccessWalletPage({
     }
   };
 
-  // Fetches the signed "Save to Google Wallet" link and hands over to Google.
+  // Google Wallet handover
   const handleOpenGoogleWallet = async () => {
     if (!currentPass) return;
     try {
@@ -281,8 +198,7 @@ export default function DigitalAccessWalletPage({
     }
   };
 
-  // One-Button Lost / Stolen Credential Protocol:
-  // Immediately revokes old pass (killing all screenshots & NFC cards) and issues fresh replacement credential.
+  // One-Button Lost / Stolen Credential Protocol
   const handleReportLost = async (passIdToRevoke?: string) => {
     const targetPassId = passIdToRevoke || currentPass?.pass_id;
     if (!targetPassId) return;
@@ -296,13 +212,11 @@ export default function DigitalAccessWalletPage({
 
       const { revoked_pass, replacement_pass, message } = res.data;
 
-      // 1. Immediately replace in active credentials list
       setCredentialsList((prev) => {
         const filtered = prev.filter((p) => p.pass_id !== revoked_pass.pass_id);
         return [replacement_pass, ...filtered];
       });
 
-      // 2. Append to revoked history list
       setRevokedList((prev) => [
         {
           id: revoked_pass.id || Date.now(),
@@ -320,10 +234,8 @@ export default function DigitalAccessWalletPage({
         ...prev,
       ]);
 
-      // 3. Immediately select new replacement pass
       setSelectedPassId(replacement_pass.pass_id);
 
-      // 4. Record incident for prominent warning banner
       setLastIncident({
         revoked_pass_id: revoked_pass.pass_id,
         replacement_pass_id: replacement_pass.pass_id,
@@ -413,159 +325,22 @@ export default function DigitalAccessWalletPage({
         {/* Main Grid: Stacked Wallet Cards (Left) & Credential Presentation (Right) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Interactive Wallet Card Stack */}
-          <div className="lg:col-span-4 space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-primary" />
-                Active Pass Roster ({credentials.length})
-              </span>
-              {household && (
-                <span className="text-xs text-muted-foreground font-mono">
-                  {household.name} • {household.property_number}
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {credentials.map((cred, idx) => {
-                const isSelected = cred.pass_id === currentPass.pass_id;
-                const isCurfew = cred.schedule?.curfew_enabled;
-                const isCaregiver = cred.role_in_household === 'caregiver';
-
-                return (
-                  <div
-                    key={cred.pass_id}
-                    onClick={() => setSelectedPassId(cred.pass_id)}
-                    className={cn(
-                      "relative p-4 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden",
-                      isSelected
-                        ? "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-amber-500/60 shadow-xl shadow-amber-500/5 ring-1 ring-amber-500/40 translate-x-1"
-                        : "bg-card/60 hover:bg-card border-border/70 hover:border-border opacity-85 hover:opacity-100 hover:translate-x-0.5"
-                    )}
-                  >
-                    {/* Metallic highlight ribbon */}
-                    <div
-                      className="absolute top-0 left-0 right-0 h-1"
-                      style={{
-                        background: isSelected
-                          ? 'linear-gradient(90deg, #F59E0B, #10B981, #6366F1)'
-                          : 'transparent',
-                      }}
-                    />
-
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-foreground text-base tracking-tight">
-                            {cred.holder_name}
-                          </span>
-                          {isSelected && (
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                          <span className="font-semibold text-primary/90">{cred.relationship_label}</span>
-                          <span>•</span>
-                          <span className="font-mono text-[11px]">{cred.property}</span>
-                        </p>
-                      </div>
-
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-[10px] uppercase font-mono px-2 py-0.5 border font-semibold",
-                          isSelected
-                            ? "border-amber-400/50 text-amber-300 bg-amber-400/10"
-                            : "border-border text-muted-foreground"
-                        )}
-                      >
-                        {cred.category_label}
-                      </Badge>
-                    </div>
-
-                    {/* Operational constraints tags */}
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-mono text-muted-foreground bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60 flex items-center gap-1">
-                        <KeyRound className="w-3 h-3 text-amber-400" />
-                        {cred.pass_id}
-                      </span>
-
-                      {isCurfew && (
-                        <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Curfew: 6am–9pm
-                        </span>
-                      )}
-
-                      {isCaregiver && cred.schedule?.hours && (
-                        <span className="text-[11px] font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          Mon–Fri Shift
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Quick Household Switcher Notice */}
-            <div className="p-4 rounded-xl border border-dashed border-border/80 bg-muted/20 text-xs text-muted-foreground flex items-start gap-2.5">
-              <Users className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-foreground">Multi-Person Household Wallet</p>
-                <p className="mt-0.5">
-                  Select any family member or caregiver above to view their active QR pass, write to an NFC keycard, or export to Apple/Google Wallet.
-                </p>
-              </div>
-            </div>
-          </div>
+          <WalletPassRoster
+            credentials={credentialsList}
+            currentPass={currentPass}
+            household={household}
+            onSelectPassId={setSelectedPassId}
+          />
 
           {/* Right Column: Multi-Modal Credential Card & Gate Handshake */}
           <div className="lg:col-span-8 space-y-6">
             {/* Real-Time Incident Banner after reporting lost */}
             {lastIncident && (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-red-950/90 via-slate-900 to-amber-950/90 border border-red-500/50 text-white shadow-xl space-y-2 animate-in fade-in duration-300">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400 shrink-0">
-                      <ShieldAlert className="w-5 h-5 animate-pulse" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-red-200 flex items-center gap-2">
-                        Credential #{lastIncident.revoked_pass_id} REVOKED Immediately
-                        <Badge variant="destructive" className="font-mono text-[9px] uppercase px-1.5 py-0 bg-red-600 text-white">
-                          Screenshots Dead
-                        </Badge>
-                      </h4>
-                      <p className="text-xs text-slate-300 mt-0.5">
-                        All prior screenshots, exported passes, and physical NFC clones have been permanently invalidated. New credential <strong className="text-emerald-400 font-mono">#{lastIncident.replacement_pass_id}</strong> is active.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-red-500/20">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => window.open('/dashboard/gate-scanner', '_blank')}
-                    className="h-7 text-xs border-red-400/40 text-red-300 hover:bg-red-500/10 gap-1.5"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Verify Rejection in Gate Scanner Kiosk
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleCopy(lastIncident.revoked_pass_id, 'Revoked Pass ID')}
-                    className="h-7 text-xs text-slate-300 hover:text-white gap-1"
-                  >
-                    {copiedKey === 'Revoked Pass ID' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    Copy Revoked Pass ID ({lastIncident.revoked_pass_id})
-                  </Button>
-                </div>
-              </div>
+              <WalletIncidentBanner
+                lastIncident={lastIncident}
+                copiedKey={copiedKey}
+                onCopy={handleCopy}
+              />
             )}
 
             <Card className="border border-border/80 shadow-2xl bg-card/90 backdrop-blur overflow-hidden">
@@ -656,529 +431,68 @@ export default function DigitalAccessWalletPage({
 
               {/* Tab 1: Dynamic QR Code Presentation */}
               {activeTab === 'qr' && (
-                <CardContent className="p-6 sm:p-8 space-y-6">
-                  <div className="flex flex-col items-center justify-center text-center">
-                    {/* QR Code in its profile bezel */}
-                    <div className="relative p-6 rounded-3xl bg-slate-950/90 border border-border shadow-2xl">
-                      <ProfileCustomQRCode
-                        value={currentPass.qr.token || currentPass.pass_id}
-                        category={currentPass.category as PassCategory}
-                        size={220}
-                      />
-
-                      {/* Rolling Countdown Progress Indicator */}
-                      <div className="mt-4 flex items-center justify-center gap-2 font-mono text-xs text-muted-foreground">
-                        <RefreshCw className={cn("w-3.5 h-3.5 text-emerald-400", secondsRemaining < 6 && "animate-spin text-amber-400")} />
-                        <span>Token rotates in <strong className="text-foreground">{secondsRemaining}s</strong></span>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 max-w-md">
-                      <p className="text-xs text-muted-foreground">
-                        Certified ISO/IEC 18004 Tamper-Evident Anti-Replay Format. Automatically rolls every 30 seconds to prevent unauthorized screenshots or forwarding.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Fallback Offline Gate PIN */}
-                  <div className="p-4 rounded-xl bg-muted/40 border border-border/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
-                        <KeyRound className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-foreground">Offline Gate Keypad PIN</p>
-                        <p className="text-[11px] text-muted-foreground">Use if gate optical scanner is impaired or during cellular outage.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <code className="text-base font-black tracking-widest px-3 py-1 rounded bg-slate-900 text-amber-400 border border-slate-700 font-mono">
-                        {currentPass.offline_pin}
-                      </code>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopy(currentPass.offline_pin, 'PIN')}
-                        className="h-8 w-8 p-0"
-                      >
-                        {copiedKey === 'PIN' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
+                <WalletQrPresentation
+                  currentPass={currentPass}
+                  secondsRemaining={secondsRemaining}
+                  copiedKey={copiedKey}
+                  onCopy={handleCopy}
+                />
               )}
 
               {/* Tab 2: Contactless NFC Tap Presentation */}
               {activeTab === 'nfc' && (
-                <CardContent className="p-6 sm:p-8 space-y-6">
-                  {/* Radar Wave Antenna Animation */}
-                  <div className="relative py-8 flex flex-col items-center justify-center text-center overflow-hidden rounded-2xl bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 border border-slate-800">
-                    {/* Glowing circular waves */}
-                    <div className="absolute w-48 h-48 rounded-full border border-emerald-500/20 animate-ping opacity-40" />
-                    <div className="absolute w-32 h-32 rounded-full border border-emerald-400/30 animate-pulse" />
-
-                    <div className="relative w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-500/20 to-teal-500/30 border-2 border-emerald-400 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
-                      <Nfc className="w-10 h-10 animate-bounce" />
-                    </div>
-
-                    <div className="relative mt-4">
-                      <h3 className="text-lg font-bold text-white tracking-tight">
-                        Tap a Keycard at the Gate
-                      </h3>
-                      <p className="text-xs text-slate-400 max-w-sm mt-1 mx-auto">
-                        Write this pass to an NFC keycard or fob below, then tap it on the gate's reader. Your phone itself can't be tapped from a web page; use the QR code or a wallet pass for that.
-                      </p>
-                    </div>
-
-                    {/* Virtual NFC Card UID */}
-                    <div className="relative mt-5 flex items-center gap-2 bg-slate-900/90 border border-slate-700 px-4 py-2 rounded-xl">
-                      <span className="text-[11px] font-mono text-slate-400 uppercase">Card UID:</span>
-                      <span className="text-sm font-mono font-bold text-emerald-400 tracking-wider">
-                        {currentPass.nfc.card_uid}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleCopy(currentPass.nfc.card_uid, 'NFC UID')}
-                        className="h-7 w-7 p-0 ml-1 text-slate-400 hover:text-white"
-                      >
-                        {copiedKey === 'NFC UID' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Write this pass to an NFC keycard (Web NFC, Chrome on Android) */}
-                  <div className="p-4 rounded-xl bg-slate-900/50 border border-border/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                        <Radio className="w-3.5 h-3.5 text-emerald-400" />
-                        Write to an NFC keycard
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {!webNfcSupported
-                          ? 'Writing keycards needs Chrome on an Android phone with NFC switched on.'
-                          : !currentPass.is_active
-                            ? 'Only an active pass can be written to a keycard.'
-                            : isWritingNfc
-                              ? 'Hold a blank NFC keycard or fob to the back of this phone.'
-                              : `Puts ${currentPass.holder_name}'s signed gate code on a keycard or fob. Reporting the pass lost stops the keycard too.`}
-                      </p>
-                    </div>
-
-                    {webNfcSupported && (
-                      isWritingNfc ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => nfcWriteAbortRef.current?.abort()}
-                          className="font-bold text-xs gap-2 shrink-0"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          Waiting for keycard… Cancel
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={handleWriteNfcKeycard}
-                          disabled={!currentPass.is_active}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 shrink-0"
-                        >
-                          <Nfc className="w-3.5 h-3.5" />
-                          Write keycard
-                        </Button>
-                      )
-                    )}
-                  </div>
-
-                  {nfcWrittenFor === currentPass.pass_id && (
-                    <div className="p-4 rounded-xl border bg-emerald-500/10 border-emerald-500/40 text-emerald-300 animate-in fade-in duration-300">
-                      <div className="flex items-start gap-3">
-                        <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-bold text-sm">Keycard written</span>
-                          <p className="text-xs mt-1 text-slate-300">
-                            Tap it on the gate reader, or hand it to the guard to read with their phone.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Physical Fob / ISO Specs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="p-3 rounded-lg border border-border/70 bg-card/40">
-                      <span className="font-bold text-foreground">Standard & Protocol:</span>
-                      <p className="text-muted-foreground mt-0.5 font-mono text-[11px]">
-                        {currentPass.nfc.protocol}
-                      </p>
-                    </div>
-                    <div className="p-3 rounded-lg border border-border/70 bg-card/40">
-                      <span className="font-bold text-foreground">Hardware Keycards & Fobs:</span>
-                      <p className="text-muted-foreground mt-0.5 text-[11px]">
-                        Physical RFID fobs registered to this UID will authenticate seamlessly at estate barriers.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
+                <WalletNfcTab
+                  currentPass={currentPass}
+                  copiedKey={copiedKey}
+                  webNfcSupported={webNfcSupported}
+                  isWritingNfc={isWritingNfc}
+                  nfcWrittenFor={nfcWrittenFor}
+                  onCopy={handleCopy}
+                  onWriteNfcKeycard={handleWriteNfcKeycard}
+                  onAbortWriteNfc={() => nfcWriteAbortRef.current?.abort()}
+                />
               )}
 
               {/* Tab 3: Mobile Wallet Integrations */}
               {activeTab === 'mobile_wallet' && (
-                <CardContent className="p-6 sm:p-8 space-y-6">
-                  <div>
-                    <h3 className="text-base font-bold text-foreground">
-                      Native Mobile Wallets (No App Required)
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Add your pass to Apple Wallet or Google Wallet for one-tap access from the lock screen.
-                    </p>
-                  </div>
-
-                  {!currentPass.wallet_integrations.apple_wallet.available &&
-                    !currentPass.wallet_integrations.google_wallet.available && (
-                      <div className="p-4 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground">
-                        Wallet passes aren't set up for this estate yet. Use the QR code in the first tab at the gate.
-                      </div>
-                    )}
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* 1. Apple Wallet (.pkpass) */}
-                    {currentPass.wallet_integrations.apple_wallet.available && (
-                    <div className="p-5 rounded-2xl bg-black border border-slate-800 text-white flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-all">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">
-                            iOS / macOS
-                          </span>
-                          <Badge variant="outline" className="border-white/20 text-white text-[10px]">
-                            .pkpass
-                          </Badge>
-                        </div>
-                        <h4 className="text-lg font-black tracking-tight mt-2 flex items-center gap-1.5">
-                          Apple Wallet
-                        </h4>
-                        <p className="text-xs text-slate-400 mt-1">
-                          A signed pass with your gate code, shown on the lock screen.
-                        </p>
-                      </div>
-
-                      <a
-                        href={currentPass.wallet_integrations.apple_wallet.download_url}
-                        download={currentPass.wallet_integrations.apple_wallet.file_name}
-                        className="w-full"
-                      >
-                        <Button className="w-full bg-white hover:bg-slate-200 text-black font-bold text-xs gap-1.5">
-                          <Download className="w-3.5 h-3.5" />
-                          Add to Apple Wallet
-                        </Button>
-                      </a>
-                    </div>
-                    )}
-
-                    {/* 2. Google Wallet */}
-                    {currentPass.wallet_integrations.google_wallet.available && (
-                    <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 text-white flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition-all">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
-                            Android / Wear OS
-                          </span>
-                        </div>
-                        <h4 className="text-lg font-black tracking-tight mt-2 flex items-center gap-1.5">
-                          Google Wallet
-                        </h4>
-                        <p className="text-xs text-slate-400 mt-1">
-                          Saves the pass with your gate code to Google Wallet.
-                        </p>
-                      </div>
-
-                      <Button
-                        onClick={handleOpenGoogleWallet}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Save to Google Wallet
-                      </Button>
-                    </div>
-                    )}
-                  </div>
-
-                  {/* Household Pass Dispatching */}
-                  <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-foreground">
-                        Send Wallet Pass to {currentPass.holder_name}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Transmit the Apple/Google Wallet pass link directly to this household member's phone via SMS or WhatsApp.
-                      </p>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      onClick={() => setShareModalOpen(true)}
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5 shrink-0"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                      Dispatch Member Pass
-                    </Button>
-                  </div>
-                </CardContent>
+                <WalletMobileWalletsTab
+                  currentPass={currentPass}
+                  onOpenGoogleWallet={handleOpenGoogleWallet}
+                  onOpenShareModal={() => setShareModalOpen(true)}
+                />
               )}
 
               {/* Bottom Card Footer: Governance, Schedule & Security Policies */}
-              <div className="p-6 bg-muted/20 border-t border-border/60 grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-primary" />
-                    Access Schedule & Curfew
-                  </span>
-                  <div className="mt-2 text-xs space-y-1">
-                    {currentPass.schedule?.curfew_enabled ? (
-                      <div className="p-2 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">
-                        <strong>Curfew Active:</strong> {currentPass.schedule.curfew_hours}
-                      </div>
-                    ) : currentPass.schedule?.days ? (
-                      <div className="p-2 rounded bg-sky-500/10 border border-sky-500/30 text-sky-300">
-                        <strong>Shift Hours:</strong> {currentPass.schedule.hours}
-                        <div className="text-[11px] opacity-80 mt-0.5">
-                          Days: {currentPass.schedule.days.join(', ')}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
-                        <strong>24/7 Clearance:</strong> Round-the-clock estate gate access.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                    Granted Privileges
-                  </span>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {(currentPass.permissions || ['gate_access_24_7', 'receive_emergency_alerts']).map((perm) => (
-                      <Badge key={perm} variant="secondary" className="text-[10px] font-mono py-0.5">
-                        {perm.replace(/_/g, ' ')}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                    <PhoneCall className="w-3.5 h-3.5 text-primary" />
-                    Estate Dispatch
-                  </span>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Security Gatehouse: <strong className="text-foreground">+1 (876) 555-GATE</strong>
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Emergency Police / Fire: <strong className="text-red-400">119</strong>
-                  </p>
-                </div>
-              </div>
+              <WalletCardFooter currentPass={currentPass} />
             </Card>
 
             {/* Revocation & Security Audit Log */}
-            <Card className="border border-border/80 bg-card/90">
-              <CardHeader className="pb-3 border-b border-border/60">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-red-400" />
-                    <CardTitle className="text-base font-bold">
-                      Revocation & Lost Credential History ({revokedList.length})
-                    </CardTitle>
-                  </div>
-                  <Badge variant="outline" className="border-red-500/30 text-red-400 font-mono text-[10px]">
-                    Zero-Trust Directory
-                  </Badge>
-                </div>
-                <CardDescription className="text-xs">
-                  Permanently invalidated credentials. Attempting to scan any of these tokens at an estate gate scanner triggers an immediate <code className="text-red-400 font-mono">PASS_REVOKED_BY_ADMIN</code> refusal.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3">
-                {revokedList.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-2 text-center">
-                    No credentials have been reported lost or revoked in this household.
-                  </p>
-                ) : (
-                  <div className="divide-y divide-border/60">
-                    {revokedList.map((rev) => (
-                      <div key={rev.pass_id} className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-foreground text-sm">{rev.holder_name}</span>
-                            <Badge variant="destructive" className="text-[10px] font-mono px-1.5 py-0 bg-red-600/80">
-                              REVOKED
-                            </Badge>
-                            <span className="text-xs font-mono text-muted-foreground">ID: {rev.pass_id}</span>
-                          </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Revoked: <span className="font-mono text-slate-300">{rev.revoked_at_formatted || rev.revoked_at}</span> • Reason: <span className="italic">{rev.revocation_reason || 'Reported Lost/Stolen'}</span>
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open('/dashboard/gate-scanner', '_blank')}
-                            className="h-7 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10 gap-1"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            Test at Gate
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleCopy(rev.pass_id, `Revoked ${rev.pass_id}`)}
-                            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                            title="Copy pass ID"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <WalletRevocationHistory
+              revokedList={revokedList}
+              onCopy={handleCopy}
+            />
           </div>
         </div>
       </div>
 
       {/* Share Member Pass Modal */}
-      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Share2 className="w-5 h-5 text-primary" />
-              Dispatch Credential to {currentPass.holder_name}
-            </DialogTitle>
-            <DialogDescription>
-              Share the mobile digital wallet pass directly with this household member.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 my-2">
-            <div className="p-3 rounded-xl bg-muted/40 border text-xs space-y-2">
-              <p className="font-semibold text-foreground">Message Preview:</p>
-              <p className="text-muted-foreground italic">
-                "Hello {currentPass.holder_name}, your official {household?.name || 'Community Hub'} gate access pass ({currentPass.pass_id}) is ready. Add to Apple Wallet or tap at the gate with NFC: {window.location.origin}/dashboard/wallet"
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const msg = encodeURIComponent(`Hello ${currentPass.holder_name}, your official Community Hub gate pass (${currentPass.pass_id}) is ready: ${window.location.origin}/dashboard/wallet`);
-                  window.open(`https://wa.me/?text=${msg}`, '_blank');
-                }}
-                className="gap-2 text-xs font-semibold"
-              >
-                <Share2 className="w-4 h-4 text-emerald-500" />
-                WhatsApp
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const msg = encodeURIComponent(`Your gate pass (${currentPass.pass_id}) is ready: ${window.location.origin}/dashboard/wallet`);
-                  window.open(`sms:?body=${msg}`, '_blank');
-                }}
-                className="gap-2 text-xs font-semibold"
-              >
-                <Smartphone className="w-4 h-4 text-primary" />
-                SMS Text
-              </Button>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShareModalOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ShareMemberPassDialog
+        open={shareModalOpen}
+        onOpenChange={setShareModalOpen}
+        currentPass={currentPass}
+        householdName={household?.name}
+      />
 
       {/* Report Credential Lost / Stolen Protocol Dialog */}
-      <Dialog open={lostModalOpen} onOpenChange={setLostModalOpen}>
-        <DialogContent className="sm:max-w-lg border-red-500/30">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-500">
-              <ShieldAlert className="w-5 h-5 text-red-500" />
-              Report Credential Lost / Stolen
-            </DialogTitle>
-            <DialogDescription>
-              Immediate one-button credential revocation and tamper-proof replacement protocol.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 my-2">
-            {/* Warning banner explaining screenshot invalidation */}
-            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-xs space-y-2">
-              <div className="flex items-center gap-2 font-bold text-red-400">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                Permanent Cryptographic Revocation
-              </div>
-              <p className="text-slate-300 leading-relaxed">
-                Once confirmed, <strong>{currentPass.holder_name}</strong>'s current QR pass (<code className="font-mono text-amber-300">{currentPass.pass_id}</code>) will be permanently <strong className="text-red-400">REVOKED</strong> in the estate security directory.
-              </p>
-              <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 font-mono text-[11px] text-amber-200">
-                ⚠️ Connected gate scanners reject previous screenshots, forwarded QR codes, and cloned NFC cards immediately. Scans queued during a network outage are revalidated when they sync.
-              </div>
-            </div>
-
-            <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs space-y-1.5">
-              <span className="font-semibold text-slate-300">Automatic Replacement:</span>
-              <p className="text-slate-400">
-                A brand-new replacement credential will be issued immediately with an incremented rotation sequence, fresh HMAC signature, and new offline keypad PIN.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Incident / Revocation Reason</label>
-              <input
-                type="text"
-                value={reportReason}
-                onChange={(e) => setReportReason(e.target.value)}
-                placeholder="e.g. Phone stolen on commute, leaked screenshot, misplaced key fob"
-                className="w-full text-xs p-2.5 rounded-lg bg-background border border-border focus:border-red-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setLostModalOpen(false)} disabled={isReportingLost}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => handleReportLost()}
-              disabled={isReportingLost}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold gap-2"
-            >
-              {isReportingLost ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Revoking & Reissuing...
-                </>
-              ) : (
-                <>
-                  <ShieldAlert className="w-4 h-4" />
-                  Confirm Revocation & Generate Replacement
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReportLostDialog
+        open={lostModalOpen}
+        onOpenChange={setLostModalOpen}
+        currentPass={currentPass}
+        reportReason={reportReason}
+        onReportReasonChange={setReportReason}
+        isReportingLost={isReportingLost}
+        onConfirmReportLost={() => handleReportLost()}
+      />
     </DashboardLayout>
   );
 }

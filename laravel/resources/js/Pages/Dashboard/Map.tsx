@@ -2,9 +2,8 @@
 import dynamic from '@/lib/dynamic';
 import { useMap } from "@/context/map-context";
 import { useIsClient } from "@/hooks/use-is-client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -13,36 +12,9 @@ import { useEffect, useState, useRef, useMemo, useCallback, Suspense } from 'rea
 import { 
   Mountain, 
   Map as MapIcon, 
-  Satellite, 
-  Layers, 
-  Search, 
-  Navigation, 
-  Copy, 
-  Lock, 
-  Unlock, 
-  Maximize2, 
-  Minimize2, 
-  Compass, 
-  Plus, 
-  Minus, 
   ShieldCheck, 
-  Building2, 
-  Trees, 
   Radio, 
-  Wrench,
-  Crosshair,
-  Info,
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  AlertTriangle,
-  Zap,
-  Settings2,
-  MapPin,
-  Trash2,
-  Filter,
-  Calendar,
-  Sparkles
+  Settings2
 } from 'lucide-react';
 import { AmenityBookingDialog } from '@/components/dashboard/amenity-booking-dialog';
 import type { MapType } from '@/components/dashboard/LeafletMapFixed';
@@ -62,6 +34,10 @@ import { AddLandmarkDialog } from '@/components/dashboard/add-landmark-dialog';
 import BoundaryPointManager from '@/components/dashboard/boundary-point-manager';
 import DashboardLayout from '@/Layouts/DashboardLayout';
 import type { BoundaryConfig, CommunityInfo } from '@/lib/boundary-manager/types';
+import { MapControlsOverlay } from '@/components/dashboard/map/map-controls-overlay';
+import { MapInspectorCard } from '@/components/dashboard/map/map-inspector-card';
+import { MapLandmarkFilters } from '@/components/dashboard/map/map-landmark-filters';
+import { MapGeofenceTelemetry } from '@/components/dashboard/map/map-geofence-telemetry';
 
 // Client-only to avoid SSR/hydration issues
 const LeafletMapFixed = dynamic(() => import("@/components/dashboard/LeafletMapFixed"), {
@@ -768,76 +744,15 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
         <>
           {/* ── Main Map Canvas Container ── */}
           <Card className="overflow-hidden border shadow-lg relative" ref={mapWrapperRef}>
-        {/* Floating Google-Style Top Navigation Overlay */}
-        <div className="absolute top-4 left-4 right-4 z-[400] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pointer-events-none">
-          {/* Search / Jump Input Box */}
-          <form 
-            onSubmit={handleSearchSubmit} 
-            className="pointer-events-auto flex items-center bg-card/95 backdrop-blur-md border border-border shadow-md rounded-full px-3 py-1.5 w-full md:w-96 transition-all focus-within:ring-2 focus-within:ring-primary focus-within:shadow-lg"
-          >
-            <Search className="h-4 w-4 text-muted-foreground ml-1 mr-2 shrink-0" />
-            <Input
-              type="text"
-              placeholder="Search coordinates or landmark..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border-0 shadow-none focus-visible:ring-0 text-xs h-8 bg-transparent p-0"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-xs text-muted-foreground hover:text-foreground px-2"
-              >
-                ✕
-              </button>
-            )}
-            <Button type="submit" size="sm" variant="ghost" className="h-7 px-3 text-xs rounded-full font-medium">
-              Go
-            </Button>
-          </form>
-
-          {/* Map Layer Switcher & Pin Controls (Top-Right) */}
-          <div className="pointer-events-auto flex items-center bg-card/95 backdrop-blur-md border border-border shadow-md rounded-full p-1 gap-1 self-end md:self-auto flex-wrap">
-            <button
-              onClick={() => setMapType('terrain')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                mapType === 'terrain'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <Mountain className="h-3.5 w-3.5" />
-              <span>Terrain</span>
-            </button>
-
-            <button
-              onClick={() => setMapType('roadmap')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                mapType === 'roadmap'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <MapIcon className="h-3.5 w-3.5" />
-              <span>Streets</span>
-            </button>
-
-            <button
-              onClick={() => setMapType('satellite')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                mapType === 'satellite'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              }`}
-            >
-              <Satellite className="h-3.5 w-3.5" />
-              <span>Satellite</span>
-            </button>
-
-            {/* Geofence Mask Toggle Button */}
-            <button
-              onClick={() => {
+            <MapControlsOverlay
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onSearchSubmit={handleSearchSubmit}
+              onClearSearch={() => setSearchQuery('')}
+              mapType={mapType}
+              onSelectMapType={setMapType}
+              showGeofenceMask={showGeofenceMask}
+              onToggleGeofenceMask={() => {
                 setShowGeofenceMask(!showGeofenceMask);
                 toast({
                   title: !showGeofenceMask ? "Geofence Mask Enabled" : "Geofence Mask Disabled",
@@ -846,20 +761,8 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
                     : "Full surrounding terrain displayed.",
                 });
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all border-l pl-2 ${
-                showGeofenceMask
-                  ? 'text-emerald-600 bg-emerald-500/10 font-bold'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Toggle Geofence External Mask"
-            >
-              {showGeofenceMask ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">Perimeter Mask</span>
-            </button>
-
-            {/* Drop Pin / Click-to-Place Mode Toggle */}
-            <button
-              onClick={() => {
+              isClickToPlacePinActive={isClickToPlacePinActive}
+              onToggleClickToPlacePin={() => {
                 const nextState = !isClickToPlacePinActive;
                 setIsClickToPlacePinActive(nextState);
                 if (nextState) {
@@ -869,494 +772,95 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
                   });
                 }
               }}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all border-l pl-2 ${
-                isClickToPlacePinActive
-                  ? 'bg-amber-500 text-white font-bold shadow-sm animate-pulse'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              title="Click on map to drop pin"
-            >
-              <MapPin className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{isClickToPlacePinActive ? 'Click Map...' : 'Drop Pin'}</span>
-            </button>
-
-            {/* Quick Add Pin Dialog Trigger */}
-            <button
-              onClick={() => {
+              onOpenAddPin={() => {
                 setAddPinCoords(null);
                 setIsAddPinOpen(true);
               }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
-              title="Add Security Gate, Community Center, or Park Pin"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Add Pin</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Floating Active Placement Mode Guidance Banner */}
-        {isClickToPlacePinActive && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[401] bg-amber-500 text-white px-4 py-2 rounded-full shadow-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-3 pointer-events-auto border-2 border-white/40">
-            <MapPin className="h-4 w-4 animate-bounce" />
-            <span>Click anywhere on the map to place a Landmark Pin (Green / Red / Blue)</span>
-            <button 
-              onClick={() => setIsClickToPlacePinActive(false)} 
-              className="ml-2 bg-black/20 hover:bg-black/40 rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold"
-              title="Cancel Pin Placement"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* Floating Google-Style Custom Controls (Bottom-Right) */}
-        <div className="absolute bottom-6 right-4 z-[400] flex flex-col items-center gap-2">
-          <div className="bg-card/95 backdrop-blur-md border border-border shadow-lg rounded-xl overflow-hidden flex flex-col">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleZoom(1)}
-              className="h-9 w-9 rounded-none border-b hover:bg-muted text-foreground"
-              aria-label="Zoom In"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleZoom(-1)}
-              className="h-9 w-9 rounded-none hover:bg-muted text-foreground"
-              aria-label="Zoom Out"
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-          </div>
-
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleRecenter}
-            className="h-9 w-9 rounded-xl bg-card/95 backdrop-blur-md shadow-lg hover:bg-muted text-foreground"
-            title="Re-center on Community Centroid"
-            aria-label="Re-center map"
-          >
-            <Crosshair className="h-4 w-4 text-primary" />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              setIsLocked(!isLocked);
-              toast({
-                title: isLocked ? "Geofence Boundary Unlocked" : "Strict Geofence Lock Activated",
-                description: isLocked
-                  ? "Camera can now explore beyond the community perimeter."
-                  : "Camera locked strictly inside the geofence perimeter.",
-              });
-            }}
-            className={`h-9 w-9 rounded-xl bg-card/95 backdrop-blur-md shadow-lg transition-colors ${
-              isLocked ? 'text-emerald-600 border-emerald-500/40 bg-emerald-500/5' : 'text-amber-500'
-            }`}
-            title={isLocked ? "Unlock pan/zoom constraint" : "Lock strictly inside community geofence"}
-            aria-label="Toggle boundary lock"
-          >
-            {isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-          </Button>
-
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleFullscreen}
-            className="h-9 w-9 rounded-xl bg-card/95 backdrop-blur-md shadow-lg hover:bg-muted text-foreground"
-            title="Toggle Fullscreen"
-            aria-label="Toggle fullscreen"
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-        </div>
-
-        {/* Floating Active Coordinate & Geofence Inspector Card (Bottom-Left) */}
-        {inspectedCoords && currentInspectGeofence && (
-          <div className="absolute bottom-6 left-4 z-[400] max-w-sm bg-card/95 backdrop-blur-md border border-border shadow-xl rounded-2xl p-4 transition-all animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="flex items-center gap-1.5">
-                {currentInspectGeofence.isInside ? (
-                  <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 bg-emerald-500/10 text-[10px] font-bold flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    INSIDE GEOFENCE
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="border-amber-500/40 text-amber-600 bg-amber-500/10 text-[10px] font-bold flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    OUTSIDE GEOFENCE
-                  </Badge>
-                )}
-              </div>
-              <button
-                onClick={() => setInspectedCoords(null)}
-                className="text-xs text-muted-foreground hover:text-foreground h-5 w-5 rounded-full flex items-center justify-center hover:bg-muted"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-1 mb-3">
-              <p className="font-mono text-sm font-bold text-foreground">
-                {inspectedCoords[0].toFixed(6)}°, {inspectedCoords[1].toFixed(6)}°
-              </p>
-              <p className="font-mono text-xs text-muted-foreground">
-                {toDMS(inspectedCoords[0], true)} {toDMS(inspectedCoords[1], false)}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-2.5 rounded-xl border mb-3">
-              <div>
-                <span className="text-muted-foreground block text-[10px] uppercase">Terrain Elevation</span>
-                <span className="font-semibold text-foreground">~{estimateElevation(inspectedCoords[0], inspectedCoords[1])} m MSL</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground block text-[10px] uppercase">Fence Distance</span>
-                <span className={`font-semibold ${currentInspectGeofence.isInside ? 'text-emerald-600' : 'text-amber-600'}`}>
-                  {currentInspectGeofence.distanceMeters}m {currentInspectGeofence.isInside ? 'inside' : 'beyond'}
-                </span>
-              </div>
-              <div className="col-span-2 pt-1 border-t mt-1">
-                <span className="text-muted-foreground block text-[10px] uppercase">Nearest Ingress Portal</span>
-                <span className="font-medium text-foreground text-xs">
-                  {currentInspectGeofence.nearestGate.name} ({currentInspectGeofence.nearestGate.distance}m away)
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="flex-1 h-8 text-xs font-medium gap-1.5"
-                onClick={() => copyCoordinates(inspectedCoords)}
-              >
-                <Copy className="h-3.5 w-3.5" />
-                Copy
-              </Button>
-              <Button
-                size="sm"
-                className="flex-1 h-8 text-xs font-medium gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={() => {
-                  setAddPinCoords(inspectedCoords);
-                  setIsAddPinOpen(true);
-                }}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Drop Pin Here
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Map Canvas */}
-        <CardContent className="p-0 overflow-hidden">
-          {isClient && (
-            <LeafletMapFixed
-              center={center}
-              zoom={16}
-              mapType={mapType}
-              onReady={setMapInstance}
-              onMapClick={handleMapClick}
-              onMove={(c, z) => {
-                setActiveCenter(c);
-                setActiveZoom(z);
+              onZoom={handleZoom}
+              onRecenter={handleRecenter}
+              isLocked={isLocked}
+              onToggleLock={() => {
+                setIsLocked(!isLocked);
+                toast({
+                  title: isLocked ? "Geofence Boundary Unlocked" : "Strict Geofence Lock Activated",
+                  description: isLocked
+                    ? "Camera can now explore beyond the community perimeter."
+                    : "Camera locked strictly inside the geofence perimeter.",
+                });
               }}
-              style={{ height: isFullscreen ? "100vh" : 640 }}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
             />
-          )}
-        </CardContent>
-      </Card>
 
-      {/* ── Landmark & Geofence Analytics Panels ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Landmark Quick Navigation Cards */}
-        <div className="md:col-span-2 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-primary" />
-              Community Pins & Infrastructure
-            </h2>
-            <span className="text-xs text-muted-foreground">Click card to pan map • Manage pins</span>
-          </div>
-
-          {/* Category Filter Tabs Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 flex-wrap">
-            <Button
-              size="sm"
-              variant={pinFilterCategory === 'all' ? 'default' : 'outline'}
-              onClick={() => setPinFilterCategory('all')}
-              className="h-7 text-xs rounded-full px-3 font-medium"
-            >
-              All Pins ({categoryCounts.all})
-            </Button>
-            <Button
-              size="sm"
-              variant={pinFilterCategory === 'Security Gate' ? 'default' : 'outline'}
-              onClick={() => setPinFilterCategory('Security Gate')}
-              className={`h-7 text-xs rounded-full px-3 font-medium gap-1.5 ${
-                pinFilterCategory === 'Security Gate' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold' : 'text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              Security Gates ({categoryCounts['Security Gate']})
-            </Button>
-            <Button
-              size="sm"
-              variant={pinFilterCategory === 'Community Center' ? 'default' : 'outline'}
-              onClick={() => setPinFilterCategory('Community Center')}
-              className={`h-7 text-xs rounded-full px-3 font-medium gap-1.5 ${
-                pinFilterCategory === 'Community Center' ? 'bg-rose-600 hover:bg-rose-700 text-white font-semibold' : 'text-rose-700 dark:text-rose-400 border-rose-500/30'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
-              Community Centers ({categoryCounts['Community Center']})
-            </Button>
-            <Button
-              size="sm"
-              variant={pinFilterCategory === 'Park' ? 'default' : 'outline'}
-              onClick={() => setPinFilterCategory('Park')}
-              className={`h-7 text-xs rounded-full px-3 font-medium gap-1.5 ${
-                pinFilterCategory === 'Park' ? 'bg-blue-600 hover:bg-blue-700 text-white font-semibold' : 'text-blue-700 dark:text-blue-400 border-blue-500/30'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-              Parks ({categoryCounts['Park']})
-            </Button>
-
-            <div className="ml-auto flex items-center gap-1.5 pl-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setBookingAmenityName(undefined);
-                  setIsBookingOpen(true);
-                }}
-                className="h-7 text-xs border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 px-2.5 rounded-lg"
-              >
-                <Calendar className="h-3.5 w-3.5 text-emerald-600" />
-                <span>Reserve Facility</span>
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => {
-                  setAddPinCoords(null);
+            {inspectedCoords && currentInspectGeofence && (
+              <MapInspectorCard
+                inspectedCoords={inspectedCoords}
+                geofenceInfo={currentInspectGeofence}
+                onClose={() => setInspectedCoords(null)}
+                onCopyCoordinates={copyCoordinates}
+                onDropPinHere={(coords) => {
+                  setAddPinCoords(coords);
                   setIsAddPinOpen(true);
                 }}
-                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 px-3 rounded-lg"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add Pin</span>
-              </Button>
-            </div>
-          </div>
+              />
+            )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {filteredLandmarks.map((lm) => {
-              const isSecurity = lm.category === 'Security Gate';
-              const isCommunityCenter = lm.category === 'Community Center';
-              const badgeStyle = isSecurity
-                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
-                : isCommunityCenter
-                ? 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30'
-                : 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
-
-              return (
-                <div
-                  key={lm.id}
-                  onClick={() => {
-                    if (mapInstance) {
-                      mapInstance.flyTo(lm.coordinates, 18, { duration: 1.2 });
-                      handleMapClick(lm.coordinates);
-                    }
+            {/* Map Canvas */}
+            <CardContent className="p-0 overflow-hidden">
+              {isClient && (
+                <LeafletMapFixed
+                  center={center}
+                  zoom={16}
+                  mapType={mapType}
+                  onReady={setMapInstance}
+                  onMapClick={handleMapClick}
+                  onMove={(c, z) => {
+                    setActiveCenter(c);
+                    setActiveZoom(z);
                   }}
-                  className="p-3.5 rounded-xl border bg-card hover:bg-muted/40 transition-all cursor-pointer shadow-sm hover:shadow group flex flex-col justify-between relative"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <span 
-                          className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm border border-white/60 flex items-center justify-center text-[8px]"
-                          style={{ backgroundColor: lm.color }}
-                        />
-                        <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                          {lm.name}
-                        </h3>
-                      </div>
-                      <Badge variant="outline" className={`text-[10px] shrink-0 font-medium ${badgeStyle}`}>
-                        {lm.category}
-                      </Badge>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
-                      {lm.description}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2 border-t text-[11px] font-mono text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <span className="font-medium text-foreground">{lm.elevation}m MSL</span>
-                      <span>•</span>
-                      <span>{lm.coordinates[0].toFixed(4)}°, {lm.coordinates[1].toFixed(4)}°</span>
-                    </span>
-
-                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                      {!isSecurity && (
-                        <button
-                          onClick={() => {
-                            setBookingAmenityName(lm.name);
-                            setIsBookingOpen(true);
-                          }}
-                          className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 hover:underline text-xs"
-                          title={`Reserve ${lm.name}`}
-                        >
-                          <Sparkles className="h-3 w-3" />
-                          Reserve
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => {
-                          if (mapInstance) {
-                            mapInstance.flyTo(lm.coordinates, 18, { duration: 1.2 });
-                            handleMapClick(lm.coordinates);
-                          }
-                        }}
-                        className="text-primary font-medium flex items-center gap-1 hover:underline text-xs"
-                      >
-                        Jump <Navigation className="h-3 w-3" />
-                      </button>
-
-                      <button
-                        onClick={() => handleRemoveLandmark(lm.id, lm.name)}
-                        className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-destructive/10 transition-colors"
-                        title="Delete pin"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Quick Add Pin Card */}
-            <div
-              onClick={() => {
-                setAddPinCoords(null);
-                setIsAddPinOpen(true);
-              }}
-              className="p-3.5 rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all cursor-pointer flex flex-col items-center justify-center text-center gap-2 group min-h-[130px]"
-            >
-              <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
-                <Plus className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-xs text-foreground">Add Custom Pin</h3>
-                <p className="text-[11px] text-muted-foreground">🟢 Security Gate • 🔴 Community Center • 🔵 Park</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Topographic & Geofence Specification Card */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              Geofence Parameters
-            </h2>
-            <div className="flex items-center gap-1.5">
-              {isSystemAdmin && (
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => setIsGeofenceDialogOpen(true)}
-                  className="text-xs h-7 gap-1 border-emerald-500/40 text-emerald-600 bg-emerald-500/10 font-medium"
-                >
-                  <Settings2 className="h-3 w-3" />
-                  Edit Geofence
-                </Button>
+                  style={{ height: isFullscreen ? "100vh" : 640 }}
+                />
               )}
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={handleSimulateGeofence}
-                className="text-xs h-7 gap-1"
-              >
-                <Zap className="h-3.5 w-3.5 text-emerald-500" />
-                Verify
-              </Button>
-            </div>
-          </div>
-
-          <Card className="border shadow-sm">
-            <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center justify-between">
-                <span>Perimeter Surveillance</span>
-                <span className="text-xs font-mono text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                  ARMED
-                </span>
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Active geofencing with {coordinates.length} radar corner nodes and 2 ingress control gates.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 pt-2 space-y-3">
-              <div className="flex justify-between items-center py-1.5 border-b text-xs">
-                <span className="text-muted-foreground">Geofenced Area</span>
-                <span className="font-semibold text-foreground font-mono">{areaAcres} Acres ({areaHectares} Ha)</span>
-              </div>
-              <div className="flex justify-between items-center py-1.5 border-b text-xs">
-                <span className="text-muted-foreground">Perimeter Fence Length</span>
-                <span className="font-semibold text-foreground font-mono">{perimeterMeters} meters</span>
-              </div>
-              <div className="flex justify-between items-center py-1.5 border-b text-xs">
-                <span className="text-muted-foreground">Boundary Radar Beacons</span>
-                <span className="font-semibold text-emerald-600 font-mono">{coordinates.length} Nodes Online</span>
-              </div>
-              <div className="flex justify-between items-center py-1.5 border-b text-xs">
-                <span className="text-muted-foreground">Controlled Ingress Gates</span>
-                <span className="font-semibold text-foreground font-mono">2 Gates (Main & North)</span>
-              </div>
-              <div className="flex justify-between items-center py-1.5 text-xs">
-                <span className="text-muted-foreground">Centroid Benchmark</span>
-                <button
-                  onClick={() => copyCoordinates(center)}
-                  className="font-mono text-primary hover:underline flex items-center gap-1"
-                  title="Copy Centroid Coordinates"
-                >
-                  {center[0].toFixed(4)}°, {center[1].toFixed(4)}°
-                  <Copy className="h-3 w-3" />
-                </button>
-              </div>
             </CardContent>
           </Card>
 
-          {/* Geofence Rules Box */}
-          <div className="p-3.5 rounded-xl bg-muted/40 border text-xs space-y-1.5 text-muted-foreground">
-            <div className="flex items-center gap-1.5 font-semibold text-foreground text-xs">
-              <Info className="h-4 w-4 text-emerald-500 shrink-0" />
-              <span>Geofencing Active Rules</span>
-            </div>
-            <p>
-              • <strong>Click anywhere</strong> on the map to test whether a coordinate is <em>Inside</em> or <em>Outside</em> the geofence perimeter.
-            </p>
-            <p>
-              • <strong>Perimeter Mask</strong> automatically dims exterior terrain to clearly demarcate the residential community boundaries.
-            </p>
-            <p>
-              • <strong>System Admin</strong> can click <em>Set Geofence Coordinates</em> to modify or load boundary presets in real time.
-            </p>
+          {/* ── Landmark & Geofence Analytics Panels ── */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <MapLandmarkFilters
+              filteredLandmarks={filteredLandmarks}
+              categoryCounts={categoryCounts}
+              pinFilterCategory={pinFilterCategory}
+              onSelectCategory={setPinFilterCategory}
+              onReserveFacility={(amenityName) => {
+                setBookingAmenityName(amenityName);
+                setIsBookingOpen(true);
+              }}
+              onOpenAddPin={() => {
+                setAddPinCoords(null);
+                setIsAddPinOpen(true);
+              }}
+              onJumpToLandmark={(coords) => {
+                if (mapInstance) {
+                  mapInstance.flyTo(coords, 18, { duration: 1.2 });
+                  handleMapClick(coords);
+                }
+              }}
+              onRemoveLandmark={handleRemoveLandmark}
+            />
+
+            <MapGeofenceTelemetry
+              isSystemAdmin={isSystemAdmin}
+              coordinatesCount={coordinates.length}
+              areaAcres={areaAcres}
+              areaHectares={areaHectares}
+              perimeterMeters={perimeterMeters}
+              center={center}
+              onOpenGeofenceDialog={() => setIsGeofenceDialogOpen(true)}
+              onSimulateGeofence={handleSimulateGeofence}
+              onCopyCentroid={copyCoordinates}
+            />
           </div>
-        </div>
-      </div>
+
       </>
       )}
 
