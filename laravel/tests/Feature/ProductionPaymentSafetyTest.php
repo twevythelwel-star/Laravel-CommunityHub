@@ -7,7 +7,8 @@ use App\Models\Invoice;
 use App\Models\StripeEvent;
 use App\Models\Transaction;
 use App\Models\User;
-use App\Services\StripePaymentService;
+use App\Services\Ledger\LedgerService;
+use App\Services\Payments\Stripe\StripeRefundAndPayoutService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -100,14 +101,14 @@ class ProductionPaymentSafetyTest extends TestCase
      */
     private function payoutContains(array $charges): void
     {
-        $this->app->instance(StripePaymentService::class, new class($charges) extends StripePaymentService
+        $this->app->instance(StripeRefundAndPayoutService::class, new class($charges, app(LedgerService::class)) extends StripeRefundAndPayoutService
         {
-            public function __construct(private array $charges)
+            public function __construct(private array $charges, LedgerService $ledgerService)
             {
-                parent::__construct();
+                parent::__construct($ledgerService);
             }
 
-            protected function payoutCharges(string $payoutId): array
+            public function payoutCharges(string $payoutId, ?string $secretKey = null): array
             {
                 return $this->charges;
             }

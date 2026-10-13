@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { router } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,32 +20,81 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { toIsoDateTime } from '@/components/dashboard/register-visitor-dialog';
 
 interface VisitorBulkEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  bulkCategory: 'VISITOR' | 'CONTRACTOR';
-  setBulkCategory: (val: 'VISITOR' | 'CONTRACTOR') => void;
-  bulkDate: Date | undefined;
-  setBulkDate: (val: Date | undefined) => void;
-  bulkText: string;
-  setBulkText: (val: string) => void;
-  bulkSubmitting: boolean;
-  onSubmit: (e: React.FormEvent) => void;
 }
 
-export function VisitorBulkEventDialog({
-  open,
-  onOpenChange,
-  bulkCategory,
-  setBulkCategory,
-  bulkDate,
-  setBulkDate,
-  bulkText,
-  setBulkText,
-  bulkSubmitting,
-  onSubmit,
-}: VisitorBulkEventDialogProps) {
+export function VisitorBulkEventDialog({ open, onOpenChange }: VisitorBulkEventDialogProps) {
+  const { toast } = useToast();
+  const [bulkDate, setBulkDate] = useState<Date | undefined>(new Date());
+  const [bulkCategory, setBulkCategory] = useState<'VISITOR' | 'CONTRACTOR'>('VISITOR');
+  const [bulkText, setBulkText] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkText.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Empty attendee list',
+        description: 'Enter at least one visitor (Name, Phone/Email, Vehicle Plate).',
+      });
+      return;
+    }
+
+    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
+    const parsedVisitors = lines.map(line => {
+      const parts = line.split(/[,;\t]/).map(p => p.trim());
+      return {
+        name: parts[0] || 'Guest',
+        contact: parts[1] || null,
+        vehicle: parts[2] || null,
+      };
+    });
+
+    if (parsedVisitors.length === 0) {
+      toast({ variant: 'destructive', title: 'Invalid format', description: 'Could not parse any visitors.' });
+      return;
+    }
+
+    // The dialog has no time picker; arrival is 10:00 AM on the chosen day.
+    const expectedAt = toIsoDateTime(bulkDate, '10', '00', 'AM');
+
+    setBulkSubmitting(true);
+    router.post('/dashboard/visitors/bulk', {
+      expected_at: expectedAt,
+      pass_category: bulkCategory,
+      visitors: parsedVisitors,
+      // Email only: this dialog has no channel choice.
+      notify_email: true,
+      notify_sms: false,
+      notify_whatsapp: false,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => {
+        setBulkSubmitting(false);
+        onOpenChange(false);
+        setBulkText('');
+        toast({
+          title: 'Bulk Event Passes Created',
+          description: `Registered ${parsedVisitors.length} attendees with digital passes.`,
+        });
+      },
+      onError: (errors) => {
+        setBulkSubmitting(false);
+        toast({
+          variant: 'destructive',
+          title: 'Registration Error',
+          description: (Object.values(errors)[0] as string) || 'Failed to register bulk attendees.',
+        });
+      },
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[540px]">

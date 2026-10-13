@@ -150,6 +150,12 @@ export default function VisitorsPage({
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
+  const shareViaSms = (visitor: VisitorRow) => {
+    const url = visitor.guestPassUrl || `${window.location.origin}/guest/pass/${visitor.shareToken}`;
+    const text = encodeURIComponent(`Hello ${visitor.name}, here is your digital gate entry pass: ${url}`);
+    window.open(`sms:?&body=${text}`, '_blank');
+  };
+
   return (
     <DashboardLayout>
       <Head title="Visitor Management" />
@@ -176,7 +182,10 @@ export default function VisitorsPage({
       {/* Share Guest Pass Dialog */}
       <VisitorSharePassDialog
         visitor={sharePassVisitor}
-        onOpenChange={(open) => !open && setSharePassVisitor(null)}
+        onClose={() => setSharePassVisitor(null)}
+        onCopyLink={copyPassLink}
+        onShareWhatsApp={shareViaWhatsApp}
+        onShareSms={shareViaSms}
       />
 
       {/* Bulk Event Registration Dialog */}

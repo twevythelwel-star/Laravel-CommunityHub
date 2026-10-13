@@ -277,16 +277,6 @@ class StripePaymentService
     }
 
     /**
-     * The card payments a payout contained, from its balance transactions.
-     *
-     * @return array<string, array{fee_minor: int, currency: string}> keyed by PaymentIntent id
-     */
-    protected function payoutCharges(string $payoutId): array
-    {
-        return $this->refundAndPayoutService->payoutCharges($payoutId, $this->secretKey);
-    }
-
-    /**
      * Bring the ledger into line with a charge's refunds. Idempotent.
      */
     public function syncRefunds(StripeObject $charge): string

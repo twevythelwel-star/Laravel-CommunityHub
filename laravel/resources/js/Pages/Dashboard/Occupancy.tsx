@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Head, router } from '@inertiajs/react';
-import DashboardLayout from '@/layouts/DashboardLayout';
+import DashboardLayout from '@/Layouts/DashboardLayout';
 import { useToast } from '@/hooks/use-toast';
 import {
   HardHat,

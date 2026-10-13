@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Compass, CheckCircle2, AlertTriangle, Save } from 'lucide-react';
-import { BoundaryPoint, BoundaryConfig } from '@/lib/boundary-manager/types';
+import type { BoundaryPoint, BoundaryConfig, BoundaryValidationResult } from '@/lib/boundary-manager/types';
 
 const BoundaryPointMap = dynamic(() => import('../boundary-point-map'), {
   ssr: false,
@@ -17,22 +17,16 @@ const BoundaryPointMap = dynamic(() => import('../boundary-point-map'), {
 });
 
 export interface BoundaryMapPreviewCardProps {
-  validation: {
-    canPublish: boolean;
-    errors: string[];
-    areaAcres: number;
-    areaHectares: number;
-    perimeterMeters: number;
-  };
+  validation: BoundaryValidationResult;
   isClickToPlaceActive: boolean;
   canEditBoundary: boolean;
   points: BoundaryPoint[];
   selectedPointIndex: number | null;
   config: BoundaryConfig;
-  focusTarget: { lat: number; lng: number } | null;
+  focusTarget: { lat: number; lng: number; zoom?: number; timestamp: number } | null;
   onPointDrag: (id: number, lat: number, lng: number) => void;
   onSelectPoint: (index: number) => void;
-  onMapClick: (e: any) => void;
+  onMapClick: (lat: number, lng: number) => void;
   onSaveDraft: () => void;
   onPublishBoundary: () => void;
 }

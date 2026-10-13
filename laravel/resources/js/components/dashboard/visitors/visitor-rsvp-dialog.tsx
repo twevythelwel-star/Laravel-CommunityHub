@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { router } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { Link as LinkIcon, Check, Copy, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { toIsoDateTime } from '@/components/dashboard/register-visitor-dialog';
 import {
   Dialog,
   DialogContent,
@@ -19,41 +22,60 @@ import {
 interface VisitorRsvpDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  rsvpGeneratedUrl: string | null;
-  setRsvpGeneratedUrl: (url: string | null) => void;
-  rsvpTitle: string;
-  setRsvpTitle: (title: string) => void;
-  rsvpDate: Date | undefined;
-  setRsvpDate: (date: Date | undefined) => void;
-  rsvpMaxGuests: string;
-  setRsvpMaxGuests: (max: string) => void;
-  rsvpNotes: string;
-  setRsvpNotes: (notes: string) => void;
-  rsvpCopied: boolean;
-  setRsvpCopied: (copied: boolean) => void;
-  rsvpSubmitting: boolean;
-  onSubmit: (e: React.FormEvent) => void;
-  onCopy: () => void;
 }
 
-export function VisitorRsvpDialog({
-  open,
-  onOpenChange,
-  rsvpGeneratedUrl,
-  setRsvpGeneratedUrl,
-  rsvpTitle,
-  setRsvpTitle,
-  rsvpDate,
-  setRsvpDate,
-  rsvpMaxGuests,
-  setRsvpMaxGuests,
-  rsvpNotes,
-  setRsvpNotes,
-  rsvpCopied,
-  rsvpSubmitting,
-  onSubmit,
-  onCopy,
-}: VisitorRsvpDialogProps) {
+export function VisitorRsvpDialog({ open, onOpenChange }: VisitorRsvpDialogProps) {
+  const { toast } = useToast();
+  const [rsvpTitle, setRsvpTitle] = useState('');
+  const [rsvpDate, setRsvpDate] = useState<Date | undefined>(new Date());
+  const [rsvpMaxGuests, setRsvpMaxGuests] = useState('50');
+  const [rsvpNotes, setRsvpNotes] = useState('');
+  const [rsvpGeneratedUrl, setRsvpGeneratedUrl] = useState<string | null>(null);
+  const [rsvpCopied, setRsvpCopied] = useState(false);
+  const [rsvpSubmitting, setRsvpSubmitting] = useState(false);
+
+  const onSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rsvpTitle.trim()) {
+      toast({ variant: 'destructive', title: 'Title required', description: 'Please enter an event or gathering title.' });
+      return;
+    }
+
+    // The dialog has no time picker; arrival is 12:00 PM on the chosen day.
+    const expectedAt = toIsoDateTime(rsvpDate, '12', '00', 'PM');
+    setRsvpSubmitting(true);
+    router.post('/dashboard/visitors/invites', {
+      title: rsvpTitle,
+      expected_at: expectedAt,
+      max_guests: parseInt(rsvpMaxGuests, 10) || 50,
+      notes: rsvpNotes || null,
+    }, {
+      preserveScroll: true,
+      onSuccess: (page) => {
+        setRsvpSubmitting(false);
+        const url = (page.props as any).flash?.rsvp_url || null;
+        if (url) {
+          setRsvpGeneratedUrl(url);
+        } else {
+          onOpenChange(false);
+        }
+        toast({ title: 'RSVP Invite Created', description: 'Share the link with your attendees.' });
+      },
+      onError: (errs) => {
+        setRsvpSubmitting(false);
+        toast({ variant: 'destructive', title: 'Creation failed', description: (Object.values(errs)[0] as string) || 'Error generating RSVP link' });
+      },
+    });
+  };
+
+  const onCopy = () => {
+    if (!rsvpGeneratedUrl) return;
+    navigator.clipboard.writeText(rsvpGeneratedUrl);
+    setRsvpCopied(true);
+    setTimeout(() => setRsvpCopied(false), 2000);
+    toast({ title: 'Copied!', description: 'RSVP link copied to clipboard.' });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">

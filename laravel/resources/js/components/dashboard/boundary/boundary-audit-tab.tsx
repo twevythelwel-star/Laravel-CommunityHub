@@ -3,20 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { History, RotateCcw } from 'lucide-react';
+import type { BoundaryAuditLogEntry } from '@/lib/boundary-manager/types';
 
 export interface BoundaryAuditTabProps {
-  auditHistory: Array<{
-    id: number | string;
-    community: string;
-    action: string;
-    changedBy: string;
-    role: string;
-    previousVersion: number;
-    newVersion: number;
-    pointsCount: number;
-    areaAcres: number | string;
-    timestamp: string;
-  }>;
+  auditHistory: BoundaryAuditLogEntry[];
   previousVersions: Array<{
     id: number;
     version: number;
