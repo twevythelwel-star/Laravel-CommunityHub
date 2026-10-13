@@ -554,8 +554,9 @@ and every seeded visitor, in the state their visit is in.
 
 ‡ All pass. PHPUnit reports one *deprecated* notice: bacon-qr-code 2.0.8
 uses implicitly nullable parameters, which PHP 8.4 deprecates. It is a
-warning, not a failure. bacon-qr-code 3 fixes it, but simple-qrcode 4.2 pins
-bacon-qr-code to 2.x.
+warning, not a failure. bacon-qr-code 3 fixes it; simple-qrcode 4.2, which
+pinned bacon-qr-code to 2.x, has since been removed (see below), so the
+upgrade is no longer blocked.
 
 The three `SendVisitorPassNotificationTest` failures from earlier are fixed.
 `simplesoftwareio/simple-qrcode` was in `composer.json` but missing from
@@ -567,7 +568,9 @@ job now draws the PNG with GD (`App\Services\QrCodePng`), and bacon-qr-code
 does the encoding. GD is already required by dompdf, so no extension is
 needed anywhere. A rendered guest-pass URL was decoded back with jsQR to
 confirm the image scans. `bacon/bacon-qr-code` is declared directly in
-`composer.json`, since the job now uses it itself.
+`composer.json`, since the job now uses it itself. Nothing called
+simple-qrcode after that, so it was later removed, together with the unused
+`laravel/octane` and `laravel/pennant`.
 
 \* `composer audit` returned *No security vulnerability advisories found* twice
 — at the end of `composer update` and on the first verification pass. A later

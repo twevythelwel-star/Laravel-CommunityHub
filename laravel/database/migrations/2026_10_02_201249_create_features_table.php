@@ -2,9 +2,9 @@
 
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Laravel\Pennant\Migrations\PennantMigration;
+use Illuminate\Database\Migrations\Migration;
 
-return new class extends PennantMigration
+return new class extends Migration
 {
     /**
      * Run the migrations.
