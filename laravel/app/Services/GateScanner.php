@@ -10,6 +10,7 @@ use App\Enums\ValidationStatus;
 use App\Events\VisitorCheckedInEvent;
 use App\Exceptions\InvalidPassTransition;
 use App\Exceptions\ScanNotConfirmable;
+use App\Models\AccessAuthorization;
 use App\Models\AccessLogEntry;
 use App\Models\AuthorizedPerson;
 use App\Models\BlocklistEntry;
@@ -159,6 +160,26 @@ class GateScanner
                 $report['decision'] = ScanDecision::Reject->value;
                 $report['status'] = 'REJECTED';
                 $report['primaryReason'] = 'The authorization behind this pass is not currently active';
+            }
+        }
+
+        // An AccessAuthorization governs scope, permissions, approval, expiry, revocation,
+        // and enforces cross-property isolation (cross-property access denied unless explicitly authorized).
+        $authId = $pass?->access_authorization_id ?? ($pass?->metadata['authorization_id'] ?? null);
+        if ($decision !== ScanDecision::Reject && $authId) {
+            $authorization = AccessAuthorization::find($authId);
+            if (! $authorization || ! $authorization->isCurrentlyActive()) {
+                $decision = ScanDecision::Reject;
+                $report['decision'] = ScanDecision::Reject->value;
+                $report['status'] = 'REJECTED';
+                $report['primaryReason'] = 'The access authorization behind this pass is expired, revoked, or pending approval';
+            } elseif ($targetPropId = ($pass->metadata['target_property_id'] ?? null)) {
+                if (! $authorization->isPermittedForProperty($targetPropId)) {
+                    $decision = ScanDecision::Reject;
+                    $report['decision'] = ScanDecision::Reject->value;
+                    $report['status'] = 'REJECTED';
+                    $report['primaryReason'] = 'Cross-property access denied: Pass is not authorized for the requested property';
+                }
             }
         }
 
