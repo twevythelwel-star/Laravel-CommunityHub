@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\GateId;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Safety\EscalateToEmergencyServicesRequest;
+use App\Http\Requests\Safety\EscalateToSecurityRequest;
+use App\Http\Requests\Safety\ResolveDistressAlertRequest;
 use App\Models\DistressAlert;
 use App\Models\DistressAlertEvent;
 use App\Models\SafetyProfile;
@@ -124,23 +127,18 @@ class SilentAssistanceController extends Controller
         return back()->with('success', 'Request acknowledged.');
     }
 
-    public function resolve(Request $request, DistressAlert $alert): RedirectResponse
+    public function resolve(ResolveDistressAlertRequest $request, DistressAlert $alert): RedirectResponse
     {
-        $validated = $request->validate([
-            'outcome' => ['required', 'in:resolved,false_alarm'],
-            'notes' => ['required', 'string', 'max:1000'],
-        ]);
+        $validated = $request->validated();
 
         $this->safety->resolve($alert, $request->user(), $validated['outcome'], $validated['notes']);
 
         return back()->with('success', 'Request closed.');
     }
 
-    public function escalateToSecurity(Request $request, DistressAlert $alert): RedirectResponse
+    public function escalateToSecurity(EscalateToSecurityRequest $request, DistressAlert $alert): RedirectResponse
     {
-        $validated = $request->validate([
-            'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->safety->escalateToSecurity($alert, $request->user(), $validated['notes'] ?? null);
@@ -151,17 +149,9 @@ class SilentAssistanceController extends Controller
         return back()->with('success', 'Escalated to security level.');
     }
 
-    public function escalateToEmergencyServices(Request $request, DistressAlert $alert): RedirectResponse
+    public function escalateToEmergencyServices(EscalateToEmergencyServicesRequest $request, DistressAlert $alert): RedirectResponse
     {
-        $validated = $request->validate([
-            'service' => ['required', 'in:police,medical,fire'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-            // An explicit yes, so a stray click cannot escalate. A flash message
-            // used to be returned instead, which a caller could ignore.
-            'confirmed' => config('safety.require_emergency_confirmation', true) ? ['accepted'] : ['nullable'],
-        ], [
-            'confirmed.accepted' => 'Confirm before escalating to emergency services.',
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->safety->escalateToEmergencyServices($alert, $request->user(), $validated['service'], $validated['notes'] ?? null);

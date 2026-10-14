@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Feedback\UpdateReviewFeedbackRequest;
 use App\Models\Feedback;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,12 +44,9 @@ class ReviewFeedbackController extends Controller
         ]);
     }
 
-    public function update(Request $request, Feedback $feedback): RedirectResponse
+    public function update(UpdateReviewFeedbackRequest $request, Feedback $feedback): RedirectResponse
     {
-        $validated = $request->validate([
-            'status' => ['required', 'in:New,In Progress,Resolved'],
-            'admin_response' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $feedback->update($validated);
 

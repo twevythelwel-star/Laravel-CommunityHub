@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Map\CheckPositionApiRequest;
 use App\Models\Community;
 use App\Models\Landmark;
 use App\Services\GeofenceService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class MapApiController extends Controller
 {
@@ -43,12 +43,9 @@ class MapApiController extends Controller
     }
 
     /** Authoritative inside/outside answer for a reported device position. */
-    public function checkPosition(Request $request): JsonResponse
+    public function checkPosition(CheckPositionApiRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'lat' => ['required', 'numeric', 'between:-90,90'],
-            'lng' => ['required', 'numeric', 'between:-180,180'],
-        ]);
+        $validated = $request->validated();
 
         $point = [(float) $validated['lat'], (float) $validated['lng']];
         $polygon = Community::default()->publishedBoundary()?->published_coordinates ?? [];

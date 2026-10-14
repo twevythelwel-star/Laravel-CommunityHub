@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Billing\ProcessPaymentLinkRequest;
 use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Models\PaymentLink;
@@ -11,9 +12,7 @@ use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\QrCodePng;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -77,24 +76,13 @@ class UniversalPaymentLinkController extends Controller
         return $pdf->stream('payment-poster-'.$token.'.pdf');
     }
 
-    public function process(Request $request, string $token): RedirectResponse
+    public function process(ProcessPaymentLinkRequest $request, string $token): RedirectResponse
     {
         $this->ensureEnabled();
 
         $paymentLink = PaymentLink::where('token', $token)->where('active', true)->firstOrFail();
 
-        $validated = $request->validate([
-            // Office-confirmed channels only: a stranger has no Community
-            // Wallet, and card needs a Stripe Checkout flow this page lacks.
-            // An unregistered key used to reach getDriver() and throw a 500.
-            'channel' => ['required', 'string', Rule::in(array_values(array_filter(
-                $this->orchestrator->channelKeys(),
-                fn (string $key) => $this->orchestrator->requiresOfficeConfirmation($key),
-            )))],
-            'payer_name' => ['required', 'string', 'max:100'],
-            'lot' => ['required', 'string', 'max:50'],
-            'custom_amount' => ['nullable', 'numeric', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $amountMinor = $paymentLink->amount_minor
             ?? (int) (round((float) $validated['custom_amount'], 2) * 100);

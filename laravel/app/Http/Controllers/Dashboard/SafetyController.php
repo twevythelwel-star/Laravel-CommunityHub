@@ -4,6 +4,12 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\GateId;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Safety\HoldSafetyQrRequest;
+use App\Http\Requests\Safety\RequestAccountCredentialAssistanceRequest;
+use App\Http\Requests\Safety\RequestCredentialAssistanceRequest;
+use App\Http\Requests\Safety\RequestSafetyAssistanceRequest;
+use App\Http\Requests\Safety\SetDuressPinRequest;
+use App\Http\Requests\Safety\UpdateSafetyProfileRequest;
 use App\Models\DistressAlert;
 use App\Models\User;
 use App\Services\Safety\SilentAssistanceService;
@@ -11,7 +17,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -94,36 +99,13 @@ class SafetyController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request): RedirectResponse
+    public function updateProfile(UpdateSafetyProfileRequest $request): RedirectResponse
     {
         $user = $this->requester($request);
         abort_unless($user->role->isResident() || $user->role->isAdministrative(), 403);
 
-        $incomingContacts = $request->input('emergency_contacts');
-        if (is_array($incomingContacts)) {
-            $request->merge(['emergency_contacts' => collect($incomingContacts)
-                ->filter(fn ($contact) => is_array($contact) && (filled($contact['name'] ?? null) || filled($contact['phone'] ?? null)))
-                ->values()
-                ->all()]);
-        }
-
         $allowedOptions = $this->safety->optionsForUser($user);
-        $validated = $request->validate([
-            'emergency_contact_name' => ['nullable', 'string', 'max:120'],
-            'emergency_contact_phone' => ['nullable', 'string', 'max:40'],
-            'emergency_contact_relationship' => ['nullable', 'string', 'max:60'],
-            'preferred_assistance' => ['sometimes', 'required', Rule::in($allowedOptions)],
-            'assistance_preferences' => ['sometimes', 'array', 'min:1', 'max:5'],
-            'assistance_preferences.*' => ['required', Rule::in($allowedOptions)],
-            'emergency_contacts' => ['sometimes', 'array', 'max:5'],
-            'emergency_contacts.*.name' => ['required', 'string', 'max:120'],
-            'emergency_contacts.*.phone' => ['required', 'string', 'max:40'],
-            'emergency_contacts.*.relationship' => ['nullable', 'string', 'max:60'],
-            'preferred_gate' => ['nullable', Rule::in(array_map(fn (GateId $gate) => $gate->value, array_filter(GateId::cases(), fn (GateId $gate) => $gate !== GateId::Any)))],
-            'preferred_vehicle_id' => ['nullable', 'integer', Rule::exists('vehicles', 'id')->where('user_id', $user->id)],
-            'medical_notes' => ['nullable', 'string', 'max:2000'],
-            'silent_alerts_enabled' => ['required', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $profile = $this->safety->profileFor($user);
         $assistancePreferences = $validated['assistance_preferences'] ?? $profile->assistance_preferences ?? [$profile->preferred_assistance];
@@ -166,14 +148,12 @@ class SafetyController extends Controller
         return back()->with('success', 'Safety profile saved.');
     }
 
-    public function setDuressPin(Request $request): RedirectResponse
+    public function setDuressPin(SetDuressPinRequest $request): RedirectResponse
     {
         $user = $this->resident($request);
         abort_unless($this->mayUseResidentTriggers($user), 403);
 
-        $validated = $request->validate([
-            'pin' => ['required', 'digits:6', 'confirmed'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->safety->setDuressPin($user, $validated['pin']);
@@ -197,21 +177,11 @@ class SafetyController extends Controller
      * "Request assistance?" from the app. The answer is a plain
      * acknowledgement whichever kind of help was asked for.
      */
-    public function requestAssistance(Request $request): JsonResponse
+    public function requestAssistance(RequestSafetyAssistanceRequest $request): JsonResponse
     {
         $user = $this->resident($request);
 
-        $validated = $request->validate([
-            'assistance' => ['required', Rule::in($this->safety->optionsForUser($user))],
-            'severity' => ['sometimes', Rule::in([
-                DistressAlert::SEVERITY_ASSISTANCE,
-                DistressAlert::SEVERITY_URGENT_ASSISTANCE,
-                DistressAlert::SEVERITY_SILENT_EMERGENCY,
-            ])],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         abort_unless(in_array($validated['assistance'], $this->safety->optionsForUser($user), true), 422);
 
@@ -249,7 +219,7 @@ class SafetyController extends Controller
         ]);
     }
 
-    public function requestAccountCredentialAssistance(Request $request): JsonResponse
+    public function requestAccountCredentialAssistance(RequestAccountCredentialAssistanceRequest $request): JsonResponse
     {
         $user = $this->requester($request);
         abort_unless($user->role->isOperational(), 403);
@@ -258,10 +228,7 @@ class SafetyController extends Controller
         abort_unless($pass && $pass->isActive() && $pass->isWithinValidity(now()), 404);
         $context = $this->safety->guestContextForPass($pass);
         abort_unless($context, 404);
-        $validated = $request->validate([
-            'assistance' => ['required', Rule::in($this->safety->optionsForUser($user))],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         abort_unless(in_array($validated['assistance'], $context['assistanceOptions'], true), 422);
 
@@ -274,7 +241,7 @@ class SafetyController extends Controller
      * The discreet QR gesture. No content back, success or not: the screen
      * the resident is holding up must not change.
      */
-    public function hold(Request $request): HttpResponse
+    public function hold(HoldSafetyQrRequest $request): HttpResponse
     {
         $user = $request->user();
         if (! $user) {
@@ -282,10 +249,7 @@ class SafetyController extends Controller
         }
 
         if ($user && $this->mayUseResidentTriggers($user)) {
-            $validated = $request->validate([
-                'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-                'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            ]);
+            $validated = $request->validated();
 
             $this->safety->arm($user, $validated);
         }
@@ -326,17 +290,14 @@ class SafetyController extends Controller
         ]);
     }
 
-    public function requestCredentialAssistance(Request $request, string $token): JsonResponse
+    public function requestCredentialAssistance(RequestCredentialAssistanceRequest $request, string $token): JsonResponse
     {
         $pass = $this->safety->passForVisitorToken($token);
         abort_unless($pass, 404);
         $context = $this->safety->accessContextForPass($pass);
         abort_unless($context, 404);
 
-        $validated = $request->validate([
-            'assistance' => ['required', Rule::in($context['assistanceOptions'])],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         abort_if($context['accountHolder'], 404);
         abort_unless($this->safety->raiseForGuest($pass, $context, $validated['assistance'], $validated), 422);

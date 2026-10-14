@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Changelog\StoreChangelogRequest;
 use App\Models\ChangelogEntry;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,16 +29,9 @@ class ChangelogController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreChangelogRequest $request): RedirectResponse
     {
-        $this->authorize('viewAppChangelog');
-
-        $validated = $request->validate([
-            'version' => ['required', 'string', 'max:20'],
-            'released_on' => ['required', 'date'],
-            'title' => ['required', 'string', 'max:160'],
-            'body' => ['required', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         ChangelogEntry::create($validated);
 

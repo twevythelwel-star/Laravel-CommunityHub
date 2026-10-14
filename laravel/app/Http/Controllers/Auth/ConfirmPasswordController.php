@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\ConfirmPasswordRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -22,13 +22,8 @@ class ConfirmPasswordController extends Controller
         return Inertia::render('Dashboard/ConfirmPassword');
     }
 
-    public function store(Request $request): JsonResponse|RedirectResponse|SymfonyResponse
+    public function store(ConfirmPasswordRequest $request): JsonResponse|RedirectResponse|SymfonyResponse
     {
-        $request->validate([
-            'password' => ['required', 'string', 'current_password'],
-        ], [
-            'password.current_password' => 'That password is incorrect.',
-        ]);
 
         $request->session()->passwordConfirmed();
         $request->user()->recordActivity('Confirmed their password for a sensitive action');

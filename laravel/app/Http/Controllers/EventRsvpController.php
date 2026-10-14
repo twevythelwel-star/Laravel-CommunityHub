@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\PassCategory;
 use App\Enums\VisitorStatus;
+use App\Http\Requests\Events\CreateEventInviteRequest;
+use App\Http\Requests\Events\SubmitEventRsvpRequest;
 use App\Models\BlocklistEntry;
 use App\Models\Community;
 use App\Models\EventInvite;
@@ -13,7 +15,6 @@ use App\Services\Messaging\PhoneNumber;
 use App\Services\SmsService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -22,16 +23,11 @@ class EventRsvpController extends Controller
     /**
      * Resident creates a shareable RSVP link for their event.
      */
-    public function createInvite(Request $request): RedirectResponse
+    public function createInvite(CreateEventInviteRequest $request): RedirectResponse
     {
         $user = $request->user();
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:120'],
-            'expected_at' => ['required', 'date'],
-            'max_guests' => ['nullable', 'integer', 'min:1', 'max:200'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $token = 'inv_'.Str::lower(Str::random(12));
 
@@ -71,7 +67,7 @@ class EventRsvpController extends Controller
     /**
      * Process attendee registration.
      */
-    public function submit(Request $request, string $token, GatePassEngine $engine, SmsService $sms): View|RedirectResponse
+    public function submit(SubmitEventRsvpRequest $request, string $token, GatePassEngine $engine, SmsService $sms): View|RedirectResponse
     {
         $invite = EventInvite::with('host')->where('token', $token)->firstOrFail();
 
@@ -79,11 +75,7 @@ class EventRsvpController extends Controller
             return back()->withErrors(['general' => 'This RSVP invitation is closed or has expired.']);
         }
 
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:100'],
-            'contact' => ['required', 'string', 'max:50'],
-            'vehicle' => ['nullable', 'string', 'max:20'],
-        ]);
+        $validated = $request->validated();
 
         $name = trim($validated['name']);
 

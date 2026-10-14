@@ -6,10 +6,10 @@ use App\Enums\UserRole;
 use App\Events\Realtime\OperationsCommandCenterEvent;
 use App\Events\Realtime\ResidentPanicAlertEvent;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Safety\ResidentPanicRequest;
 use App\Models\InAppNotification;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class ResidentEmergencyController extends Controller
@@ -17,20 +17,10 @@ class ResidentEmergencyController extends Controller
     /**
      * Dispatch an emergency resident SOS panic alert in real-time.
      */
-    public function panic(Request $request): JsonResponse
+    public function panic(ResidentPanicRequest $request): JsonResponse
     {
         $user = $request->user();
-
-        if (! $user->can('triggerEmergencyPanic')) {
-            abort(403, 'Unauthorized to trigger emergency panic alerts.');
-        }
-
-        $validated = $request->validate([
-            'emergency_type' => ['required', 'string', 'in:medical,security,fire,general'],
-            'latitude' => ['nullable', 'numeric', 'between:-90,90'],
-            'longitude' => ['nullable', 'numeric', 'between:-180,180'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $alertId = sprintf('SOS-%s-%s', date('Ymd'), strtoupper(bin2hex(random_bytes(3))));
         $location = $user->lot ? sprintf('%s, %s', $user->lot, $user->street ?? 'Community') : ($user->street ?? 'Main Community Premises');

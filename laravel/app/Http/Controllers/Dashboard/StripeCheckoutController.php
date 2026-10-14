@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Billing\RefundTransactionRequest;
 use App\Models\Invoice;
 use App\Models\Transaction;
 use App\Models\User;
@@ -122,14 +123,11 @@ class StripeCheckoutController extends Controller
      * own record of the charge, the same way the `charge.refunded` webhook
      * does, so the two cannot both record the same refund.
      */
-    public function refund(Request $request, Transaction $transaction): RedirectResponse
+    public function refund(RefundTransactionRequest $request, Transaction $transaction): RedirectResponse
     {
         $this->ensureEnabled();
 
-        $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'note' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $amountMinor = (int) round($validated['amount'] * 100);
 

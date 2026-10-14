@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\CreateWebhookSubscriptionApiRequest;
+use App\Http\Requests\Api\Webhooks\TestWebhookSubscriptionApiRequest;
 use App\Http\Resources\WebhookSubscriptionResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\WebhookSubscription;
@@ -107,7 +108,7 @@ class WebhookApiController extends Controller
     /**
      * Send a test ping event to the subscribed webhook endpoint.
      */
-    public function test(Request $request, WebhookSubscription $subscription): JsonResponse
+    public function test(TestWebhookSubscriptionApiRequest $request, WebhookSubscription $subscription): JsonResponse
     {
         $this->authorizeAccess($request, $subscription);
 

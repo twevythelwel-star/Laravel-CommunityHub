@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Spreadsheets\ImportSpreadsheetApiRequest;
+use App\Http\Requests\Api\Spreadsheets\QueueSpreadsheetExportApiRequest;
 use App\Http\Responses\ApiResponse;
 use App\Services\Spreadsheets\EnterpriseSpreadsheetService;
 use Illuminate\Http\JsonResponse;
@@ -64,18 +66,12 @@ class SpreadsheetApiController extends Controller
     /**
      * Enqueue an asynchronous export job to the queue.
      */
-    public function queueExport(Request $request, string $blueprint): JsonResponse
+    public function queueExport(QueueSpreadsheetExportApiRequest $request, string $blueprint): JsonResponse
     {
         $blueprints = $this->spreadsheetService->getExportBlueprints();
         if (! isset($blueprints[$blueprint])) {
             abort(404, "Export blueprint [{$blueprint}] not found.");
         }
-
-        $this->authorize($this->spreadsheetService->exportGate($blueprint));
-
-        // Never a caller's choice: `public` would publish the roster or the
-        // ledger at a /storage URL anyone could fetch.
-        $request->validate(['disk' => ['nullable', 'in:local']]);
 
         $format = $request->input('format', 'xlsx');
         $disk = 'local';
@@ -93,18 +89,12 @@ class SpreadsheetApiController extends Controller
     /**
      * Import spreadsheet rows from uploaded CSV or XLSX file.
      */
-    public function import(Request $request, string $blueprint): JsonResponse
+    public function import(ImportSpreadsheetApiRequest $request, string $blueprint): JsonResponse
     {
         $blueprints = $this->spreadsheetService->getImportBlueprints();
         if (! isset($blueprints[$blueprint])) {
             abort(404, "Import blueprint [{$blueprint}] not found.");
         }
-
-        $this->authorize($this->spreadsheetService->importGate($blueprint));
-
-        $request->validate([
-            'file' => 'required|file|mimes:csv,txt,xlsx,xls|max:10240',
-        ]);
 
         $file = $request->file('file');
         $result = $this->spreadsheetService->import($blueprint, $file);

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Vehicles\StoreVehicleRequest;
+use App\Http\Requests\Vehicles\UpdateVehicleRequest;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\User;
@@ -11,7 +13,6 @@ use App\Services\VehicleManagementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -51,26 +52,9 @@ class VehicleController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreVehicleRequest $request): RedirectResponse
     {
-        // A registered plate opens the gate by ANPR: residents and administrators register them.
-        abort_unless($request->user()->role->isResident() || $request->user()->role->isAdministrative(), 403, 'Only residents and administrators can register vehicles.');
-
-        $validated = $request->validate([
-            'license_plate' => ['required', 'string', 'max:32'],
-            'jurisdiction' => ['nullable', 'string', 'max:64'],
-            'make' => ['required', 'string', 'max:64'],
-            'model' => ['required', 'string', 'max:64'],
-            'color' => ['required', 'string', 'max:48'],
-            'year' => ['nullable', 'integer', 'min:1950', 'max:2030'],
-            'parking_location' => ['nullable', 'string', 'max:128'],
-            'household_member_id' => ['nullable', Rule::exists('occupants', 'id')->where('type', HouseholdMember::TYPE)],
-            'is_ev' => ['nullable', 'boolean'],
-            'is_temporary' => ['nullable', 'boolean'],
-            'valid_until' => ['nullable', 'date'],
-            'anpr_enabled' => ['nullable', 'boolean'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $this->ensureOwnHouseholdMember($request->user(), $validated['household_member_id'] ?? null);
 
@@ -79,24 +63,9 @@ class VehicleController extends Controller
         return back()->with('success', 'Vehicle registered successfully. ANPR plate authorization active.');
     }
 
-    public function update(Request $request, Vehicle $vehicle): RedirectResponse
+    public function update(UpdateVehicleRequest $request, Vehicle $vehicle): RedirectResponse
     {
-        $validated = $request->validate([
-            'license_plate' => ['sometimes', 'string', 'max:32'],
-            'jurisdiction' => ['nullable', 'string', 'max:64'],
-            'make' => ['sometimes', 'string', 'max:64'],
-            'model' => ['sometimes', 'string', 'max:64'],
-            'color' => ['sometimes', 'string', 'max:48'],
-            'year' => ['nullable', 'integer', 'min:1950', 'max:2030'],
-            'parking_location' => ['nullable', 'string', 'max:128'],
-            'household_member_id' => ['nullable', Rule::exists('occupants', 'id')->where('type', HouseholdMember::TYPE)],
-            'is_ev' => ['nullable', 'boolean'],
-            'is_temporary' => ['nullable', 'boolean'],
-            'valid_until' => ['nullable', 'date'],
-            'anpr_enabled' => ['nullable', 'boolean'],
-            'status' => ['nullable', 'string', 'in:active,inactive,suspended,revoked'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
         $this->ensureCanManage($user, $vehicle);

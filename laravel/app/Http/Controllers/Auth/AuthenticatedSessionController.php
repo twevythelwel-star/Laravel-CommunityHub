@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
 use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Services\GatePassEngine;
@@ -31,12 +32,9 @@ class AuthenticatedSessionController extends Controller
         ]);
     }
 
-    public function store(Request $request, GatePassEngine $engine): RedirectResponse
+    public function store(LoginRequest $request, GatePassEngine $engine): RedirectResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'string', 'email'],
-            'password' => ['required', 'string'],
-        ]);
+        $credentials = $request->validated();
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             throw ValidationException::withMessages([

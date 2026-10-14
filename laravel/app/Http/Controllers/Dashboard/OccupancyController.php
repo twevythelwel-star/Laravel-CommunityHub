@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Occupancy\ResolveMusterRequest;
+use App\Http\Requests\Occupancy\StartMusterRequest;
+use App\Http\Requests\Occupancy\UpdateMusterStatusRequest;
 use App\Models\MusterSession;
 use App\Models\User;
 use App\Services\EmergencyMusterService;
@@ -16,7 +19,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -214,20 +216,10 @@ class OccupancyController extends Controller
     /**
      * Start an Emergency Muster / Evacuation session.
      */
-    public function startMuster(Request $request): RedirectResponse|JsonResponse
+    public function startMuster(StartMusterRequest $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
-        if (! $user->role->isAdministrative() && ! $user->role->isSecurity() && ! $user->role->isStaff()) {
-            abort(403, 'Unauthorized to initiate emergency muster operations.');
-        }
-
-        $validated = $request->validate([
-            'incident_type' => ['required', 'string', 'in:fire,hurricane,earthquake,flood,security_incident,drill,other'],
-            'title' => ['required', 'string', 'max:160'],
-            // Required unless the estate has configured one; there is no invented default.
-            'assembly_point' => [Rule::requiredIf(blank(config('occupancy.assembly_point'))), 'nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $session = $this->musterService->startSession(
@@ -255,19 +247,10 @@ class OccupancyController extends Controller
     /**
      * Update an individual's muster status: safe, missing, evacuated, needs_assistance, checked_out.
      */
-    public function updateMusterStatus(Request $request): JsonResponse|RedirectResponse
+    public function updateMusterStatus(UpdateMusterStatusRequest $request): JsonResponse|RedirectResponse
     {
         $user = $request->user();
-        if (! $user->role->isAdministrative() && ! $user->role->isSecurity() && ! $user->role->isStaff()) {
-            abort(403, 'Unauthorized to update emergency muster statuses.');
-        }
-
-        $validated = $request->validate([
-            'session_id' => ['required', 'integer', 'exists:muster_sessions,id'],
-            'occupant_id' => ['required', 'string'],
-            'status' => ['required', 'string', 'in:safe,missing,evacuated,needs_assistance,checked_out'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $session = MusterSession::findOrFail($validated['session_id']);
 
@@ -298,17 +281,10 @@ class OccupancyController extends Controller
     /**
      * Resolve/complete an emergency muster session.
      */
-    public function resolveMuster(Request $request): RedirectResponse|JsonResponse
+    public function resolveMuster(ResolveMusterRequest $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
-        if (! $user->role->isAdministrative() && ! $user->role->isSecurity() && ! $user->role->isStaff()) {
-            abort(403, 'Unauthorized to resolve emergency muster operations.');
-        }
-
-        $validated = $request->validate([
-            'session_id' => ['required', 'integer', 'exists:muster_sessions,id'],
-            'resolution_notes' => ['nullable', 'string', 'max:1000'],
-        ]);
+        $validated = $request->validated();
 
         $session = MusterSession::findOrFail($validated['session_id']);
 

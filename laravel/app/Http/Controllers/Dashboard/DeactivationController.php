@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Profile\StoreDeactivationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -27,13 +28,9 @@ class DeactivationController extends Controller
         ]);
     }
 
-    public function store(Request $request): SymfonyResponse
+    public function store(StoreDeactivationRequest $request): SymfonyResponse
     {
-        $validated = $request->validate([
-            'password' => ['required', 'current_password'],
-            'reason' => ['nullable', 'string', 'max:1000'],
-            'confirm' => ['accepted'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 

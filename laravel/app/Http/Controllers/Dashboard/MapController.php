@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Map\LocateMapRequest;
+use App\Http\Requests\Map\StoreLandmarkRequest;
 use App\Models\BoundaryAuditLog;
 use App\Models\BoundaryConfig;
 use App\Models\Community;
@@ -73,18 +75,9 @@ class MapController extends Controller
         ]);
     }
 
-    public function storeLandmark(Request $request): RedirectResponse
+    public function storeLandmark(StoreLandmarkRequest $request): RedirectResponse
     {
-        $this->authorize('manageLandmarks');
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'category' => ['required', 'string', 'in:Security Gate,Community Center,Park'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'lat' => ['required', 'numeric', 'between:-90,90'],
-            'lng' => ['required', 'numeric', 'between:-180,180'],
-            'icon' => ['nullable', 'string', 'max:40'],
-        ]);
+        $validated = $request->validated();
 
         Community::default()->landmarks()->create([
             ...$validated,
@@ -113,12 +106,9 @@ class MapController extends Controller
      * decides whether it is inside the published boundary, so the answer cannot
      * be spoofed by editing client state.
      */
-    public function locate(Request $request): JsonResponse
+    public function locate(LocateMapRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'lat' => ['required', 'numeric', 'between:-90,90'],
-            'lng' => ['required', 'numeric', 'between:-180,180'],
-        ]);
+        $validated = $request->validated();
 
         $point = [(float) $validated['lat'], (float) $validated['lng']];
         $polygon = Community::default()->publishedBoundary()?->published_coordinates ?? [];

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Parking\StoreParkingPassRequest;
+use App\Http\Requests\Parking\VerifyParkingPassRequest;
 use App\Models\ParkingPass;
 use App\Models\Vehicle;
 use App\Services\ParkingPassService;
@@ -41,24 +43,12 @@ class ParkingPassController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreParkingPassRequest $request): RedirectResponse
     {
         $user = $request->user();
         $isStaff = $user->can('manageSecurity');
-        abort_unless($user->role->isResident() || $isStaff, 403, 'Only residents, security and administration can issue parking passes.');
 
-        $validated = $request->validate([
-            'category' => ['required', 'string', 'in:resident,visitor,contractor,temporary,accessible,loading_zone'],
-            'license_plate' => ['required', 'string', 'max:32'],
-            'vehicle_id' => ['nullable', 'exists:vehicles,id'],
-            'property' => ['nullable', 'string', 'max:64'],
-            'assigned_bay' => ['nullable', 'string', 'max:64'],
-            'holder_name' => ['required', 'string', 'max:128'],
-            'valid_from' => ['nullable', 'date'],
-            'valid_until' => ['nullable', 'date'],
-            'max_duration_minutes' => ['nullable', 'integer'],
-            'metadata' => ['nullable', 'array'],
-        ]);
+        $validated = $request->validated();
 
         // A resident issues passes for their own property and vehicles; bays and
         // the accessible and loading-zone categories are assigned by staff.
@@ -76,9 +66,9 @@ class ParkingPassController extends Controller
         return back()->with('success', 'Parking QR credential issued successfully.');
     }
 
-    public function verify(Request $request): JsonResponse
+    public function verify(VerifyParkingPassRequest $request): JsonResponse
     {
-        $token = $request->input('token') ?? $request->query('token', '');
+        $token = $request->validated('token') ?? $request->input('token') ?? $request->query('token', '');
         $result = $this->parkingService->verifyParkingPass((string) $token);
 
         return response()->json($result);

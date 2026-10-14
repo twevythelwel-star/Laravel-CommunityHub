@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Events\SecurityAlertBroadcastEvent;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Warnings\RespondWarningRequest;
+use App\Http\Requests\Warnings\StoreWarningRequest;
 use App\Models\Warning;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,12 +67,9 @@ class WarningController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreWarningRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'min:5', 'max:160'],
-            'description' => ['required', 'string', 'min:10', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 
@@ -96,11 +95,9 @@ class WarningController extends Controller
         return back()->with('success', 'Your alert has been sent to the community.');
     }
 
-    public function respond(Request $request, Warning $warning): RedirectResponse
+    public function respond(RespondWarningRequest $request, Warning $warning): RedirectResponse
     {
-        $validated = $request->validate([
-            'response' => ['required', 'in:confirmed,denied'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 

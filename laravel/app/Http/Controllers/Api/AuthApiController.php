@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Auth\ApiLoginRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\GatePassEngine;
@@ -15,13 +16,9 @@ use Illuminate\Validation\ValidationException;
 /** Token auth for the Capacitor shell and handheld scanners. */
 class AuthApiController extends Controller
 {
-    public function login(Request $request, GatePassEngine $engine): JsonResponse
+    public function login(ApiLoginRequest $request, GatePassEngine $engine): JsonResponse
     {
-        $validated = $request->validate([
-            'email' => ['required', 'email'],
-            'password' => ['required', 'string'],
-            'device_name' => ['required', 'string', 'max:120'],
-        ]);
+        $validated = $request->validated();
 
         $user = User::where('email', $validated['email'])->first();
 

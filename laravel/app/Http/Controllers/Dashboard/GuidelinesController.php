@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Guidelines\StoreGuidelineRequest;
+use App\Http\Requests\Guidelines\UpdateGuidelineRequest;
 use App\Models\Guideline;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,9 +38,9 @@ class GuidelinesController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreGuidelineRequest $request): RedirectResponse
     {
-        $validated = $this->validated($request);
+        $validated = $request->validated();
 
         // Appended to the end of its category, which is where the page shows it.
         $validated['sort_order'] = (int) Guideline::where('category', $validated['category'])->max('sort_order') + 1;
@@ -48,9 +50,9 @@ class GuidelinesController extends Controller
         return back()->with('success', 'Guideline added.');
     }
 
-    public function update(Request $request, Guideline $guideline): RedirectResponse
+    public function update(UpdateGuidelineRequest $request, Guideline $guideline): RedirectResponse
     {
-        $validated = $this->validated($request);
+        $validated = $request->validated();
 
         if ($validated['category'] !== $guideline->category) {
             $validated['sort_order'] = (int) Guideline::where('category', $validated['category'])->max('sort_order') + 1;
@@ -66,20 +68,5 @@ class GuidelinesController extends Controller
         $guideline->delete();
 
         return back()->with('success', 'Guideline deleted.');
-    }
-
-    /**
-     * Mirrors the minimums in guideline-form.tsx so the server refuses what the
-     * form refuses.
-     *
-     * @return array{category: string, title: string, description: string}
-     */
-    private function validated(Request $request): array
-    {
-        return $request->validate([
-            'category' => ['required', 'string', 'min:3', 'max:80'],
-            'title' => ['required', 'string', 'min:3', 'max:160'],
-            'description' => ['required', 'string', 'min:10', 'max:5000'],
-        ]);
     }
 }

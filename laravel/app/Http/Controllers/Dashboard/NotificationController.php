@@ -8,6 +8,9 @@ use App\Enums\UserRole;
 use App\Enums\VisitorStatus;
 use App\Events\Realtime\LiveNotificationEvent;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Notifications\BroadcastEmergencyNotificationRequest;
+use App\Http\Requests\Notifications\StoreNotificationRequest;
+use App\Http\Requests\Notifications\SuggestAudienceRequest;
 use App\Models\Community;
 use App\Models\DelegatedAccess;
 use App\Models\GatePass;
@@ -78,14 +81,9 @@ class NotificationController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreNotificationRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'content' => ['required', 'string', 'max:5000'],
-            'target_roles' => ['nullable', 'array'],
-            'target_roles.*' => ['string', 'in:'.implode(',', array_column(UserRole::cases(), 'value'))],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
         $roles = array_values(array_unique($validated['target_roles'] ?? []));
@@ -122,7 +120,7 @@ class NotificationController extends Controller
      * agreed to, and the agreement itself lived in localStorage, so clearing
      * site data silently revoked a consent no record was ever kept of.
      */
-    public function suggestAudience(Request $request, NotificationTargetingService $targeting): JsonResponse
+    public function suggestAudience(SuggestAudienceRequest $request, NotificationTargetingService $targeting): JsonResponse
     {
         $user = $request->user();
 
@@ -133,9 +131,7 @@ class NotificationController extends Controller
             ], 403);
         }
 
-        $validated = $request->validate([
-            'document' => ['required', 'string', 'max:20000'],
-        ]);
+        $validated = $request->validated();
 
         /*
          | The community is not the composer's to type. The original offered a
@@ -153,28 +149,13 @@ class NotificationController extends Controller
      * Dispatch an emergency broadcast notice across Push, SMS, WhatsApp, Email, and In-App.
      */
     public function broadcastEmergency(
-        Request $request,
+        BroadcastEmergencyNotificationRequest $request,
         SmsService $sms,
         WhatsAppService $whatsapp
     ): RedirectResponse|JsonResponse {
         $user = $request->user();
-        if (! $user->can('broadcastNotices') && ! $user->can('manageSecurity')) {
-            abort(403, 'Unauthorized to dispatch emergency broadcasts.');
-        }
 
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'content' => ['required', 'string', 'max:1000'],
-            'severity' => ['required', 'string', 'in:info,advisory,emergency'],
-            'audience' => ['required', 'string', 'in:all,building,property,residents,staff,security,legacy_contacts,long_term_guests,visitors'],
-            'target_building' => ['nullable', 'required_if:audience,building', 'string', 'max:100'],
-            'target_property' => ['nullable', 'required_if:audience,property', 'string', 'max:100'],
-            'send_push' => ['nullable', 'boolean'],
-            'send_sms' => ['nullable', 'boolean'],
-            'send_whatsapp' => ['nullable', 'boolean'],
-            'send_email' => ['nullable', 'boolean'],
-            'send_in_app' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $title = $validated['title'];
         $content = $validated['content'];

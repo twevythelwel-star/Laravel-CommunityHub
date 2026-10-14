@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Calendar\StoreCalendarEventRequest;
+use App\Http\Requests\Calendar\UpdateCalendarEventRequest;
 use App\Models\CommunityEvent;
 use App\Models\Renter;
 use App\Models\Visitor;
@@ -95,34 +97,18 @@ class CalendarController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreCalendarEventRequest $request): RedirectResponse
     {
-        $this->authorize('broadcastNotices');
-
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'description' => ['required', 'string', 'max:5000'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'image_url' => ['nullable', 'url', 'max:2048'],
-        ]);
+        $validated = $request->validated();
 
         CommunityEvent::create([...$validated, 'created_by' => $request->user()->id]);
 
         return back()->with('success', 'Event created.');
     }
 
-    public function update(Request $request, CommunityEvent $communityEvent): RedirectResponse
+    public function update(UpdateCalendarEventRequest $request, CommunityEvent $communityEvent): RedirectResponse
     {
-        $this->authorize('broadcastNotices');
-
-        $validated = $request->validate([
-            'title' => ['sometimes', 'string', 'max:160'],
-            'description' => ['sometimes', 'string', 'max:5000'],
-            'start_date' => ['sometimes', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'image_url' => ['nullable', 'url', 'max:2048'],
-        ]);
+        $validated = $request->validated();
 
         $communityEvent->update($validated);
 

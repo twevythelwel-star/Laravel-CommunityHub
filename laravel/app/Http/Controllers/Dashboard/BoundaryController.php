@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Boundary\ImportBoundaryGeoJsonRequest;
+use App\Http\Requests\Boundary\PublishBoundaryRequest;
+use App\Http\Requests\Boundary\SaveBoundaryDraftRequest;
+use App\Http\Requests\Boundary\ValidateBoundaryRequest;
 use App\Models\BoundaryAuditLog;
 use App\Models\BoundaryConfig;
 use App\Models\Community;
@@ -105,13 +109,9 @@ class BoundaryController extends Controller
     }
 
     /** Stateless validation, so the editor can check a shape before saving. */
-    public function validateBoundary(Request $request): JsonResponse
+    public function validateBoundary(ValidateBoundaryRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'points' => ['required', 'array', 'min:1', 'max:8'],
-            'points.*.lat' => ['required', 'numeric', 'between:-90,90'],
-            'points.*.lng' => ['required', 'numeric', 'between:-180,180'],
-        ]);
+        $validated = $request->validated();
 
         $polygon = array_map(
             fn (array $p) => [(float) $p['lat'], (float) $p['lng']],
@@ -174,10 +174,8 @@ class BoundaryController extends Controller
     }
 
     /** Import polygon coordinates from uploaded or pasted GeoJSON */
-    public function importGeoJson(Request $request): JsonResponse
+    public function importGeoJson(ImportBoundaryGeoJsonRequest $request): JsonResponse
     {
-        $this->authorize('manageBoundary');
-
         $geojsonRaw = null;
         if ($request->hasFile('file')) {
             $geojsonRaw = file_get_contents($request->file('file')->getRealPath());
@@ -277,9 +275,9 @@ class BoundaryController extends Controller
         ]);
     }
 
-    public function saveDraft(Request $request): RedirectResponse
+    public function saveDraft(SaveBoundaryDraftRequest $request): RedirectResponse
     {
-        $validated = $this->validatePoints($request);
+        $validated = $request->validated();
 
         $community = Community::default();
         $user = $request->user();
@@ -339,9 +337,9 @@ class BoundaryController extends Controller
         return back()->with('success', 'Boundary draft saved.');
     }
 
-    public function publish(Request $request): RedirectResponse
+    public function publish(PublishBoundaryRequest $request): RedirectResponse
     {
-        $validated = $this->validatePoints($request);
+        $validated = $request->validated();
 
         $polygon = array_map(
             fn (array $p) => [(float) $p['lat'], (float) $p['lng']],
@@ -413,7 +411,6 @@ class BoundaryController extends Controller
 
     public function replace(Request $request, BoundaryConfig $boundaryConfig): RedirectResponse
     {
-        $this->authorize('manageBoundary');
         $community = Community::default();
         $user = $request->user();
 
@@ -510,16 +507,5 @@ class BoundaryController extends Controller
         });
 
         return back()->with('success', 'Boundary configuration deleted.');
-    }
-
-    private function validatePoints(Request $request): array
-    {
-        return $request->validate([
-            'points' => ['required', 'array', 'min:4', 'max:8'],
-            'points.*.label' => ['nullable', 'string', 'max:60'],
-            'points.*.lat' => ['required', 'numeric', 'between:-90,90'],
-            'points.*.lng' => ['required', 'numeric', 'between:-180,180'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
     }
 }

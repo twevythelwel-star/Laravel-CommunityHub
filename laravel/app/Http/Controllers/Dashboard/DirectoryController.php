@@ -4,7 +4,11 @@ namespace App\Http\Controllers\Dashboard;
 
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Directory\StoreDirectoryPropertyRequest;
+use App\Http\Requests\Directory\StoreStaffRequest;
+use App\Http\Requests\Directory\StoreUserRequest;
 use App\Http\Requests\Directory\UpdateStaffRequest;
+use App\Http\Requests\Directory\UpdateUserRequest;
 use App\Models\Property;
 use App\Models\Staff;
 use App\Models\User;
@@ -12,7 +16,6 @@ use App\Services\PropertyOwnershipService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -104,19 +107,9 @@ class DirectoryController extends Controller
         ]);
     }
 
-    public function storeStaff(Request $request): RedirectResponse
+    public function storeStaff(StoreStaffRequest $request): RedirectResponse
     {
-        $this->authorize('registerStaff');
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'job' => ['required', 'string', 'max:120'],
-            'id_type' => ['required', 'string', 'max:60'],
-            'id_number' => ['required', 'string', 'max:60'],
-            'id_expiry' => ['required', 'date', 'after:today'],
-            'id_image_url' => ['nullable', 'url', 'max:2048'],
-            'photo_url' => ['nullable', 'url', 'max:2048'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 
@@ -150,19 +143,9 @@ class DirectoryController extends Controller
         return back()->with('success', 'Staff member removed.');
     }
 
-    public function storeUser(Request $request): RedirectResponse
+    public function storeUser(StoreUserRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'display_name' => ['nullable', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:190', 'unique:users,email'],
-            'phone' => ['nullable', 'string', 'max:40'],
-            'role' => ['required', 'string', 'in:'.implode(',', array_column(UserRole::cases(), 'value'))],
-            'title' => ['nullable', 'string', 'max:120'],
-            'lot' => ['nullable', 'string', 'max:60'],
-            'street' => ['nullable', 'string', 'max:120'],
-            'password' => ['required', 'confirmed', Password::defaults()],
-        ]);
+        $validated = $request->validated();
 
         // Only a System Admin may mint another System Admin.
         if ($validated['role'] === UserRole::SystemAdmin->value
@@ -183,17 +166,9 @@ class DirectoryController extends Controller
         return back()->with('success', 'User created.');
     }
 
-    public function updateUser(Request $request, User $user): RedirectResponse
+    public function updateUser(UpdateUserRequest $request, User $user): RedirectResponse
     {
-        $validated = $request->validate([
-            'display_name' => ['sometimes', 'string', 'max:120'],
-            'phone' => ['nullable', 'string', 'max:40'],
-            'role' => ['sometimes', 'string', 'in:'.implode(',', array_column(UserRole::cases(), 'value'))],
-            'title' => ['nullable', 'string', 'max:120'],
-            'lot' => ['nullable', 'string', 'max:60'],
-            'street' => ['nullable', 'string', 'max:120'],
-            'status' => ['sometimes', 'in:Active,Inactive'],
-        ]);
+        $validated = $request->validated();
 
         $actor = $request->user();
 
@@ -233,7 +208,7 @@ class DirectoryController extends Controller
      * Records that a homeowner owns another property, which is then billed HOA
      * dues of its own.
      */
-    public function storeProperty(Request $request, User $user): RedirectResponse
+    public function storeProperty(StoreDirectoryPropertyRequest $request, User $user): RedirectResponse
     {
         // Homeowners, and administrators who live on the estate.
         if ($user->role !== UserRole::Homeowner && ! $user->role->isAdministrative()) {
@@ -245,10 +220,7 @@ class DirectoryController extends Controller
             return back()->withErrors(['lot_number' => "Only a System Admin can manage an administrator's properties."]);
         }
 
-        $validated = $request->validate([
-            'lot_number' => ['required', 'string', 'max:50'],
-            'street_address' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $property = $this->ownership->assign($user, $validated['lot_number'], $validated['street_address'] ?? null);

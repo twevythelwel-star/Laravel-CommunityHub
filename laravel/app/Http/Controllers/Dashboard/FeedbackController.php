@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Feedback\StoreFeedbackRequest;
 use App\Models\Feedback;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,13 +34,9 @@ class FeedbackController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreFeedbackRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'type' => ['required', 'in:Issue,Suggestion'],
-            'subject' => ['required', 'string', 'max:160'],
-            'body' => ['required', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 

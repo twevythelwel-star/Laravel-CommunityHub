@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Updates\StoreUpdateRequest;
 use App\Models\CommunityUpdate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,15 +28,9 @@ class UpdateController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreUpdateRequest $request): RedirectResponse
     {
-        $this->authorize('broadcastNotices');
-
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'date' => ['required', 'date'],
-            'summary' => ['required', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         CommunityUpdate::create([...$validated, 'created_by' => $request->user()->id]);
 

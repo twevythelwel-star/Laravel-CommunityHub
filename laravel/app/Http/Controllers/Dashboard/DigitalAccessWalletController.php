@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Dashboard;
 use App\Enums\GateId;
 use App\Exceptions\WalletPassUnavailable;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Access\ReportLostCredentialRequest;
 use App\Models\GatePass;
 use App\Models\Household;
 use App\Services\DigitalAccessWalletService;
@@ -79,12 +80,9 @@ class DigitalAccessWalletController extends Controller
      * Immediately revokes the current credential (invalidating all QR tokens and screenshots)
      * and automatically generates a fresh replacement credential.
      */
-    public function reportLost(Request $request): JsonResponse
+    public function reportLost(ReportLostCredentialRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'pass_id' => ['required', 'string'],
-            'reason' => ['nullable', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $pass = GatePass::where('pass_id', $validated['pass_id'])->firstOrFail();
         $this->authorize('view', $pass);

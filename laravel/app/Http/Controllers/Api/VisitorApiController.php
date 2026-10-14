@@ -7,6 +7,9 @@ use App\Enums\PassCategory;
 use App\Enums\PassStatus;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Visitors\CheckInApiVisitorRequest;
+use App\Http\Requests\Visitors\CheckOutApiVisitorRequest;
+use App\Http\Requests\Visitors\StoreApiVisitorRequest;
 use App\Http\Resources\VisitorResource;
 use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
@@ -38,21 +41,9 @@ class VisitorApiController extends Controller
         return response()->json(['visitors' => VisitorResource::collection($visitors)->resolve()]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreApiVisitorRequest $request): JsonResponse
     {
-        $this->authorize('registerVisitors');
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'contact' => ['nullable', 'string', 'max:120'],
-            'type' => ['required', 'in:One-time,Recurring'],
-            'expected_at' => ['required', 'date'],
-            'date_range' => ['nullable', 'string', 'max:120'],
-            'notify_email' => ['nullable', 'boolean'],
-            'notify_sms' => ['nullable', 'boolean'],
-            'notify_whatsapp' => ['nullable', 'boolean'],
-            'pass_category' => ['nullable', 'in:VISITOR,CONTRACTOR'],
-        ]);
+        $validated = $request->validated();
 
         $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
         unset($validated['pass_category']);
@@ -91,7 +82,7 @@ class VisitorApiController extends Controller
         ], 201);
     }
 
-    public function checkIn(Request $request, Visitor $visitor): JsonResponse
+    public function checkIn(CheckInApiVisitorRequest $request, Visitor $visitor): JsonResponse
     {
         if ($visitor->gatePass) {
             try {
@@ -128,7 +119,7 @@ class VisitorApiController extends Controller
         return response()->json(['allowed' => true, 'status' => $visitor->status->value]);
     }
 
-    public function checkOut(Request $request, Visitor $visitor): JsonResponse
+    public function checkOut(CheckOutApiVisitorRequest $request, Visitor $visitor): JsonResponse
     {
         if ($visitor->gatePass) {
             try {

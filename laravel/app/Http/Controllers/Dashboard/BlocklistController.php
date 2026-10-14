@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Blocklist\RequestBlocklistRemovalRequest;
+use App\Http\Requests\Blocklist\ReviewBlocklistRemovalRequest;
+use App\Http\Requests\Blocklist\StoreBlocklistEntryRequest;
+use App\Http\Requests\Blocklist\UpdateBlocklistEntryRequest;
 use App\Models\BlocklistEntry;
 use App\Models\BlocklistRemovalRequest;
 use App\Models\User;
@@ -85,16 +89,9 @@ class BlocklistController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreBlocklistEntryRequest $request): RedirectResponse
     {
-        $this->authorize('manageBlocklist');
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'reason' => ['required', 'string', 'max:1000'],
-            'photo_url' => ['nullable', 'url', 'max:2048'],
-            'expiry_date' => ['nullable', 'date', 'after:today'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 
@@ -114,16 +111,9 @@ class BlocklistController extends Controller
         return back()->with('success', "{$entry->name} added to the blocklist.");
     }
 
-    public function update(Request $request, BlocklistEntry $blocklistEntry): RedirectResponse
+    public function update(UpdateBlocklistEntryRequest $request, BlocklistEntry $blocklistEntry): RedirectResponse
     {
-        $this->authorize('manageBlocklist');
-
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:120'],
-            'reason' => ['sometimes', 'string', 'max:1000'],
-            'photo_url' => ['nullable', 'url', 'max:2048'],
-            'expiry_date' => ['nullable', 'date'],
-        ]);
+        $validated = $request->validated();
 
         $blocklistEntry->update($validated);
 
@@ -154,17 +144,10 @@ class BlocklistController extends Controller
      * Replaces a dialog that called console.log and told the resident the request
      * had been sent to administrators.
      */
-    public function requestRemoval(Request $request, BlocklistEntry $blocklistEntry): RedirectResponse
+    public function requestRemoval(RequestBlocklistRemovalRequest $request, BlocklistEntry $blocklistEntry): RedirectResponse
     {
         $user = $request->user();
-
-        if (! $user->role->isResident()) {
-            abort(403, 'Only residents can request a blocklist review.');
-        }
-
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'min:10', 'max:2000'],
-        ]);
+        $validated = $request->validated();
 
         // One open request per resident per entry; asking again reopens the
         // existing row rather than stacking duplicates.
@@ -188,14 +171,9 @@ class BlocklistController extends Controller
     }
 
     /** An administrator approves or declines a request. */
-    public function reviewRemoval(Request $request, BlocklistRemovalRequest $removalRequest): RedirectResponse
+    public function reviewRemoval(ReviewBlocklistRemovalRequest $request, BlocklistRemovalRequest $removalRequest): RedirectResponse
     {
-        $this->authorize('manageBlocklist');
-
-        $validated = $request->validate([
-            'status' => ['required', 'in:Approved,Declined'],
-            'reviewer_note' => ['nullable', 'string', 'max:2000'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
 

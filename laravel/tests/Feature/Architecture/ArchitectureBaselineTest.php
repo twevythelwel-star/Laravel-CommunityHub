@@ -165,7 +165,7 @@ class ArchitectureBaselineTest extends TestCase
             $ref = new ReflectionMethod($class, $method);
             $short = str_replace('App\\Http\\Controllers\\', '', $class).'@'.$method;
 
-            if (array_intersect($verbs, ['POST', 'PUT', 'PATCH']) && ! $this->hasFormRequest($ref)) {
+            if (array_intersect($verbs, ['POST', 'PUT', 'PATCH']) && ! $this->hasFormRequest($ref) && $this->readsInput($ref)) {
                 $writes[$key] = $short;
             }
 
@@ -197,6 +197,23 @@ class ArchitectureBaselineTest extends TestCase
             'adhoc_authz' => $adhoc,
             'services_root_files' => $root,
         ];
+    }
+
+    /**
+     * Whether the action reads or validates request input itself. A write
+     * that takes no input (logout) or verifies a raw signed body (a provider
+     * webhook) has nothing for a FormRequest to validate, and an empty one
+     * would only satisfy this test.
+     */
+    private function readsInput(ReflectionMethod $method): bool
+    {
+        $lines = file($method->getFileName());
+        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
+
+        return (bool) preg_match(
+            '/(\$request|request\(\))->(input|get|all|only|except|post|query|boolean|string|integer|float|date|enum|file|files|validate|safe|collect|has|filled|missing)\(|Validator::make\(/',
+            $body,
+        );
     }
 
     private function hasFormRequest(ReflectionMethod $method): bool

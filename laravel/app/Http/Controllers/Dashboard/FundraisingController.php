@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Billing\AddFundraiserUpdateRequest;
+use App\Http\Requests\Billing\DonateFundraiserRequest;
+use App\Http\Requests\Billing\RefundDonationRequest;
+use App\Http\Requests\Billing\StoreFundraiserRequest;
+use App\Http\Requests\Billing\UpdateFundraiserRequest;
 use App\Models\Community;
 use App\Models\Donation;
 use App\Models\Fundraiser;
@@ -184,20 +189,9 @@ class FundraisingController extends Controller
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(StoreFundraiserRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:160'],
-            'description' => ['required', 'string', 'max:5000'],
-            'beneficiary' => ['nullable', 'string', 'max:150'],
-            'goal' => ['required', 'numeric', 'min:1'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after:start_date'],
-            'status' => ['required', 'in:Active,Upcoming'],
-            'cover_image_url' => ['nullable', 'string', 'max:500'],
-            'images' => ['nullable'],
-            'matching_sponsor' => ['nullable', 'string', 'max:150'],
-        ]);
+        $validated = $request->validated();
 
         $images = [];
         if (! empty($validated['images'])) {
@@ -228,11 +222,9 @@ class FundraisingController extends Controller
         return back()->with('success', 'Fundraiser created.');
     }
 
-    public function update(Request $request, Fundraiser $fundraiser): RedirectResponse
+    public function update(UpdateFundraiserRequest $request, Fundraiser $fundraiser): RedirectResponse
     {
-        $validated = $request->validate([
-            'status' => ['required', 'in:Active,Upcoming,Completed,Canceled'],
-        ]);
+        $validated = $request->validated();
 
         if ($validated['status'] === 'Active' && $fundraiser->end_date->isPast()) {
             return back()->withErrors([
@@ -254,19 +246,9 @@ class FundraisingController extends Controller
      * go through the card driver, which returned success for every request, so
      * the default channel recorded a completed donation with no money taken.
      */
-    public function donate(Request $request, Fundraiser $fundraiser, ProviderRegistry $providers): SymfonyResponse
+    public function donate(DonateFundraiserRequest $request, Fundraiser $fundraiser, ProviderRegistry $providers): SymfonyResponse
     {
-        $validated = $request->validate([
-            'amount' => ['required', 'numeric', 'min:1', 'max:100000000'],
-            'donor_name' => ['nullable', 'string', 'max:120'],
-            'is_anonymous' => ['boolean'],
-            'is_recurring' => ['nullable', 'boolean'],
-            'frequency' => ['nullable', 'string', 'in:monthly,quarterly,annual'],
-            // Validated against the registered drivers. Without this an
-            // unknown key reached PaymentOrchestratorService::getDriver(),
-            // which throws InvalidArgumentException — a 500 from a form post.
-            'channel' => ['nullable', 'string', 'in:'.implode(',', $this->orchestrator->channelKeys())],
-        ]);
+        $validated = $request->validated();
 
         if (! $fundraiser->isOpen()) {
             return back()->withErrors(['amount' => 'This fundraiser is not currently accepting donations.']);
@@ -355,11 +337,9 @@ class FundraisingController extends Controller
     /**
      * Administrator refund processing for donations.
      */
-    public function refund(Request $request, Donation $donation): RedirectResponse
+    public function refund(RefundDonationRequest $request, Donation $donation): RedirectResponse
     {
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         if ($donation->status === 'refunded') {
             return back()->withErrors(['refund' => 'This donation has already been refunded.']);
@@ -522,13 +502,9 @@ class FundraisingController extends Controller
             ->with('info', 'Donation cancelled. You have not been charged.');
     }
 
-    public function addUpdate(Request $request, Fundraiser $fundraiser): RedirectResponse
+    public function addUpdate(AddFundraiserUpdateRequest $request, Fundraiser $fundraiser): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'content' => ['required', 'string', 'max:2000'],
-            'image_url' => ['nullable', 'url', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $fundraiser->updates()->create($validated);
 

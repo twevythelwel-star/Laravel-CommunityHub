@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Settings\UpdateSettingsRequest;
 use App\Models\BrandingSetting;
 use App\Models\Community;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -62,34 +62,11 @@ class SettingsController extends Controller
         ]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(UpdateSettingsRequest $request): RedirectResponse
     {
         $user = $request->user();
 
-        $validated = $request->validate([
-            // ── Personal preferences ──
-            'theme' => ['sometimes', 'in:light,dark,system'],
-            'map_show_boundary' => ['sometimes', 'boolean'],
-            'map_show_landmarks' => ['sometimes', 'boolean'],
-            'notify_email' => ['sometimes', 'boolean'],
-            'notify_push' => ['sometimes', 'boolean'],
-            'notify_sms' => ['sometimes', 'boolean'],
-
-            // ── Estate-wide branding & community name, admin only ──
-            'app_name' => ['sometimes', 'string', 'max:80'],
-            'community_name' => ['sometimes', 'string', 'max:120'],
-            'logo_url' => ['nullable', 'string', 'max:2048'],
-            'primary_color' => ['nullable', 'string', 'max:32'],
-            'accent_color' => ['nullable', 'string', 'max:32'],
-            'background_color' => ['nullable', 'string', 'max:32'],
-            'default_theme' => ['sometimes', 'in:light,dark,system'],
-            'theme_tokens' => ['sometimes', 'array'],
-            'theme_tokens.*' => ['nullable'],
-
-            // ── Password change ──
-            'current_password' => ['sometimes', 'required_with:password', 'current_password'],
-            'password' => ['sometimes', 'confirmed', Password::defaults()],
-        ]);
+        $validated = $request->validated();
 
         $personal = array_intersect_key($validated, array_flip([
             'theme', 'map_show_boundary', 'map_show_landmarks',

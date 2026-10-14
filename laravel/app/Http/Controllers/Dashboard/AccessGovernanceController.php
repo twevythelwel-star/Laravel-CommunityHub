@@ -3,6 +3,11 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Access\ApproveAccessRequestRequest;
+use App\Http\Requests\Access\AttachComplianceDocumentRequest;
+use App\Http\Requests\Access\LockdownIncidentRequest;
+use App\Http\Requests\Access\RejectAccessRequestRequest;
+use App\Http\Requests\Access\ResolveIncidentRequest;
 use App\Models\AccessApprovalRequest;
 use App\Models\AccessAuditTimelineEvent;
 use App\Models\AccessRiskIncident;
@@ -92,11 +97,9 @@ class AccessGovernanceController extends Controller
     /**
      * Approve the current stage of an access approval request.
      */
-    public function approveRequest(Request $request, int $id): RedirectResponse
+    public function approveRequest(ApproveAccessRequestRequest $request, int $id): RedirectResponse
     {
-        $validated = $request->validate([
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->approvalWorkflowService->approveStage($id, $request->user(), $validated['notes'] ?? null);
@@ -110,11 +113,9 @@ class AccessGovernanceController extends Controller
     /**
      * Reject an access approval request.
      */
-    public function rejectRequest(Request $request, int $id): RedirectResponse
+    public function rejectRequest(RejectAccessRequestRequest $request, int $id): RedirectResponse
     {
-        $validated = $request->validate([
-            'reason' => ['required', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $this->approvalWorkflowService->rejectRequest($id, $request->user(), $validated['reason']);
@@ -128,10 +129,10 @@ class AccessGovernanceController extends Controller
     /**
      * Emergency lockdown of a suspicious credential.
      */
-    public function lockdownIncident(Request $request, int $id): RedirectResponse
+    public function lockdownIncident(LockdownIncidentRequest $request, int $id): RedirectResponse
     {
         $incident = AccessRiskIncident::findOrFail($id);
-        $reason = $request->input('reason', 'Security emergency: Immediate lockdown from Access Risk Engine');
+        $reason = $request->validated('reason') ?? 'Security emergency: Immediate lockdown from Access Risk Engine';
 
         if ($incident->pass_id) {
             $this->riskEngine->lockdownCredential($incident->pass_id, $request->user(), $reason);
@@ -149,11 +150,9 @@ class AccessGovernanceController extends Controller
     /**
      * Resolve a suspicious incident.
      */
-    public function resolveIncident(Request $request, int $id): RedirectResponse
+    public function resolveIncident(ResolveIncidentRequest $request, int $id): RedirectResponse
     {
-        $validated = $request->validate([
-            'resolution_notes' => ['required', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $incident = AccessRiskIncident::findOrFail($id);
         $incident->update([
@@ -178,7 +177,7 @@ class AccessGovernanceController extends Controller
     /**
      * Execute mandatory expiration sweep across all passes.
      */
-    public function sweepExpiredPasses(): RedirectResponse
+    public function sweepExpiredPasses(Request $request): RedirectResponse
     {
         $count = $this->expirationPolicyService->sweepExpiredPasses();
 
@@ -188,7 +187,7 @@ class AccessGovernanceController extends Controller
     /**
      * Audit digital lease and authorization documents.
      */
-    public function auditDocuments(): RedirectResponse
+    public function auditDocuments(Request $request): RedirectResponse
     {
         $result = $this->documentService->auditDocumentExpirations();
 
@@ -198,15 +197,9 @@ class AccessGovernanceController extends Controller
     /**
      * Attach a new digital compliance document.
      */
-    public function attachDocument(Request $request): RedirectResponse
+    public function attachDocument(AttachComplianceDocumentRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:255'],
-            'document_type' => ['required', 'string', 'in:lease,authorization_letter,id_verification,insurance,contractor_certificate,other'],
-            'holder_name' => ['required', 'string', 'max:255'],
-            'expires_at' => ['required', 'date'],
-            'gate_pass_id' => ['nullable', 'integer', 'exists:gate_passes,id'],
-        ]);
+        $validated = $request->validated();
 
         $this->documentService->attachDocument($validated, $request->user());
 

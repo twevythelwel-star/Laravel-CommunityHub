@@ -5,12 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Enums\GateId;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\GatePass\ConfirmGatePassScanRequest;
+use App\Http\Requests\GatePass\ValidateGatePassTokenRequest;
 use App\Http\Resources\GatePassResource;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 /**
  * Mobile and scanner gate-pass endpoints.
@@ -76,12 +77,9 @@ class GatePassApiController extends Controller
         ]);
     }
 
-    public function validateToken(Request $request): JsonResponse
+    public function validateToken(ValidateGatePassTokenRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'token' => ['required', 'string', 'max:4096'],
-            'gate' => ['nullable', 'string', Rule::in(['GATE-01', 'GATE-02'])],
-        ]);
+        $validated = $request->validated();
 
         $gate = GateId::tryFrom($validated['gate'] ?? '') ?? GateId::Gate01;
         $result = $this->scanner->scan($validated['token'], $gate, $request->user(), 'Handheld Scanner');
@@ -92,12 +90,9 @@ class GatePassApiController extends Controller
         ]);
     }
 
-    public function confirmScan(Request $request, string $scan): JsonResponse
+    public function confirmScan(ConfirmGatePassScanRequest $request, string $scan): JsonResponse
     {
-        $validated = $request->validate([
-            'accept' => ['required', 'boolean'],
-            'reason' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         try {
             $result = $this->scanner->confirm($scan, $request->user(), $validated['accept'], $validated['reason'] ?? null);

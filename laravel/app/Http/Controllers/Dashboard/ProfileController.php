@@ -3,11 +3,15 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Billing\UpdatePaymentPreferencesRequest;
+use App\Http\Requests\Profile\SetAiConsentRequest;
+use App\Http\Requests\Profile\UpdateAvatarRequest;
+use App\Http\Requests\Profile\UpdateProfileRequest;
+use App\Http\Requests\Profile\UpdateThemePresetRequest;
 use App\Models\BrandingSetting;
 use App\Services\GatePassEngine;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -135,23 +139,18 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(UpdateProfileRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'display_name' => ['required', 'string', 'max:120'],
-            'phone' => ['nullable', 'string', 'max:40'],
-        ]);
+        $validated = $request->validated();
 
         $request->user()->update($validated);
 
         return back()->with('success', 'Profile updated.');
     }
 
-    public function updateAvatar(Request $request): RedirectResponse
+    public function updateAvatar(UpdateAvatarRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096'],
-        ]);
+        $validated = $request->validated();
 
         $path = $validated['avatar']->store('avatars', 'public');
 
@@ -161,11 +160,9 @@ class ProfileController extends Controller
     }
 
     /** Persists the AI consent decision previously kept only in localStorage. */
-    public function setAiConsent(Request $request): RedirectResponse
+    public function setAiConsent(SetAiConsentRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'consent' => ['required', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $request->user()->update(['ai_consent' => $validated['consent']]);
 
@@ -179,17 +176,9 @@ class ProfileController extends Controller
      * Samsung Pay, or raw card credentials. It only saves preference identifiers
      * and provider references (PaymentCustomer / PaymentMethod).
      */
-    public function updatePaymentPreferences(Request $request): RedirectResponse
+    public function updatePaymentPreferences(UpdatePaymentPreferencesRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'preferred_payment' => ['required', 'string', 'in:apple_pay,google_pay,samsung_pay,card,bank_transfer'],
-            'default_payment_method' => ['nullable', 'string', 'max:100'],
-            'notifications' => ['nullable', 'array'],
-            'notifications.payment_confirmation' => ['nullable', 'boolean'],
-            'notifications.receipt' => ['nullable', 'boolean'],
-            'notifications.failed_payment' => ['nullable', 'boolean'],
-            'notifications.refund' => ['nullable', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $user = $request->user();
         $prefs = $user->preferences()->firstOrCreate(['user_id' => $user->id]);
@@ -237,12 +226,9 @@ class ProfileController extends Controller
      * Allows any authenticated user (Homeowner, Resident, Security, Staff, Admin)
      * to personalize the application theme preset for their individual profile.
      */
-    public function updateThemePreset(Request $request): RedirectResponse
+    public function updateThemePreset(UpdateThemePresetRequest $request): RedirectResponse
     {
-        $validated = $request->validate([
-            // 'default' and 'community' (or nothing) mean: follow the community's preset.
-            'theme_preset' => ['nullable', 'string', Rule::in([...array_keys(BrandingSetting::THEME_PRESETS), 'default', 'community'])],
-        ]);
+        $validated = $request->validated();
 
         $preset = BrandingSetting::isValidPreset($validated['theme_preset'] ?? null) ? $validated['theme_preset'] : null;
 

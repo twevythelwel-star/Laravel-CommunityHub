@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Deals\StoreBusinessDealRequest;
+use App\Http\Requests\Deals\StoreFoodAppDealRequest;
+use App\Http\Requests\Deals\StoreVoucherDealRequest;
 use App\Models\Business;
 use App\Models\FoodApp;
 use App\Models\Voucher;
@@ -49,22 +52,9 @@ class DealsController extends Controller
         ]);
     }
 
-    public function storeBusiness(Request $request): RedirectResponse
+    public function storeBusiness(StoreBusinessDealRequest $request): RedirectResponse
     {
-        $this->authorize('manageUsers');
-
-        // Normalize camelCase from front-end
-        $data = [
-            'name' => $request->input('name'),
-            'logo_url' => $request->input('logo_url', $request->input('logoUrl')),
-            'ai_hint' => $request->input('ai_hint', $request->input('aiHint')),
-        ];
-
-        $validated = validator($data, [
-            'name' => ['required', 'string', 'max:120'],
-            'logo_url' => ['nullable', 'url', 'max:2048'],
-            'ai_hint' => ['nullable', 'string', 'max:160'],
-        ])->validate();
+        $validated = $request->validated();
 
         Business::create([...$validated, 'active' => true]);
 
@@ -80,26 +70,9 @@ class DealsController extends Controller
         return back()->with('success', 'Business deactivated.');
     }
 
-    public function storeFoodApp(Request $request): RedirectResponse
+    public function storeFoodApp(StoreFoodAppDealRequest $request): RedirectResponse
     {
-        $this->authorize('manageUsers');
-
-        // Normalize camelCase from front-end
-        $data = [
-            'name' => $request->input('name'),
-            'website_url' => $request->input('website_url', $request->input('websiteUrl')),
-            'logo_url' => $request->input('logo_url', $request->input('logoUrl')),
-            'ai_hint' => $request->input('ai_hint', $request->input('aiHint')),
-            'coupon_percentage' => $request->input('coupon_percentage', $request->input('couponPercentage')),
-        ];
-
-        $validated = validator($data, [
-            'name' => ['required', 'string', 'max:120'],
-            'website_url' => ['required', 'url', 'max:2048'],
-            'logo_url' => ['nullable', 'url', 'max:2048'],
-            'ai_hint' => ['nullable', 'string', 'max:160'],
-            'coupon_percentage' => ['nullable', 'integer', 'between:0,100'],
-        ])->validate();
+        $validated = $request->validated();
 
         FoodApp::create($validated);
 
@@ -115,23 +88,9 @@ class DealsController extends Controller
         return back()->with('success', 'Food delivery option removed.');
     }
 
-    public function storeVoucher(Request $request): RedirectResponse
+    public function storeVoucher(StoreVoucherDealRequest $request): RedirectResponse
     {
-        $this->authorize('manageUsers');
-
-        $data = [
-            'business_id' => $request->input('business_id', $request->input('businessId')),
-            'title' => $request->input('title'),
-            'description' => $request->input('description'),
-            'expires_at' => $request->input('expires_at', $request->input('expiresAt')),
-        ];
-
-        $validated = validator($data, [
-            'business_id' => ['required', 'exists:businesses,id'],
-            'title' => ['required', 'string', 'min:3', 'max:160'],
-            'description' => ['required', 'string', 'min:5', 'max:1000'],
-            'expires_at' => ['nullable', 'date'],
-        ])->validate();
+        $validated = $request->validated();
 
         Voucher::create($validated);
 

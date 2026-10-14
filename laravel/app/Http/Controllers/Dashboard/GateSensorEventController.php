@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Access\ResolveGateSensorEventRequest;
 use App\Services\GateTailgatingDetectionService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class GateSensorEventController extends Controller
 {
@@ -19,13 +19,9 @@ class GateSensorEventController extends Controller
      | and resolve them here; they no longer type head counts in.
      */
 
-    public function resolve(Request $request): JsonResponse
+    public function resolve(ResolveGateSensorEventRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'event_id' => ['required', 'exists:gate_sensor_events,id'],
-            'status' => ['required', 'string', 'in:CLEAR,INVESTIGATING,CONFIRMED_VIOLATION,DISMISSED'],
-            'notes' => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $event = $this->tailgatingService->resolveEvent(
             (int) $validated['event_id'],

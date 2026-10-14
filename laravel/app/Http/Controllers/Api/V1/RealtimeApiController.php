@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Realtime\BroadcastRealtimeEventApiRequest;
 use App\Services\Realtime\RealtimeBroadcasterService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class RealtimeApiController extends Controller
 {
@@ -87,31 +87,9 @@ class RealtimeApiController extends Controller
      * notification pushed to another user is an administrator's
      * (`broadcastNotices`).
      */
-    public function broadcast(Request $request): JsonResponse
+    public function broadcast(BroadcastRealtimeEventApiRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'type' => ['required', 'string', 'in:chat,telemetry,notification,pass,operations'],
-            'room_id' => ['nullable', 'string', 'max:64'],
-            'message' => ['nullable', 'string', 'max:2000'],
-            'title' => ['nullable', 'string', 'max:160'],
-            'body' => ['nullable', 'string', 'max:2000'],
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
-            'pass_id' => ['nullable', 'integer'],
-            'status' => ['nullable', 'string', 'max:40'],
-            'severity' => ['nullable', 'string', 'in:info,warning,critical'],
-            'headline' => ['nullable', 'string', 'max:160'],
-            'telemetry' => ['nullable', 'array'],
-        ]);
-
-        $ability = match ($validated['type']) {
-            'chat' => null,
-            'notification' => 'broadcastNotices',
-            default => 'manageSecurity',
-        };
-
-        if ($ability !== null) {
-            $this->authorize($ability);
-        }
+        $validated = $request->validated();
 
         $currentUser = $request->user();
 
