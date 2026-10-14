@@ -178,10 +178,14 @@ class ArchitectureBaselineTest extends TestCase
             }
         }
 
+        // Keyed relative to app/Http/Controllers with forward slashes, so the
+        // baseline holds on any machine: glob() returns '/' but app_path() uses
+        // the OS separator, which left Windows keys absolute.
+        $controllers = str_replace('\\', '/', app_path('Http/Controllers')).'/';
         foreach (glob(app_path('Http/Controllers').'/{,*/,*/*/}*.php', GLOB_BRACE) as $file) {
             $count = preg_match_all('/abort\(\s*403|abort_(?:if|unless)\(|->role->is\w+\(/', file_get_contents($file));
             if ($count > 0) {
-                $adhoc[str_replace([app_path('Http/Controllers').DIRECTORY_SEPARATOR, '\\'], ['', '/'], $file)] = $count;
+                $adhoc[str_replace($controllers, '', str_replace('\\', '/', $file))] = $count;
             }
         }
 
