@@ -15,6 +15,12 @@ class Fundraiser extends Model
 {
     use HasFactory;
 
+    /** Shown when a campaign sets no amounts of its own (minor units). */
+    public const DEFAULT_SUGGESTED_AMOUNTS = [1000, 2500, 5000, 10000];
+
+    /** How a campaign says the money is spent, when it says nothing (percent). */
+    public const DEFAULT_FUND_ALLOCATION = ['Project Execution' => 70, 'Materials & Equipment' => 20, 'Contingency' => 10];
+
     protected $fillable = [
         'title', 'description', 'beneficiary', 'cover_image_url', 'images', 'goal_minor', 'goal_currency',
         'start_date', 'end_date', 'status', 'created_by', 'allow_anonymous', 'allow_recurring',

@@ -3,10 +3,16 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\Donation;
 use App\Models\GatePass;
+use App\Models\HouseholdMember;
+use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Policies\DonationPolicy;
 use App\Policies\GatePassPolicy;
+use App\Policies\HouseholdMemberPolicy;
+use App\Policies\RenterPolicy;
 use App\Policies\VisitorPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -29,16 +35,18 @@ class AuthServiceProvider extends ServiceProvider
     protected array $policies = [
         Visitor::class => VisitorPolicy::class,
         GatePass::class => GatePassPolicy::class,
-        \App\Models\HouseholdMember::class => \App\Policies\HouseholdMemberPolicy::class,
-        \App\Models\Renter::class => \App\Policies\RenterPolicy::class,
+        Donation::class => DonationPolicy::class,
+        HouseholdMember::class => HouseholdMemberPolicy::class,
+        Renter::class => RenterPolicy::class,
     ];
 
     public function boot(): void
     {
         Gate::policy(Visitor::class, VisitorPolicy::class);
         Gate::policy(GatePass::class, GatePassPolicy::class);
-        Gate::policy(\App\Models\HouseholdMember::class, \App\Policies\HouseholdMemberPolicy::class);
-        Gate::policy(\App\Models\Renter::class, \App\Policies\RenterPolicy::class);
+        Gate::policy(Donation::class, DonationPolicy::class);
+        Gate::policy(HouseholdMember::class, HouseholdMemberPolicy::class);
+        Gate::policy(Renter::class, RenterPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {

@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
 /**
  * Building CSV exports that are safe to open in a spreadsheet.
  */
@@ -28,5 +30,24 @@ final class Csv
     public static function row(array $values): string
     {
         return implode(',', array_map(self::cell(...), $values))."\n";
+    }
+
+    /**
+     * A CSV file download, every cell made safe by cell().
+     *
+     * @param  list<string>  $header
+     * @param  iterable<list<mixed>>  $rows
+     */
+    public static function download(string $filename, array $header, iterable $rows): StreamedResponse
+    {
+        return response()->stream(function () use ($header, $rows) {
+            echo self::row($header);
+            foreach ($rows as $row) {
+                echo self::row($row);
+            }
+        }, 200, [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="'.str_replace('"', '', $filename).'"',
+        ]);
     }
 }

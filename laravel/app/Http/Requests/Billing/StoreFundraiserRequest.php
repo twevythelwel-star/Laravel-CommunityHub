@@ -26,4 +26,21 @@ class StoreFundraiserRequest extends FormRequest
             'matching_sponsor' => ['nullable', 'string', 'max:150'],
         ];
     }
+
+    /**
+     * The gallery image URLs: a list, or one URL per line from the form's
+     * textarea.
+     *
+     * @return list<string>
+     */
+    public function images(): array
+    {
+        $images = $this->validated('images');
+
+        return match (true) {
+            is_array($images) => array_values($images),
+            is_string($images) => array_values(array_filter(array_map('trim', explode("\n", $images)))),
+            default => [],
+        };
+    }
 }
