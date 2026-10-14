@@ -139,7 +139,7 @@ class MusterSafetyTest extends TestCase
     {
         $this->checkedIn('=HYPERLINK("http://evil.example","Click")', PassCategory::Visitor, 'Unit 14', now()->subHour());
 
-        $roster = $this->actingAs($this->officer)->get('/dashboard/occupancy/export')->assertOk()->getContent();
+        $roster = $this->actingAs($this->officer)->get('/dashboard/occupancy/export')->assertOk()->streamedContent();
         $this->assertStringContainsString('"\'=HYPERLINK(""http://evil.example"",""Click"")"', $roster);
 
         $this->startMuster()->assertOk();

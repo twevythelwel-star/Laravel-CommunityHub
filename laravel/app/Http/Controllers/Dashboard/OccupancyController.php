@@ -7,21 +7,20 @@ use App\Http\Requests\Occupancy\ResolveMusterRequest;
 use App\Http\Requests\Occupancy\StartMusterRequest;
 use App\Http\Requests\Occupancy\UpdateMusterStatusRequest;
 use App\Models\MusterSession;
-use App\Models\User;
 use App\Services\EmergencyMusterService;
 use App\Services\Occupancy\OccupancyCategoryResolver;
 use App\Services\Occupancy\OccupancyCensusQueryService;
 use App\Services\Occupancy\OccupancyHierarchyBuilder;
-use App\Services\Occupancy\OccupancyMetricsService;
+use App\Services\Occupancy\OccupancyPagePresenter;
 use App\Support\Csv;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Who is on the estate right now, by unit, and the emergency muster roll.
@@ -34,191 +33,69 @@ use Inertia\Response as InertiaResponse;
  */
 class OccupancyController extends Controller
 {
+    private const ROSTER_HEADER = ['Unit', 'Name', 'Category', 'Role', 'CheckIn_Time', 'Gate', 'Host_Resident', 'Vehicle', 'Contact', 'Pass_ID'];
+
     public function __construct(
         private readonly OccupancyCategoryResolver $categories,
         private readonly OccupancyCensusQueryService $census,
         private readonly OccupancyHierarchyBuilder $hierarchy,
-        private readonly OccupancyMetricsService $metrics,
         private readonly EmergencyMusterService $musterService,
     ) {}
 
-    /**
-     * Display the Live "Who's On Property?" Security & Admin Dashboard.
-     */
-    public function index(Request $request): InertiaResponse
+    /** "Who's on property?": see OccupancyPagePresenter for what each viewer sees. */
+    public function index(Request $request, OccupancyPagePresenter $presenter): InertiaResponse
     {
-        $user = $request->user();
-        $isStaff = $this->isStaff($user);
-        $ownUnit = $this->ownUnit($user);
+        $filter = fn (string $key) => $request->string($key)->trim()->toString();
 
-        $selectedCategory = $request->string('category')->trim()->toString() ?: 'all';
-        $search = $request->string('search')->trim()->toString() ?: null;
-        $activeTab = $request->string('tab')->trim()->toString() ?: 'inside';
-
-        // Anyone else is held to their own unit, whatever ?unit= says.
-        $selectedUnit = $isStaff
-            ? ($request->string('unit')->trim()->toString() ?: null)
-            : $ownUnit;
-
-        $communitySummary = $this->metrics->getSummary();
-        $expectedSummary = $this->metrics->getExpectedTodaySummary();
-        $unitSummary = $selectedUnit ? $this->metrics->getSummary($selectedUnit) : null;
-        $unitExpectedSummary = $selectedUnit ? $this->metrics->getExpectedTodaySummary($selectedUnit) : null;
-
-        $units = $isStaff
-            ? $this->metrics->getUnitsSummary()
-            : [];
-
-        $communityHierarchy = $this->hierarchy->getCommunityHierarchy($isStaff ? null : $ownUnit);
-
-        // No unit of their own means nothing to list, not the whole estate.
-        $occupantsCollection = ($isStaff || $selectedUnit)
-            ? $this->census->getAllCurrentOccupants(
-                unitFilter: $selectedUnit,
-                categoryFilter: $selectedCategory,
-                search: $search
-            )
-            : collect();
-
-        $expectedCollection = ($isStaff || $selectedUnit)
-            ? $this->census->getAllExpectedToday(
-                unitFilter: $selectedUnit,
-                categoryFilter: $selectedCategory,
-                search: $search
-            )
-            : collect();
-
-        $activeList = $activeTab === 'expected' ? $expectedCollection : $occupantsCollection;
-
-        // Paginate manually or return full list
-        $perPage = 25;
-        $page = max(1, (int) $request->input('page', 1));
-        $totalOccupants = $activeList->count();
-        $paginatedOccupants = $activeList->forPage($page, $perPage)->values();
-
-        // Check for active Emergency Muster / Evacuation session
-        $activeMuster = $this->musterService->getActiveSession();
-        $musterData = null;
-        if ($activeMuster) {
-            $musterData = [
-                'id' => $activeMuster->id,
-                'incident_type' => $activeMuster->incident_type,
-                'incident_label' => $activeMuster->incidentLabel(),
-                'title' => $activeMuster->title,
-                'assembly_point' => $activeMuster->assembly_point,
-                'notes' => $activeMuster->notes,
-                'started_at' => $activeMuster->started_at->toIso8601String(),
-                'started_time' => $activeMuster->started_at->format('g:i A'),
-                'initiator_name' => $activeMuster->initiator?->name ?? 'Security Dispatch',
-                'counts' => $activeMuster->getCounts(),
-                'roll_calls' => $activeMuster->rollCalls
-                    ->filter(fn ($rc) => $isStaff || ($ownUnit !== null && $this->sameUnit($rc->unit, $ownUnit)))
-                    ->values()
-                    ->map(fn ($rc) => [
-                        'id' => $rc->id,
-                        'occupant_id' => $rc->occupant_id,
-                        'name' => $rc->occupant_name,
-                        'pass_id' => $rc->pass_id,
-                        'unit' => $rc->unit,
-                        'category' => $rc->category,
-                        'status' => $rc->status,
-                        'status_label' => $rc->statusLabel(),
-                        'contact' => $rc->contact,
-                        'vehicle' => $rc->vehicle,
-                        'notes' => $rc->notes,
-                        'marked_at' => $rc->marked_at?->toIso8601String(),
-                        'marked_by_name' => $rc->marker?->name,
-                    ]),
-            ];
-        }
-
-        return Inertia::render('Dashboard/Occupancy', [
-            'summary' => $communitySummary,
-            'expectedSummary' => $expectedSummary,
-            'unitSummary' => $unitSummary,
-            'unitExpectedSummary' => $unitExpectedSummary,
-            'units' => $units,
-            'selectedUnit' => $selectedUnit,
-            'selectedCategory' => $selectedCategory,
-            'search' => $search,
-            'activeTab' => $activeTab,
-            'communityHierarchy' => $communityHierarchy,
-            'occupants' => [
-                'data' => $paginatedOccupants,
-                'total' => $totalOccupants,
-                'current_page' => $page,
-                'per_page' => $perPage,
-                'last_page' => (int) ceil($totalOccupants / $perPage),
-            ],
-            'canManage' => $isStaff,
-            'userUnit' => $ownUnit,
-            'activeMuster' => $musterData,
-            'enclosureZones' => $isStaff ? $this->metrics->getEnclosureZonesSummary() : [],
-            'lastUpdated' => now()->toIso8601String(),
-        ]);
+        return Inertia::render('Dashboard/Occupancy', $presenter->props($request->user(), [
+            'category' => $filter('category'),
+            'search' => $filter('search'),
+            'tab' => $filter('tab'),
+            'unit' => $filter('unit'),
+            'page' => (int) $request->input('page', 1),
+        ]));
     }
 
-    /**
-     * Dedicated Drill-down API endpoint: "Who's inside Unit 14?"
-     */
-    public function unit(Request $request, string $unit): JsonResponse
+    /** "Who's inside Unit 14?": occupancy managers, or that unit's resident. */
+    public function unit(string $unit): JsonResponse
     {
-        $user = $request->user();
-        $ownUnit = $this->ownUnit($user);
-
-        abort_unless(
-            $this->isStaff($user) || ($ownUnit !== null && $this->sameUnit($unit, $ownUnit)),
-            403,
-            'You can only see who is at your own unit.',
-        );
+        $this->authorize('viewUnitOccupancy', [$unit]);
 
         $drilldown = $this->hierarchy->getUnitDrilldown($unit);
 
         return response()->json([
             'success' => true,
-            'unit' => $drilldown['unit'],
-            'total' => $drilldown['total'],
-            'totalCurrentlyInside' => $drilldown['totalCurrentlyInside'],
-            'totalExpectedToday' => $drilldown['totalExpectedToday'],
-            'summary' => $drilldown['summary'],
-            'expectedSummary' => $drilldown['expectedSummary'],
-            'occupants' => $drilldown['occupants'],
-            'expected' => $drilldown['expected'],
-            'rosterByCategory' => $drilldown['rosterByCategory'],
+            ...collect($drilldown)->only([
+                'unit', 'total', 'totalCurrentlyInside', 'totalExpectedToday', 'summary',
+                'expectedSummary', 'occupants', 'expected', 'rosterByCategory',
+            ])->all(),
             'ownership' => $drilldown['ownership'] ?? null,
             'timestamp' => now()->toIso8601String(),
         ]);
     }
 
     /**
-     * Community Map & Spatial Hierarchy Tree API endpoint.
+     * The estate's spatial tree: whole for occupancy managers, the caller's
+     * own unit for anyone else, and nothing without one (a null scope is the
+     * whole estate to the builder).
      */
     public function hierarchy(Request $request): JsonResponse
     {
         $user = $request->user();
-        $isStaff = $this->isStaff($user);
-        $ownUnit = $this->ownUnit($user);
-
-        // Without a unit of their own a non-staff caller gets nothing: a null
-        // scope is the whole estate to the service.
-        if (! $isStaff && $ownUnit === null) {
-            return response()->json(['success' => true, 'hierarchy' => []]);
-        }
-
-        $hierarchy = $this->hierarchy->getCommunityHierarchy($isStaff ? null : $ownUnit);
+        $manages = $user->can('manageOccupancy');
+        $ownUnit = $this->categories->normalizeUnit($user->lot);
 
         return response()->json([
             'success' => true,
-            'hierarchy' => $hierarchy,
+            'hierarchy' => $manages || $ownUnit !== null
+                ? $this->hierarchy->getCommunityHierarchy($manages ? null : $ownUnit)
+                : [],
         ]);
     }
 
-    /**
-     * Start an Emergency Muster / Evacuation session.
-     */
+    /** Start an emergency muster (evacuation roll call). */
     public function startMuster(StartMusterRequest $request): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
         $validated = $request->validated();
 
         try {
@@ -227,31 +104,21 @@ class OccupancyController extends Controller
                 title: $validated['title'],
                 assemblyPoint: $validated['assembly_point'] ?? null,
                 notes: $validated['notes'] ?? null,
-                initiator: $user
+                initiator: $request->user(),
             );
         } catch (DomainException $e) {
             throw ValidationException::withMessages(['muster' => $e->getMessage()])->status(409);
         }
 
-        if ($request->wantsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => "Emergency Muster session for {$session->incidentLabel()} initiated.",
-                'session_id' => $session->id,
-            ]);
-        }
+        $message = "Emergency Muster session for {$session->incidentLabel()} initiated.";
 
-        return back()->with('success', "Emergency Muster session for {$session->incidentLabel()} initiated. Live roll-call active.");
+        return $this->reply($request, "{$message} Live roll-call active.", ['message' => $message, 'session_id' => $session->id]);
     }
 
-    /**
-     * Update an individual's muster status: safe, missing, evacuated, needs_assistance, checked_out.
-     */
+    /** Mark one person safe, missing, evacuated, needing assistance or checked out. */
     public function updateMusterStatus(UpdateMusterStatusRequest $request): JsonResponse|RedirectResponse
     {
-        $user = $request->user();
         $validated = $request->validated();
-
         $session = MusterSession::findOrFail($validated['session_id']);
 
         try {
@@ -260,125 +127,74 @@ class OccupancyController extends Controller
                 occupantId: $validated['occupant_id'],
                 status: $validated['status'],
                 notes: $validated['notes'] ?? null,
-                marker: $user
+                marker: $request->user(),
             );
         } catch (DomainException $e) {
             throw ValidationException::withMessages(['occupant_id' => $e->getMessage()]);
         }
 
-        if ($request->wantsJson()) {
-            return response()->json([
-                'success' => true,
-                'status' => $record->status,
-                'status_label' => $record->statusLabel(),
-                'counts' => $session->fresh()->getCounts(),
-            ]);
-        }
-
-        return back()->with('success', "Occupant marked {$record->statusLabel()}.");
+        return $this->reply($request, "Occupant marked {$record->statusLabel()}.", [
+            'status' => $record->status,
+            'status_label' => $record->statusLabel(),
+            'counts' => $session->fresh()->getCounts(),
+        ]);
     }
 
-    /**
-     * Resolve/complete an emergency muster session.
-     */
+    /** Close the muster and archive its roll call. */
     public function resolveMuster(ResolveMusterRequest $request): RedirectResponse|JsonResponse
     {
-        $user = $request->user();
-        $validated = $request->validated();
-
-        $session = MusterSession::findOrFail($validated['session_id']);
-
         $this->musterService->resolveSession(
-            session: $session,
-            resolver: $user,
-            notes: $validated['resolution_notes'] ?? 'All muster points cleared and verified.'
+            session: MusterSession::findOrFail($request->validated('session_id')),
+            resolver: $request->user(),
+            notes: $request->validated('resolution_notes') ?? 'All muster points cleared and verified.',
         );
 
-        if ($request->wantsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Emergency muster session concluded and archived.',
-            ]);
-        }
+        $message = 'Emergency muster session concluded and archived.';
 
-        return back()->with('success', 'Emergency muster session concluded and archived.');
+        return $this->reply($request, $message, ['message' => $message]);
     }
 
-    /**
-     * Export active Emergency Muster roll-call CSV for First Responders.
-     */
+    /** The running (or else the latest) muster's roll call as CSV, for first responders. */
     public function exportMusterRoster(Request $request): Response
     {
-        abort_unless($this->isStaff($request->user()), 403, 'Only security and administration can export the muster roll.');
+        $this->authorize('manageOccupancy');
 
-        $session = $this->musterService->getActiveSession();
-
-        if (! $session) {
-            $session = MusterSession::latest('id')->first();
-        }
+        $session = $this->musterService->getActiveSession() ?? MusterSession::latest('id')->first();
 
         if (! $session) {
-            return $this->exportRoster($request);
+            return $this->exportRoster();
         }
 
-        $csv = $this->musterService->exportCsv($session);
         $filename = sprintf('Emergency_Muster_Roster_%s_%s.csv', $session->incident_type, now()->format('Y-m-d_Hi'));
 
-        return response($csv, 200, [
+        return response($this->musterService->exportCsv($session), 200, [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
+    }
+
+    /** Everyone on the estate now, as CSV for first responders and muster marshals. */
+    public function exportRoster(): Response
+    {
+        $this->authorize('manageOccupancy');
+
+        $rows = $this->census->getAllCurrentOccupants()->map(fn (array $item) => [
+            $item['unit'], $item['name'], $item['categoryLabel'], $item['role'], $item['checkedInTime'],
+            $item['gate'], $item['host'] ?? 'N/A', $item['vehicle'] ?? 'N/A', $item['contact'] ?? 'N/A', $item['passId'],
+        ]);
+
+        return Csv::download(sprintf('Emergency_Evacuation_Roster_%s.csv', now()->format('Y-m-d_Hi')), self::ROSTER_HEADER, $rows);
     }
 
     /**
-     * Emergency Evacuation Roster Export (CSV format for first responders & muster marshals).
+     * JSON for the live roll-call screen, a flash message for a form post.
+     *
+     * @param  array<string, mixed>  $json
      */
-    public function exportRoster(Request $request): Response
+    private function reply(Request $request, string $flash, array $json): JsonResponse|RedirectResponse
     {
-        abort_unless($this->isStaff($request->user()), 403, 'Only security and administration can export the occupancy roster.');
-
-        $occupants = $this->census->getAllCurrentOccupants();
-
-        $csv = "Unit,Name,Category,Role,CheckIn_Time,Gate,Host_Resident,Vehicle,Contact,Pass_ID\n";
-
-        foreach ($occupants as $item) {
-            // Csv::row neutralises formulas: visitor names come from residents and visitors.
-            $csv .= Csv::row([
-                $item['unit'],
-                $item['name'],
-                $item['categoryLabel'],
-                $item['role'],
-                $item['checkedInTime'],
-                $item['gate'],
-                $item['host'] ?? 'N/A',
-                $item['vehicle'] ?? 'N/A',
-                $item['contact'] ?? 'N/A',
-                $item['passId'],
-            ]);
-        }
-
-        $filename = sprintf('Emergency_Evacuation_Roster_%s.csv', now()->format('Y-m-d_Hi'));
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ]);
-    }
-
-    /** Security, administrators and staff: the people who run the gate and a muster. */
-    private function isStaff(User $user): bool
-    {
-        return $user->role->isAdministrative() || $user->role->isSecurity() || $user->role->isStaff();
-    }
-
-    /** The caller's own unit, normalised as the occupancy service does ("Lot 14" -> "Unit 14"). */
-    private function ownUnit(User $user): ?string
-    {
-        return $this->categories->normalizeUnit($user->lot);
-    }
-
-    private function sameUnit(?string $a, string $b): bool
-    {
-        return strcasecmp((string) $this->categories->normalizeUnit($a), $b) === 0;
+        return $request->wantsJson()
+            ? response()->json(['success' => true, ...$json])
+            : back()->with('success', $flash);
     }
 }

@@ -364,8 +364,8 @@ class LiveWhosOnPropertyTest extends TestCase
         $response->assertOk();
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
 
-        $content = $response->getContent();
-        $this->assertStringContainsString('Unit,Name,Category,Role,CheckIn_Time,Gate,Host_Resident,Vehicle,Contact,Pass_ID', $content);
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('"Unit","Name","Category","Role","CheckIn_Time","Gate","Host_Resident","Vehicle","Contact","Pass_ID"', $content);
         $this->assertStringContainsString('Unit 14', $content);
         $this->assertStringContainsString('Bruce Wayne', $content);
         $this->assertStringContainsString('Residents', $content);

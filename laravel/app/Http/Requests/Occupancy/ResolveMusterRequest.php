@@ -8,12 +8,7 @@ class ResolveMusterRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
-        if (! $user) {
-            return false;
-        }
-
-        return $user->role->isAdministrative() || $user->role->isSecurity() || $user->role->isStaff();
+        return $this->user()?->can('manageOccupancy') ?? false;
     }
 
     public function rules(): array

@@ -14,6 +14,8 @@ use App\Policies\GatePassPolicy;
 use App\Policies\HouseholdMemberPolicy;
 use App\Policies\RenterPolicy;
 use App\Policies\VisitorPolicy;
+use App\Services\Occupancy\OccupancyCategoryResolver;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -158,5 +160,26 @@ class AuthServiceProvider extends ServiceProvider
         // Residents in distress (and admins on their behalf) can trigger emergency panic dispatch.
         Gate::define('triggerEmergencyPanic', fn (User $user) => $user->role->isResident()
             || $user->role->isAdministrative());
+
+        // Who runs the estate's occupancy picture and an emergency muster:
+        // security, administrators and staff. They see every unit and export
+        // the rosters; anyone else sees the totals and their own unit only.
+        Gate::define('manageOccupancy', fn (User $user) => $user->role->isAdministrative()
+            || $user->role->isSecurity()
+            || $user->role->isStaff());
+
+        // Who is at one unit: the occupancy managers, or that unit's own resident.
+        Gate::define('viewUnitOccupancy', function (User $user, ?string $unit) {
+            if ($user->can('manageOccupancy')) {
+                return true;
+            }
+
+            $units = app(OccupancyCategoryResolver::class);
+            $own = $units->normalizeUnit($user->lot);
+
+            return $own !== null && strcasecmp((string) $units->normalizeUnit($unit), $own) === 0
+                ? Response::allow()
+                : Response::deny('You can only see who is at your own unit.');
+        });
     }
 }
