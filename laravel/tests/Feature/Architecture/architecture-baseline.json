@@ -35,8 +35,6 @@
         "Dashboard\\GatePassController@scanner": 30,
         "Dashboard\\HouseholdController@index": 53,
         "Dashboard\\MapController@index": 46,
-        "Dashboard\\ProfileController@edit": 115,
-        "Dashboard\\ProfileController@updatePaymentPreferences": 45,
         "Dashboard\\RenterController@index": 41,
         "Dashboard\\ResidentEmergencyController@panic": 94,
         "Dashboard\\ReviewFeedbackController@index": 30,
