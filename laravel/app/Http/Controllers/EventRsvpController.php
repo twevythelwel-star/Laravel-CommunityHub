@@ -2,17 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\PassCategory;
-use App\Enums\VisitorStatus;
+use App\Actions\Visitors\RegisterEventGuestAction;
 use App\Http\Requests\Events\CreateEventInviteRequest;
 use App\Http\Requests\Events\SubmitEventRsvpRequest;
-use App\Models\BlocklistEntry;
 use App\Models\Community;
 use App\Models\EventInvite;
-use App\Models\Visitor;
-use App\Services\GatePassEngine;
-use App\Services\Messaging\PhoneNumber;
-use App\Services\SmsService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Str;
@@ -55,75 +49,26 @@ class EventRsvpController extends Controller
         $invite = EventInvite::with('host')->where('token', $token)->firstOrFail();
         $community = Community::first();
 
-        $isClosed = ! $invite->is_active || $invite->expected_at->isPast();
-
         return view('blade.event-rsvp', [
             'invite' => $invite,
             'community' => $community,
-            'isClosed' => $isClosed,
+            'isClosed' => ! $invite->isOpen(),
         ]);
     }
 
     /**
-     * Process attendee registration.
+     * Process attendee registration; see RegisterEventGuestAction.
      */
-    public function submit(SubmitEventRsvpRequest $request, string $token, GatePassEngine $engine, SmsService $sms): View|RedirectResponse
+    public function submit(SubmitEventRsvpRequest $request, string $token, RegisterEventGuestAction $register): View
     {
         $invite = EventInvite::with('host')->where('token', $token)->firstOrFail();
 
-        if (! $invite->is_active || $invite->expected_at->isPast()) {
-            return back()->withErrors(['general' => 'This RSVP invitation is closed or has expired.']);
-        }
-
-        $validated = $request->validated();
-
-        $name = trim($validated['name']);
-
-        // Check blocklist
-        if (BlocklistEntry::blocks($name)) {
-            return back()->withInput()->withErrors([
-                'name' => 'Registration cannot be processed at this time. Please contact your host directly.',
-            ]);
-        }
-
-        $visitor = Visitor::create([
-            'homeowner_id' => $invite->host_id,
-            'name' => $name,
-            'type' => 'Visitor',
-            'contact' => $validated['contact'],
-            'vehicle' => $validated['vehicle'] ? strtoupper(trim($validated['vehicle'])) : null,
-            'expected_at' => $invite->expected_at,
-            'status' => VisitorStatus::Expected,
-            'notify_sms' => true,
-        ]);
-
-        // Issue gate pass
-        $gatePass = $engine->issueGuestPass($visitor, $invite->host, PassCategory::Visitor);
-
-        // Send SMS if phone number is valid
-        $phoneE164 = PhoneNumber::toE164($visitor->contact);
-        $smsSent = false;
-        if ($phoneE164 && $sms->isConfigured()) {
-            try {
-                $sms->sendVisitorPass(
-                    $phoneE164,
-                    $visitor->guestPassUrl(),
-                    $visitor->name,
-                    $invite->host->display_name ?? 'Resident Host',
-                    $invite->expected_at->format('M j, Y g:i A')
-                );
-                $smsSent = true;
-            } catch (\Throwable $e) {
-                // Non-blocking
-            }
-        }
-
-        $community = Community::first();
+        ['visitor' => $visitor, 'smsSent' => $smsSent] = $register->execute($invite, $request->validated());
 
         return view('blade.event-rsvp-success', [
             'visitor' => $visitor,
             'invite' => $invite,
-            'community' => $community,
+            'community' => Community::first(),
             'smsSent' => $smsSent,
         ]);
     }

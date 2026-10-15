@@ -35,7 +35,6 @@
         "Dashboard\\VisitorController@index": 42,
         "Dashboard\\WarningController@index": 27,
         "Dashboard\\WarningController@store": 27,
-        "EventRsvpController@submit": 60,
         "GuestPassController@show": 28,
         "TwilioWebhookController@messagingStatus": 45,
         "UniversalPaymentLinkController@process": 44

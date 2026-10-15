@@ -38,4 +38,10 @@ class EventInvite extends Model
     {
         return route('rsvp.show', $this->token);
     }
+
+    /** Still taking RSVPs: not switched off and the event has not started. */
+    public function isOpen(): bool
+    {
+        return $this->is_active && ! $this->expected_at->isPast();
+    }
 }

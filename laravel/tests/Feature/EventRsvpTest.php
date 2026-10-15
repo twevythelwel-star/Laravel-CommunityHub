@@ -105,4 +105,35 @@ class EventRsvpTest extends TestCase
             'name' => 'Roy Anderson',
         ]);
     }
+
+    public function test_a_closed_or_past_invite_takes_no_rsvps(): void
+    {
+        $host = User::factory()->create(['role' => UserRole::Homeowner]);
+        EventInvite::create(['host_id' => $host->id, 'title' => 'Switched Off', 'token' => 'inv_off', 'expected_at' => now()->addDay(), 'max_guests' => 10, 'is_active' => false]);
+        EventInvite::create(['host_id' => $host->id, 'title' => 'Last Week', 'token' => 'inv_past', 'expected_at' => now()->subWeek(), 'max_guests' => 10, 'is_active' => true]);
+
+        foreach (['inv_off', 'inv_past'] as $token) {
+            $this->post("/rsvp/{$token}", ['name' => 'Late Guest', 'contact' => '+18765550205'])
+                ->assertSessionHasErrors(['general' => 'This RSVP invitation is closed or has expired.']);
+        }
+
+        $this->assertDatabaseMissing('visitors', ['name' => 'Late Guest']);
+    }
+
+    public function test_a_failed_text_does_not_undo_the_rsvp(): void
+    {
+        $host = User::factory()->create(['role' => UserRole::Homeowner]);
+        EventInvite::create(['host_id' => $host->id, 'title' => 'Garden Party', 'token' => 'inv_garden', 'expected_at' => now()->addDay(), 'max_guests' => 10, 'is_active' => true]);
+
+        $mockSms = $this->createMock(SmsService::class);
+        $mockSms->method('isConfigured')->willReturn(true);
+        $mockSms->method('sendVisitorPass')->willThrowException(new \RuntimeException('Twilio down'));
+        $this->app->instance(SmsService::class, $mockSms);
+
+        $this->post('/rsvp/inv_garden', ['name' => 'Phyllis Vance', 'contact' => '+18765550206'])
+            ->assertOk()
+            ->assertViewHas('smsSent', false);
+
+        $this->assertDatabaseHas('visitors', ['name' => 'Phyllis Vance', 'vehicle' => null]);
+    }
 }
