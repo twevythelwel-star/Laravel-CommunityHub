@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Billing\PayThroughPublicLinkAction;
 use App\Http\Requests\Billing\ProcessPaymentLinkRequest;
 use App\Models\BrandingSetting;
 use App\Models\Community;
 use App\Models\PaymentLink;
-use App\Models\Transaction;
-use App\Models\User;
-use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\QrCodePng;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -18,20 +16,15 @@ use Illuminate\View\View;
 /**
  * Public, unauthenticated payment links.
  *
- * Disabled unless `PAYMENT_PUBLIC_LINKS_ENABLED` is set. No payment driver in
- * App\Services\Payments\Drivers takes money — each returns a simulated
- * reference — and `process()` then records a Transaction with status
- * `completed`. While this is reachable, anyone holding a link can fabricate a
- * settled payment against the community ledger without signing in.
+ * Disabled unless `PAYMENT_PUBLIC_LINKS_ENABLED` is set. `process()` records
+ * a payment awaiting transfer, which counts only once the office logs it
+ * received and verifies it in a reconciliation (PayThroughPublicLinkAction);
+ * nothing here settles money.
  *
  * See config/payments.php.
  */
 class UniversalPaymentLinkController extends Controller
 {
-    public function __construct(
-        protected PaymentOrchestratorService $orchestrator
-    ) {}
-
     /** Public links stay off until a driver genuinely settles funds. */
     protected function ensureEnabled(): void
     {
@@ -76,44 +69,13 @@ class UniversalPaymentLinkController extends Controller
         return $pdf->stream('payment-poster-'.$token.'.pdf');
     }
 
-    public function process(ProcessPaymentLinkRequest $request, string $token): RedirectResponse
+    /** Records the payment for the office to confirm; see PayThroughPublicLinkAction. */
+    public function process(ProcessPaymentLinkRequest $request, string $token, PayThroughPublicLinkAction $pay): RedirectResponse
     {
         $this->ensureEnabled();
 
         $paymentLink = PaymentLink::where('token', $token)->where('active', true)->firstOrFail();
-
-        $validated = $request->validated();
-
-        $amountMinor = $paymentLink->amount_minor
-            ?? (int) (round((float) $validated['custom_amount'], 2) * 100);
-
-        /*
-         | No user is attached. This was
-         | `User::where('name', 'like', '%'.$payer_name.'%')->first()`, so a
-         | payer name typed on a public form credited whichever resident's name
-         | happened to match it first — a stranger could post a payment against
-         | someone else's account, and a common surname could do it by accident.
-         | The payer's name and lot are kept with the payment instead.
-         |
-         | The payment waits for the office like any other office channel: it
-         | counts only once one administrator logs it received and another
-         | verifies it in a bank reconciliation.
-         */
-        $payment = $this->orchestrator->startPayment([
-            'channel' => $validated['channel'],
-            'payment_link' => $paymentLink,
-            'invoice' => $paymentLink->invoice,
-            'user' => $paymentLink->user ?? $paymentLink->invoice?->user,
-            'applies_to' => $paymentLink->invoice_id ? 'invoice' : 'payment_link',
-            'purpose' => $paymentLink->invoice_id ? Transaction::PURPOSE_HOA_ASSESSMENT : Transaction::PURPOSE_COMMUNITY_PROJECT,
-            'amount_minor' => $amountMinor,
-            'currency' => $paymentLink->currency,
-            'metadata' => ['payer_name' => $validated['payer_name'], 'lot' => $validated['lot']],
-            'source' => 'public_link',
-        ]);
-
-        $this->orchestrator->awaitTransfer($payment);
-        $paymentLink->increment('uses_count');
+        $payment = $pay->execute($paymentLink, $request->validated());
 
         return back()->with(
             'status',

@@ -20,8 +20,7 @@
         "Dashboard\\VisitorController@index": 29,
         "Dashboard\\WarningController@index": 27,
         "Dashboard\\WarningController@store": 27,
-        "GuestPassController@show": 28,
-        "UniversalPaymentLinkController@process": 44
+        "GuestPassController@show": 28
     },
     "logic_closures": [],
     "adhoc_authz": {
