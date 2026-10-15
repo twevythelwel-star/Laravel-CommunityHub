@@ -7,7 +7,6 @@ use App\Http\Requests\Vehicles\StoreVehicleRequest;
 use App\Http\Requests\Vehicles\UpdateVehicleRequest;
 use App\Models\Household;
 use App\Models\HouseholdMember;
-use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\VehicleManagementService;
 use Illuminate\Http\JsonResponse;
@@ -56,7 +55,7 @@ class VehicleController extends Controller
     {
         $validated = $request->validated();
 
-        $this->ensureOwnHouseholdMember($request->user(), $validated['household_member_id'] ?? null);
+        $this->authorize('assignToMember', [Vehicle::class, $validated['household_member_id'] ?? null]);
 
         $this->vehicleService->registerVehicle($request->user(), $validated);
 
@@ -68,8 +67,8 @@ class VehicleController extends Controller
         $validated = $request->validated();
 
         $user = $request->user();
-        $this->ensureCanManage($user, $vehicle);
-        $this->ensureOwnHouseholdMember($user, $validated['household_member_id'] ?? null);
+        $this->authorize('manage', $vehicle);
+        $this->authorize('assignToMember', [Vehicle::class, $validated['household_member_id'] ?? null]);
 
         // Suspension and revocation are security's call: an owner could set a
         // suspended plate back to active, or switch its ANPR back on.
@@ -87,7 +86,7 @@ class VehicleController extends Controller
 
     public function destroy(Request $request, Vehicle $vehicle): RedirectResponse
     {
-        $this->ensureCanManage($request->user(), $vehicle);
+        $this->authorize('manage', $vehicle);
 
         $vehicle->delete();
 
@@ -99,16 +98,14 @@ class VehicleController extends Controller
         $plate = $request->query('plate', '');
         $result = $this->vehicleService->lookupPlate($plate);
 
-        // The result names the owner, their property and where the car parks.
-        // Gate staff look up any plate; anyone else only their own household's,
-        // and someone else's is answered exactly like an unregistered one.
-        $user = $request->user();
-        if (($result['found'] ?? false) && ! $user->can('scanPasses')
-            && ! Vehicle::whereKey($result['id'])->where('user_id', $user->id)->exists()) {
-            $result = null;
-        }
+        // The result names the owner, their property and where the car parks
+        // (VehiclePolicy::view). Someone else's plate is answered exactly
+        // like an unregistered one.
+        $visible = ($result['found'] ?? false)
+            && ($vehicle = Vehicle::find($result['id']))
+            && $request->user()->can('view', $vehicle);
 
-        if (! $result || ! ($result['found'] ?? false)) {
+        if (! $visible) {
             return response()->json([
                 'found' => false,
                 'authorized' => false,
@@ -124,28 +121,5 @@ class VehicleController extends Controller
             'message' => 'Vehicle recognized by ANPR registry.',
             'vehicle' => $result,
         ]);
-    }
-
-    /**
-     * Its owner, or security and administration. Any account could edit or
-     * delete any vehicle by id, its ANPR flag and status included.
-     */
-    private function ensureCanManage(User $user, Vehicle $vehicle): void
-    {
-        abort_unless((int) $vehicle->user_id === $user->id || $user->can('manageSecurity'), 403, 'You can only change your own vehicles.');
-    }
-
-    /** A vehicle can only be tied to a member of the user's own household. */
-    private function ensureOwnHouseholdMember(User $user, mixed $memberId): void
-    {
-        if ($memberId === null || $user->role->isAdministrative()) {
-            return;
-        }
-
-        abort_unless(
-            HouseholdMember::whereKey($memberId)->whereHas('household', fn ($q) => $q->where('primary_homeowner_id', $user->id))->exists(),
-            403,
-            'That person is not in your household.',
-        );
     }
 }

@@ -11,6 +11,7 @@ use App\Models\Renter;
 use App\Models\Staff;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Models\Visitor;
 use App\Models\WebhookSubscription;
 use App\Policies\DelegatedAccessPolicy;
@@ -21,6 +22,7 @@ use App\Policies\RenterPolicy;
 use App\Policies\StaffPolicy;
 use App\Policies\TransactionPolicy;
 use App\Policies\UserPolicy;
+use App\Policies\VehiclePolicy;
 use App\Policies\VisitorPolicy;
 use App\Policies\WebhookSubscriptionPolicy;
 use App\Services\Occupancy\OccupancyCategoryResolver;
@@ -54,6 +56,7 @@ class AuthServiceProvider extends ServiceProvider
         DelegatedAccess::class => DelegatedAccessPolicy::class,
         Transaction::class => TransactionPolicy::class,
         WebhookSubscription::class => WebhookSubscriptionPolicy::class,
+        Vehicle::class => VehiclePolicy::class,
     ];
 
     public function boot(): void
@@ -68,6 +71,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(DelegatedAccess::class, DelegatedAccessPolicy::class);
         Gate::policy(Transaction::class, TransactionPolicy::class);
         Gate::policy(WebhookSubscription::class, WebhookSubscriptionPolicy::class);
+        Gate::policy(Vehicle::class, VehiclePolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {
