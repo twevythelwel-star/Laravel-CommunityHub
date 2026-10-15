@@ -12,6 +12,7 @@ use App\Models\Staff;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Models\WebhookSubscription;
 use App\Policies\DelegatedAccessPolicy;
 use App\Policies\DonationPolicy;
 use App\Policies\GatePassPolicy;
@@ -21,6 +22,7 @@ use App\Policies\StaffPolicy;
 use App\Policies\TransactionPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\VisitorPolicy;
+use App\Policies\WebhookSubscriptionPolicy;
 use App\Services\Occupancy\OccupancyCategoryResolver;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
@@ -51,6 +53,7 @@ class AuthServiceProvider extends ServiceProvider
         User::class => UserPolicy::class,
         DelegatedAccess::class => DelegatedAccessPolicy::class,
         Transaction::class => TransactionPolicy::class,
+        WebhookSubscription::class => WebhookSubscriptionPolicy::class,
     ];
 
     public function boot(): void
@@ -64,6 +67,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(DelegatedAccess::class, DelegatedAccessPolicy::class);
         Gate::policy(Transaction::class, TransactionPolicy::class);
+        Gate::policy(WebhookSubscription::class, WebhookSubscriptionPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {

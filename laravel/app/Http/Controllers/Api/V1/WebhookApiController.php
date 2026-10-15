@@ -10,6 +10,7 @@ use App\Http\Requests\Api\Webhooks\TestWebhookSubscriptionApiRequest;
 use App\Http\Resources\WebhookSubscriptionResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\WebhookSubscription;
+use App\Services\Webhooks\IncomingWebhookVerifier;
 use App\Services\Webhooks\WebhookDispatcherService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,7 +86,7 @@ class WebhookApiController extends Controller
      */
     public function show(Request $request, WebhookSubscription $subscription): JsonResponse
     {
-        $this->authorizeAccess($request, $subscription);
+        $this->authorize('manage', $subscription);
 
         return ApiResponse::success(
             new WebhookSubscriptionResource($subscription),
@@ -98,7 +99,7 @@ class WebhookApiController extends Controller
      */
     public function destroy(Request $request, WebhookSubscription $subscription): JsonResponse
     {
-        $this->authorizeAccess($request, $subscription);
+        $this->authorize('manage', $subscription);
 
         $subscription->delete();
 
@@ -110,7 +111,7 @@ class WebhookApiController extends Controller
      */
     public function test(TestWebhookSubscriptionApiRequest $request, WebhookSubscription $subscription): JsonResponse
     {
-        $this->authorizeAccess($request, $subscription);
+        $this->authorize('manage', $subscription);
 
         $result = $this->dispatcher->dispatchDirect(
             $subscription,
@@ -131,38 +132,20 @@ class WebhookApiController extends Controller
     }
 
     /**
-     * Handle incoming webhooks from external providers with signature verification.
+     * Handle incoming webhooks from external providers with signature
+     * verification (IncomingWebhookVerifier). A service with no secret
+     * configured is refused rather than accepted unchecked.
      */
-    public function incoming(Request $request, string $service): JsonResponse
+    public function incoming(Request $request, string $service, IncomingWebhookVerifier $verifier): JsonResponse
     {
-        $signature = (string) ($request->header('X-Webhook-Signature')
-            ?? $request->header('X-Hub-Signature-256')
-            ?? $request->header('Stripe-Signature')
-            ?? '');
-
-        $payload = $request->getContent();
-        // Senders are listed in config/services.php: an env lookup here was null under config:cache.
-        $configuredSecret = (string) config('services.webhooks.'.strtolower($service).'.secret');
-
-        // Fail closed: with no secret configured there is nothing to verify
-        // against, which used to mean every delivery was accepted unchecked.
-        if ($configuredSecret === '') {
+        if (! $verifier->isConfigured($service)) {
             return ApiResponse::error("Webhooks from [{$service}] are not configured.", 'NOT_CONFIGURED', 404);
         }
 
-        $expectedSignature = 'sha256='.hash_hmac('sha256', $payload, $configuredSecret);
-        $rawExpected = hash_hmac('sha256', $payload, $configuredSecret);
-
-        $isValid = hash_equals($expectedSignature, $signature) || hash_equals($rawExpected, $signature);
-
-        if (! $isValid) {
+        if (! $verifier->verify($request, $service)) {
             Log::warning("Incoming webhook signature verification failed for service [{$service}].");
 
-            return ApiResponse::error(
-                'Invalid webhook signature.',
-                'INVALID_SIGNATURE',
-                401
-            );
+            return ApiResponse::error('Invalid webhook signature.', 'INVALID_SIGNATURE', 401);
         }
 
         // Not the headers: they carry the sender's credentials and signature.
@@ -171,24 +154,8 @@ class WebhookApiController extends Controller
         ]);
 
         return ApiResponse::success(
-            [
-                'received' => true,
-                'service' => $service,
-                'timestamp' => now()->toIso8601String(),
-            ],
+            ['received' => true, 'service' => $service, 'timestamp' => now()->toIso8601String()],
             "Webhook for {$service} acknowledged successfully."
         );
-    }
-
-    protected function authorizeAccess(Request $request, WebhookSubscription $subscription): void
-    {
-        // Not tokenCan('*'): a session-authenticated request carries Sanctum's
-        // TransientToken, which "can" everything, so that check let any
-        // signed-in browser user act on anybody's subscription.
-        $user = $request->user();
-
-        if ($user === null || ($subscription->user_id !== $user->id && ! $user->can('operatePlatform'))) {
-            abort(403, 'Unauthorized access to this webhook subscription.');
-        }
     }
 }

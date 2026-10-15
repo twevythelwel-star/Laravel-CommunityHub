@@ -6,7 +6,6 @@
     "fat_actions": {
         "Api\\AuthApiController@login": 29,
         "Api\\V1\\TokenApiController@store": 40,
-        "Api\\V1\\WebhookApiController@incoming": 46,
         "Api\\V1\\WebhookApiController@store": 26,
         "Auth\\AuthenticatedSessionController@store": 29,
         "Dashboard\\DeactivationController@store": 41,
@@ -29,7 +28,6 @@
     "logic_closures": [],
     "adhoc_authz": {
         "Api/QueryApiController.php": 1,
-        "Api/V1/WebhookApiController.php": 1,
         "Dashboard/BillingController.php": 1,
         "Dashboard/DelegatedAccessController.php": 3,
         "Dashboard/DirectoryController.php": 1,

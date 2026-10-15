@@ -68,4 +68,21 @@ class IncomingWebhookSecretsTest extends TestCase
         $this->postSigned('ACME', 'acme-secret')->assertOk();
         $this->postSigned('acme', 'wrong-secret')->assertUnauthorized();
     }
+
+    public function test_each_supported_signature_header_and_form_is_accepted(): void
+    {
+        config(['services.webhooks' => ['acme' => ['secret' => 'acme-secret']]]);
+        $body = json_encode(['event' => 'gate.opened']);
+        $raw = hash_hmac('sha256', $body, 'acme-secret');
+
+        $post = fn (array $headers) => $this->call('POST', '/api/v1/webhooks/incoming/acme', [], [], [], [
+            'CONTENT_TYPE' => 'application/json', ...$headers,
+        ], $body);
+
+        $post(['HTTP_X_WEBHOOK_SIGNATURE' => $raw])->assertOk();
+        $post(['HTTP_X_HUB_SIGNATURE_256' => 'sha256='.$raw])->assertOk();
+        $post(['HTTP_STRIPE_SIGNATURE' => $raw])->assertOk();
+        $post([])->assertUnauthorized();
+        $post(['HTTP_X_WEBHOOK_SIGNATURE' => 'sha256='.hash_hmac('sha256', $body.' ', 'acme-secret')])->assertUnauthorized();
+    }
 }
