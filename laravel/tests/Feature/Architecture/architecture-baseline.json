@@ -36,7 +36,6 @@
         "Dashboard\\SafetyController@updateProfile": 48,
         "Dashboard\\SettingsController@index": 39,
         "Dashboard\\SettingsController@update": 51,
-        "Dashboard\\SilentAssistanceController@index": 94,
         "Dashboard\\StripeCheckoutController@checkout": 29,
         "Dashboard\\VehicleController@anprLookup": 31,
         "Dashboard\\VehicleController@index": 29,
