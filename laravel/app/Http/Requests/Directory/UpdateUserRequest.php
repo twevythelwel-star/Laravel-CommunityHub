@@ -3,7 +3,9 @@
 namespace App\Http\Requests\Directory;
 
 use App\Enums\UserRole;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class UpdateUserRequest extends FormRequest
 {
@@ -23,5 +25,22 @@ class UpdateUserRequest extends FormRequest
             'street' => ['nullable', 'string', 'max:120'],
             'status' => ['sometimes', 'in:Active,Inactive'],
         ];
+    }
+
+    /**
+     * An administrator cannot deactivate their own account here and lock
+     * themselves out.
+     *
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator) {
+            $account = $this->route('user');
+
+            if ($account instanceof User && $account->is($this->user()) && $this->input('status') === 'Inactive') {
+                $validator->errors()->add('status', 'You cannot deactivate your own account here.');
+            }
+        }];
     }
 }

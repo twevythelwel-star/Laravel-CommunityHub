@@ -269,6 +269,53 @@ class DirectoryPageTest extends TestCase
         $this->assertSame(UserRole::Homeowner, $resident->fresh()->role);
     }
 
+    public function test_an_admin_cannot_create_a_system_admin(): void
+    {
+        $this->actingAs($this->admin())
+            ->post('/dashboard/directory/users', [
+                'display_name' => 'Shadow Root',
+                'name' => 'Shadow Root',
+                'email' => 'shadow@example.org',
+                'password' => 'correct-horse-battery',
+                'password_confirmation' => 'correct-horse-battery',
+                'role' => UserRole::SystemAdmin->value,
+            ])
+            ->assertSessionHasErrors(['role' => 'Only a System Admin can grant System Admin.']);
+
+        $this->assertFalse(User::where('email', 'shadow@example.org')->exists());
+    }
+
+    public function test_an_admin_cannot_deactivate_their_own_account(): void
+    {
+        $admin = $this->admin();
+
+        $this->actingAs($admin)
+            ->patch("/dashboard/directory/users/{$admin->id}", ['status' => 'Inactive'])
+            ->assertSessionHasErrors(['status' => 'You cannot deactivate your own account here.']);
+
+        $this->assertSame('Active', $admin->fresh()->status);
+    }
+
+    public function test_only_a_system_admin_manages_an_administrators_properties(): void
+    {
+        $officeManager = $this->admin(['lot' => 'Lot 3', 'street' => 'Hibiscus Way']);
+
+        $this->actingAs($this->admin())
+            ->post("/dashboard/directory/users/{$officeManager->id}/properties", ['lot_number' => 'Lot 3'])
+            ->assertSessionHasErrors(['lot_number' => "Only a System Admin can manage an administrator's properties."]);
+        $this->assertSame(0, Property::count());
+
+        $this->actingAs($this->systemAdmin())
+            ->post("/dashboard/directory/users/{$officeManager->id}/properties", ['lot_number' => 'Lot 3'])
+            ->assertSessionHasNoErrors();
+        $property = Property::sole();
+
+        $this->actingAs($this->admin())
+            ->delete("/dashboard/directory/properties/{$property->id}")
+            ->assertSessionHasErrors('lot_number');
+        $this->assertSame($officeManager->id, $property->fresh()->owner_user_id);
+    }
+
     public function test_a_resident_cannot_edit_anyone(): void
     {
         $other = User::factory()->role(UserRole::Homeowner)->create();
@@ -332,5 +379,26 @@ class DirectoryPageTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame('Lot 7, Hibiscus Crescent', $staff->fresh()->property_label);
+    }
+
+    public function test_a_resident_cannot_touch_staff_someone_else_registered(): void
+    {
+        $staff = Staff::create([
+            'name' => 'Maria Garcia',
+            'job' => 'Housekeeper',
+            'id_type' => 'National ID',
+            'id_number' => 'JM-8841-2290',
+            'id_expiry' => now()->addYear()->toDateString(),
+            'property_label' => 'Lot 42',
+            'added_by' => User::factory()->role(UserRole::Homeowner)->create()->id,
+        ]);
+        $neighbour = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($neighbour)->patch("/dashboard/directory/staff/{$staff->id}", ['property' => 'Lot 1'])->assertForbidden();
+        $this->actingAs($neighbour)->delete("/dashboard/directory/staff/{$staff->id}")->assertForbidden();
+        $this->assertSame('Lot 42', $staff->fresh()->property_label);
+
+        $this->actingAs($this->admin())->delete("/dashboard/directory/staff/{$staff->id}")->assertRedirect();
+        $this->assertNull($staff->fresh());
     }
 }

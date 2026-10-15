@@ -12,10 +12,13 @@ use App\Http\Requests\Directory\UpdateUserRequest;
 use App\Models\Property;
 use App\Models\Staff;
 use App\Models\User;
+use App\Services\People\DirectoryPresenter;
 use App\Services\PropertyOwnershipService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,71 +43,10 @@ class DirectoryController extends Controller
 {
     public function __construct(private readonly PropertyOwnershipService $ownership) {}
 
-    public function index(Request $request): Response
+    /** See DirectoryPresenter for what administrators and residents each see. */
+    public function index(Request $request, DirectoryPresenter $presenter): Response
     {
-        $user = $request->user();
-        $isAdmin = $user->can('manageUsers');
-
-        return Inertia::render('Dashboard/Directory', [
-            /*
-             | Administrators see every account whatever its status, because
-             | they are the ones who reactivate a deactivated one — scoping this
-             | to active() would have made deactivation a one-way door.
-             | Everyone else sees the resident directory, active only.
-             */
-            'residents' => User::query()
-                ->when(! $isAdmin, fn ($q) => $q
-                    ->active()
-                    ->whereIn('role', [
-                        UserRole::Homeowner->value,
-                        UserRole::TemporaryHomeowner->value,
-                    ]))
-                ->orderBy('display_name')
-                ->with('properties')
-                ->get()
-                ->map(fn (User $u) => [
-                    'id' => $u->id,
-                    'name' => $u->display_name,
-                    'role' => $u->role->value,
-                    'lot' => $u->lot,
-                    'street' => $u->street,
-                    // What they own: HOA dues are charged per property.
-                    'properties' => $u->properties
-                        ->sortBy('id')
-                        ->map(fn (Property $p) => ['id' => $p->id, 'label' => $p->label(), 'code' => $p->property_code])
-                        ->values(),
-                    'title' => $u->title,
-                    'avatarUrl' => $u->avatar_url,
-                    // Contact details are only exposed to administrators.
-                    'email' => $isAdmin ? $u->email : null,
-                    'phone' => $isAdmin ? $u->phone : null,
-                    'status' => $u->status,
-                    'createdAt' => $u->created_at?->toIso8601String(),
-                    // Drives the self-lockout guard in the UI, which updateUser
-                    // also enforces server-side.
-                    'isSelf' => $u->is($user),
-                ]),
-
-            'staff' => Staff::query()
-                ->when(! $isAdmin, fn ($q) => $q->where('added_by', $user->id))
-                ->orderBy('name')
-                ->get()
-                ->map(fn (Staff $s) => [
-                    'id' => $s->id,
-                    'name' => $s->name,
-                    'job' => $s->job,
-                    'idType' => $s->id_type,
-                    'idNumber' => $isAdmin ? $s->id_number : null,
-                    'idExpiry' => $s->id_expiry->toDateString(),
-                    'idImageUrl' => $s->id_image_url,
-                    'property' => $s->property_label,
-                    'status' => $s->effectiveStatus(),
-                    'photoUrl' => $s->photo_url,
-                ]),
-
-            'canManageUsers' => $isAdmin,
-            'roles' => array_column(UserRole::cases(), 'value'),
-        ]);
+        return Inertia::render('Dashboard/Directory', $presenter->props($request->user()));
     }
 
     public function storeStaff(StoreStaffRequest $request): RedirectResponse
@@ -127,16 +69,16 @@ class DirectoryController extends Controller
 
     public function updateStaff(UpdateStaffRequest $request, Staff $staff): RedirectResponse
     {
-        $this->authorizeStaff($request, $staff);
+        $this->authorize('update', $staff);
 
         $staff->update($request->staffAttributes());
 
         return back()->with('success', 'Staff record updated.');
     }
 
-    public function destroyStaff(Request $request, Staff $staff): RedirectResponse
+    public function destroyStaff(Staff $staff): RedirectResponse
     {
-        $this->authorizeStaff($request, $staff);
+        $this->authorize('delete', $staff);
 
         $staff->delete();
 
@@ -146,12 +88,7 @@ class DirectoryController extends Controller
     public function storeUser(StoreUserRequest $request): RedirectResponse
     {
         $validated = $request->validated();
-
-        // Only a System Admin may mint another System Admin.
-        if ($validated['role'] === UserRole::SystemAdmin->value
-            && $request->user()->role !== UserRole::SystemAdmin) {
-            return back()->withErrors(['role' => 'Only a System Admin can create another System Admin.']);
-        }
+        $this->allowOrFail('assignRole', [User::class, $validated['role']], 'role');
 
         $created = User::create([
             ...$validated,
@@ -169,27 +106,10 @@ class DirectoryController extends Controller
     public function updateUser(UpdateUserRequest $request, User $user): RedirectResponse
     {
         $validated = $request->validated();
-
-        $actor = $request->user();
-
-        if (($validated['role'] ?? null) === UserRole::SystemAdmin->value
-            && $actor->role !== UserRole::SystemAdmin) {
-            return back()->withErrors(['role' => 'Only a System Admin can grant System Admin.']);
+        if (isset($validated['role'])) {
+            $this->allowOrFail('assignRole', [User::class, $validated['role']], 'role');
         }
-
-        /*
-         | An Admin must not be able to edit, demote or deactivate a System
-         | Admin. Without this, `manageUsers` was enough to deactivate the only
-         | account that can grant System Admin and take the tier over.
-         */
-        if ($user->role === UserRole::SystemAdmin && $actor->role !== UserRole::SystemAdmin) {
-            return back()->withErrors(['role' => 'Only a System Admin can modify a System Admin account.']);
-        }
-
-        // Guard against an admin locking themselves out.
-        if ($user->is($actor) && ($validated['status'] ?? 'Active') === 'Inactive') {
-            return back()->withErrors(['status' => 'You cannot deactivate your own account here.']);
-        }
+        $this->allowOrFail('manageAccount', [$user], 'role');
 
         $user->update($validated);
 
@@ -199,7 +119,7 @@ class DirectoryController extends Controller
 
         $this->recordAccountProperty($user);
 
-        $actor->recordActivity("Updated user {$user->email}");
+        $request->user()->recordActivity("Updated user {$user->email}");
 
         return back()->with('success', 'User updated.');
     }
@@ -215,10 +135,7 @@ class DirectoryController extends Controller
             return back()->withErrors(['lot_number' => 'Only a Homeowner or an administrator can own a property.']);
         }
 
-        // As for the account itself: an administrator's is a System Admin's to manage.
-        if ($user->role->isAdministrative() && $request->user()->role !== UserRole::SystemAdmin) {
-            return back()->withErrors(['lot_number' => "Only a System Admin can manage an administrator's properties."]);
-        }
+        $this->allowOrFail('manageProperties', [User::class, $user], 'lot_number');
 
         $validated = $request->validated();
 
@@ -240,10 +157,7 @@ class DirectoryController extends Controller
     public function destroyProperty(Request $request, Property $property): RedirectResponse
     {
         $owner = $property->owner;
-
-        if ($owner?->role->isAdministrative() && $request->user()->role !== UserRole::SystemAdmin) {
-            return back()->withErrors(['lot_number' => "Only a System Admin can manage an administrator's properties."]);
-        }
+        $this->allowOrFail('manageProperties', [User::class, $owner], 'lot_number');
 
         $this->ownership->release($property);
 
@@ -267,12 +181,18 @@ class DirectoryController extends Controller
         }
     }
 
-    private function authorizeStaff(Request $request, Staff $staff): void
+    /**
+     * A UserPolicy denial, shown on the form field it concerns rather than
+     * as a 403 page.
+     *
+     * @param  array<int, mixed>  $arguments
+     */
+    private function allowOrFail(string $ability, array $arguments, string $field): void
     {
-        $user = $request->user();
+        $response = Gate::inspect($ability, $arguments);
 
-        if ($staff->added_by !== $user->id && ! $user->can('manageUsers')) {
-            abort(403, 'You can only manage staff you registered.');
+        if ($response->denied()) {
+            throw ValidationException::withMessages([$field => $response->message()]);
         }
     }
 }
