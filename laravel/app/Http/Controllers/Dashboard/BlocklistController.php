@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Actions\Visitors\ReviewBlocklistRemovalAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Blocklist\RequestBlocklistRemovalRequest;
 use App\Http\Requests\Blocklist\ReviewBlocklistRemovalRequest;
@@ -9,8 +10,7 @@ use App\Http\Requests\Blocklist\StoreBlocklistEntryRequest;
 use App\Http\Requests\Blocklist\UpdateBlocklistEntryRequest;
 use App\Models\BlocklistEntry;
 use App\Models\BlocklistRemovalRequest;
-use App\Models\User;
-use App\Models\Visitor;
+use App\Services\Access\BlocklistPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -32,61 +32,15 @@ use Inertia\Response;
  *   someone is blocked and ask for a review; only `manageBlocklist` may add,
  *   edit or remove entries.
  *
- * A blocklist is personal data and the stated reasons are unflattering, so a
- * resident's copy carries the name, status and date only. The reason, the photo
- * and who added the entry are withheld from anyone who cannot manage the list.
+ * A blocklist is personal data; what a resident's copy withholds is set out in
+ * BlocklistPresenter.
  */
 class BlocklistController extends Controller
 {
-    public function index(Request $request): Response
+    /** See BlocklistPresenter for what residents and staff each receive. */
+    public function index(Request $request, BlocklistPresenter $presenter): Response
     {
-        $user = $request->user();
-        $canManage = $user->can('manageBlocklist');
-
-        return Inertia::render('Dashboard/BlockList', [
-            'entries' => BlocklistEntry::with('removalRequests')
-                ->latest('date_added')
-                ->paginate(25)
-                ->through(fn (BlocklistEntry $e) => $this->entryPayload($e, $user, $canManage)),
-
-            /*
-             | Known visitors, so the add form can pre-fill a name and reuse the
-             | ID photo already on file. Only sent to staff — it is a directory of
-             | everyone's guests, which residents have no reason to receive.
-             */
-            'visitors' => $canManage
-                ? Visitor::query()
-                    ->orderBy('name')
-                    ->get(['id', 'name', 'id_image_url'])
-                    ->map(fn (Visitor $v) => [
-                        'id' => $v->id,
-                        'name' => $v->name,
-                        'idImageUrl' => $v->id_image_url,
-                    ])
-                : [],
-
-            // Pending resident requests, for the administrators who action them.
-            'removalRequests' => $canManage
-                ? BlocklistRemovalRequest::with(['entry:id,name', 'requester:id,display_name,lot'])
-                    ->pending()
-                    ->latest()
-                    ->get()
-                    ->map(fn (BlocklistRemovalRequest $r) => [
-                        'id' => $r->id,
-                        'entryId' => $r->blocklist_entry_id,
-                        'entryName' => $r->entry?->name,
-                        'requestedBy' => $r->requester?->display_name,
-                        'lot' => $r->requester?->lot,
-                        'reason' => $r->reason,
-                        'requestedAt' => $r->created_at->toIso8601String(),
-                    ])
-                : [],
-
-            'can' => [
-                'manage' => $canManage,
-                'requestRemoval' => $user->role->isResident(),
-            ],
-        ]);
+        return Inertia::render('Dashboard/BlockList', $presenter->props($request->user()));
     }
 
     public function store(StoreBlocklistEntryRequest $request): RedirectResponse
@@ -171,66 +125,10 @@ class BlocklistController extends Controller
     }
 
     /** An administrator approves or declines a request. */
-    public function reviewRemoval(ReviewBlocklistRemovalRequest $request, BlocklistRemovalRequest $removalRequest): RedirectResponse
+    public function reviewRemoval(ReviewBlocklistRemovalRequest $request, BlocklistRemovalRequest $removalRequest, ReviewBlocklistRemovalAction $review): RedirectResponse
     {
-        $validated = $request->validated();
+        $removed = $review->execute($removalRequest, $request->user(), $request->validated());
 
-        $user = $request->user();
-
-        $removalRequest->update([
-            ...$validated,
-            'reviewed_by' => $user->id,
-            'reviewed_at' => now(),
-        ]);
-
-        // Approving the request is what actually lifts the block.
-        if ($validated['status'] === 'Approved') {
-            $entry = $removalRequest->entry;
-
-            Log::channel('security')->notice('Blocklist entry removed after resident request', [
-                'name' => $entry?->name,
-                'removed_by' => $user->uid,
-                'requested_by' => $removalRequest->requester?->uid,
-            ]);
-
-            $entry?->delete();
-
-            return back()->with('success', 'Request approved and the entry removed from the blocklist.');
-        }
-
-        return back()->with('success', 'Request declined.');
-    }
-
-    /**
-     * Builds one row, redacting the sensitive fields for residents.
-     *
-     * @return array<string, mixed>
-     */
-    private function entryPayload(BlocklistEntry $e, User $user, bool $canManage): array
-    {
-        $base = [
-            'id' => $e->id,
-            'name' => $e->name,
-            'dateAdded' => $e->date_added->toIso8601String(),
-            'expiryDate' => $e->expiry_date?->toIso8601String(),
-            'isPermanent' => $e->isPermanent(),
-            'inForce' => $e->isCurrentlyBlocking(),
-            // Lets a resident see that they have already asked, so the action
-            // can be disabled rather than silently doing nothing.
-            'myRequestStatus' => $e->removalRequests
-                ->firstWhere('requested_by', $user->id)?->status,
-        ];
-
-        if (! $canManage) {
-            return $base;
-        }
-
-        return [
-            ...$base,
-            'reason' => $e->reason,
-            'photoUrl' => $e->photo_url,
-            'addedBy' => $e->added_by,
-            'pendingRequests' => $e->removalRequests->where('status', 'Pending')->count(),
-        ];
+        return back()->with('success', $removed ? 'Request approved and the entry removed from the blocklist.' : 'Request declined.');
     }
 }
