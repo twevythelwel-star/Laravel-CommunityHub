@@ -252,6 +252,12 @@ class ApiArchitectureLayerTest extends TestCase
         $response->assertStatus(200)
             ->assertSee('Community Hub Enterprise API')
             ->assertSee('swagger-ui');
+
+        $this->get('/api/v2/docs')
+            ->assertOk()
+            ->assertSee('<title>Community Hub API Reference (v2)</title>', false)
+            ->assertSee('<a href="/api/v2/docs" class="version-btn active">', false)
+            ->assertSee(json_encode(url('/api/v2/openapi.json')), false);
     }
 
     public function test_scramble_documentation_route(): void
