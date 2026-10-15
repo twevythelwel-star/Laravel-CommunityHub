@@ -42,6 +42,7 @@ use App\Services\Payments\PaymentOrchestratorService;
 use App\Services\Payments\Providers\Contracts\TakesInPersonPayments;
 use App\Services\Payments\Providers\ProviderRegistry;
 use App\Services\StripePaymentService;
+use App\Support\Csv;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -55,6 +56,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BillingController extends Controller
 {
+    private const LEDGER_HEADER = ['Reference', 'Receipt', 'Homeowner', 'Lot', 'Amount', 'Currency', 'Channel', 'Status', 'Date', 'Notes'];
+
     public function __construct(
         protected PaymentOrchestratorService $orchestrator,
         protected BillingPresenter $presenter,
@@ -216,36 +219,26 @@ class BillingController extends Controller
         ]);
     }
 
+    /**
+     * The master ledger as CSV, every cell formula-safe, read lazily by id so
+     * payments arriving mid-export are neither skipped nor duplicated.
+     */
     public function exportTransactions(): StreamedResponse
     {
-        $headers = [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="transactions-master-ledger.csv"',
-        ];
+        $rows = Transaction::with('user')->lazyById(100)->map(fn (Transaction $tx) => [
+            $tx->reference,
+            $tx->receipt_number,
+            $tx->user?->name ?? 'Resident',
+            $tx->user?->lot ?? 'N/A',
+            number_format($tx->amount_minor / 100, 2),
+            $tx->currency,
+            $tx->payment_channel,
+            $tx->status,
+            $tx->created_at->toDateTimeString(),
+            $tx->notes,
+        ]);
 
-        return response()->stream(function () {
-            $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Reference', 'Receipt', 'Homeowner', 'Lot', 'Amount', 'Currency', 'Channel', 'Status', 'Date', 'Notes']);
-
-            Transaction::with('user')->chunk(100, function ($transactions) use ($handle) {
-                foreach ($transactions as $tx) {
-                    fputcsv($handle, [
-                        $tx->reference,
-                        $tx->receipt_number,
-                        $tx->user?->name ?? 'Resident',
-                        $tx->user?->lot ?? 'N/A',
-                        number_format($tx->amount_minor / 100, 2),
-                        $tx->currency,
-                        $tx->payment_channel,
-                        $tx->status,
-                        $tx->created_at->toDateTimeString(),
-                        $tx->notes,
-                    ]);
-                }
-            });
-
-            fclose($handle);
-        }, 200, $headers);
+        return Csv::download('transactions-master-ledger.csv', self::LEDGER_HEADER, $rows);
     }
 
     public function updateSettings(UpdateBillingSettingsRequest $request): RedirectResponse
@@ -360,14 +353,9 @@ class BillingController extends Controller
         return back()->with('success', "Payment plan configured for invoice {$invoice->reference}.");
     }
 
-    public function downloadReceipt(Request $request, Transaction $transaction): \Illuminate\Http\Response
+    public function downloadReceipt(Transaction $transaction): \Illuminate\Http\Response
     {
-        $user = $request->user();
-        abort_unless(
-            $transaction->user_id === $user->id || $user->can('manageBilling'),
-            403,
-            'You can only download your own payment receipts.'
-        );
+        $this->authorize('viewReceipt', $transaction);
 
         abort_if(
             $transaction->isPending() || in_array($transaction->status, ['rejected'], true),
@@ -375,17 +363,12 @@ class BillingController extends Controller
             'A receipt is issued once the community office confirms the payment.',
         );
 
-        $transaction->load(['user', 'invoice']);
-        $community = Community::first();
-
         $pdf = Pdf::loadView('pdf.transaction-receipt', [
-            'transaction' => $transaction,
-            'community' => $community,
+            'transaction' => $transaction->load(['user', 'invoice']),
+            'community' => Community::first(),
         ])->setPaper('a4', 'portrait');
 
-        $ref = $transaction->receipt_number ?? $transaction->reference;
-
-        return $pdf->download("receipt-{$ref}.pdf");
+        return $pdf->download('receipt-'.($transaction->receipt_number ?? $transaction->reference).'.pdf');
     }
 
     public function storeReconciliation(StoreReconciliationRequest $request, StoreReconciliationAction $action): RedirectResponse

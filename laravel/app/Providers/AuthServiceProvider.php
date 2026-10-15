@@ -9,6 +9,7 @@ use App\Models\GatePass;
 use App\Models\HouseholdMember;
 use App\Models\Renter;
 use App\Models\Staff;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Policies\DelegatedAccessPolicy;
@@ -17,6 +18,7 @@ use App\Policies\GatePassPolicy;
 use App\Policies\HouseholdMemberPolicy;
 use App\Policies\RenterPolicy;
 use App\Policies\StaffPolicy;
+use App\Policies\TransactionPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\VisitorPolicy;
 use App\Services\Occupancy\OccupancyCategoryResolver;
@@ -48,6 +50,7 @@ class AuthServiceProvider extends ServiceProvider
         Staff::class => StaffPolicy::class,
         User::class => UserPolicy::class,
         DelegatedAccess::class => DelegatedAccessPolicy::class,
+        Transaction::class => TransactionPolicy::class,
     ];
 
     public function boot(): void
@@ -60,6 +63,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(Staff::class, StaffPolicy::class);
         Gate::policy(User::class, UserPolicy::class);
         Gate::policy(DelegatedAccess::class, DelegatedAccessPolicy::class);
+        Gate::policy(Transaction::class, TransactionPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {

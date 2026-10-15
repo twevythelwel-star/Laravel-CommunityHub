@@ -112,6 +112,36 @@ class BillingEngineExpansionTest extends TestCase
         $this->assertStringContainsString('application/pdf', $response->headers->get('Content-Type'));
     }
 
+    public function test_the_master_ledger_exports_every_payment_as_text(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create(['name' => '=HYPERLINK("http://evil.example","Pay")', 'lot' => 'Lot 9']);
+        foreach (range(1, 120) as $i) {
+            Transaction::create([
+                'user_id' => $resident->id,
+                'amount_minor' => 150000,
+                'currency' => 'JMD',
+                'payment_channel' => 'bank_wire',
+                'reference' => "TX-{$i}",
+                'status' => 'completed',
+                'notes' => $i === 1 ? '+SUM(A1:A9)' : null,
+            ]);
+        }
+
+        $response = $this->confirmPassword()->actingAs($this->admin())->get('/dashboard/billing/export-transactions');
+
+        $response->assertOk();
+        $this->assertSame('attachment; filename="transactions-master-ledger.csv"', $response->headers->get('Content-Disposition'));
+        $csv = $response->streamedContent();
+
+        $this->assertStringStartsWith('"Reference","Receipt","Homeowner","Lot","Amount"', $csv);
+        $this->assertSame(121, substr_count(trim($csv), "\n") + 1, 'header plus every payment, past the first chunk');
+        $this->assertStringContainsString('"\'=HYPERLINK(""http://evil.example"",""Pay"")"', $csv);
+        $this->assertStringContainsString('"\'+SUM(A1:A9)"', $csv);
+        $this->assertStringContainsString('"1,500.00"', $csv);
+
+        $this->confirmPassword()->actingAs($resident)->get('/dashboard/billing/export-transactions')->assertForbidden();
+    }
+
     public function test_user_cannot_download_neighbor_transaction_receipt(): void
     {
         Community::default();
