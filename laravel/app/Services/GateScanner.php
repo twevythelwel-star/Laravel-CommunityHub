@@ -10,13 +10,13 @@ use App\Enums\ValidationStatus;
 use App\Events\VisitorCheckedInEvent;
 use App\Exceptions\InvalidPassTransition;
 use App\Exceptions\ScanNotConfirmable;
-use App\Models\AccessAuthorization;
 use App\Models\AccessLogEntry;
 use App\Models\AuthorizedPerson;
 use App\Models\BlocklistEntry;
 use App\Models\DelegatedAccess;
 use App\Models\GatePass;
 use App\Models\InAppNotification;
+use App\Models\Occupant;
 use App\Models\User;
 use App\Services\Credentials\WalletCredentialCode;
 use App\Services\Safety\SilentAssistanceService;
@@ -163,23 +163,17 @@ class GateScanner
             }
         }
 
-        // An AccessAuthorization governs scope, permissions, approval, expiry, revocation,
-        // and enforces cross-property isolation (cross-property access denied unless explicitly authorized).
-        $authId = $pass?->access_authorization_id ?? ($pass?->metadata['authorization_id'] ?? null);
-        if ($decision !== ScanDecision::Reject && $authId) {
-            $authorization = AccessAuthorization::find($authId);
-            if (! $authorization || ! $authorization->isCurrentlyActive()) {
+        // A renter's, household member's or staff member's pass is only as good
+        // as their place at the property: suspended, removed from the household,
+        // a lease or schedule ended, or an ID expired, and the pass stops too,
+        // even if the pass itself was never revoked.
+        if ($decision !== ScanDecision::Reject && $pass) {
+            $occupant = Occupant::everyone()->where('gate_pass_id', $pass->id)->first();
+            if ($occupant && ! $occupant->hasCurrentAccess()) {
                 $decision = ScanDecision::Reject;
                 $report['decision'] = ScanDecision::Reject->value;
                 $report['status'] = 'REJECTED';
-                $report['primaryReason'] = 'The access authorization behind this pass is expired, revoked, or pending approval';
-            } elseif ($targetPropId = ($pass->metadata['target_property_id'] ?? null)) {
-                if (! $authorization->isPermittedForProperty($targetPropId)) {
-                    $decision = ScanDecision::Reject;
-                    $report['decision'] = ScanDecision::Reject->value;
-                    $report['status'] = 'REJECTED';
-                    $report['primaryReason'] = 'Cross-property access denied: Pass is not authorized for the requested property';
-                }
+                $report['primaryReason'] = 'The occupancy behind this pass has ended or is suspended';
             }
         }
 

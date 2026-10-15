@@ -45,16 +45,6 @@ class Property extends Model
         return $this->belongsTo(User::class, 'primary_occupant_id');
     }
 
-    public function propertyRelationships(): HasMany
-    {
-        return $this->hasMany(PropertyRelationship::class);
-    }
-
-    public function accessAuthorizations(): HasMany
-    {
-        return $this->hasMany(AccessAuthorization::class);
-    }
-
     public function renters(): HasMany
     {
         return $this->hasMany(Renter::class);

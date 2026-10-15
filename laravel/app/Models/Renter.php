@@ -66,7 +66,7 @@ class Renter extends Occupant
 
     public function hasCurrentAccess(): bool
     {
-        return $this->status === 'Active' && $this->lease_end !== null && ! $this->lease_end->endOfDay()->isPast();
+        return $this->status === 'Active' && $this->lease_end !== null && ! $this->lease_end->copy()->endOfDay()->isPast();
     }
 
     public function accessEndsAt(): ?CarbonInterface

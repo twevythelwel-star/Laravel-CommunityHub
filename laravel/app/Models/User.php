@@ -56,11 +56,6 @@ class User extends Authenticatable implements HasMedia
 
     // ── Relationships ────────────────────────────────────────────────
 
-    public function person(): HasOne
-    {
-        return $this->hasOne(Person::class);
-    }
-
     public function gatePasses(): HasMany
     {
         return $this->hasMany(GatePass::class);
