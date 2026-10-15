@@ -290,4 +290,35 @@ class AccessGovernanceAndRiskTest extends TestCase
             ->post(route('dashboard.access-governance.sweep'))
             ->assertRedirect();
     }
+
+    public function test_the_governance_center_counts_open_and_critical_incidents(): void
+    {
+        $incident = fn (string $risk, string $status) => AccessRiskIncident::create([
+            'user_id' => $this->homeowner->id,
+            'gate' => 'GATE-01',
+            'flag_type' => 'SIMULTANEOUS_MULTI_GATE',
+            'risk_level' => $risk,
+            'title' => "{$risk} {$status}",
+            'description' => 'Test incident',
+            'status' => $status,
+            'occurred_at' => now(),
+        ]);
+        $incident('CRITICAL', 'NEW');
+        $incident('MEDIUM', 'NEW');
+        $incident('CRITICAL', 'RESOLVED');
+
+        $this->actingAs($this->guard)->get(route('dashboard.access-governance'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Dashboard/AccessGovernance')
+                ->has('incidents', 3)
+                ->where('metrics.activeIncidents', 2)
+                ->where('metrics.criticalIncidents', 1)
+                ->where('metrics.pendingApprovals', 0)
+                ->where('userScope.role', fn ($role) => filled($role))
+                ->has('visibilityMatrix')
+            );
+
+        $this->actingAs($this->homeowner)->get(route('dashboard.access-governance'))->assertForbidden();
+    }
 }

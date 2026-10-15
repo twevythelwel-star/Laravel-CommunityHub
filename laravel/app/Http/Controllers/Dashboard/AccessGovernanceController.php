@@ -8,15 +8,12 @@ use App\Http\Requests\Access\AttachComplianceDocumentRequest;
 use App\Http\Requests\Access\LockdownIncidentRequest;
 use App\Http\Requests\Access\RejectAccessRequestRequest;
 use App\Http\Requests\Access\ResolveIncidentRequest;
-use App\Models\AccessApprovalRequest;
-use App\Models\AccessAuditTimelineEvent;
 use App\Models\AccessRiskIncident;
-use App\Models\AuthorizationDocument;
+use App\Services\Access\AccessGovernancePresenter;
 use App\Services\AccessApprovalWorkflowService;
 use App\Services\AccessAuditTimelineService;
 use App\Services\AccessExpirationPolicyService;
 use App\Services\AccessRiskEngine;
-use App\Services\AccessVisibilityService;
 use App\Services\DigitalAuthorizationDocumentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -33,65 +30,14 @@ class AccessGovernanceController extends Controller
         private readonly AccessExpirationPolicyService $expirationPolicyService,
         private readonly DigitalAuthorizationDocumentService $documentService,
         private readonly AccessAuditTimelineService $timelineService,
-        private readonly AccessVisibilityService $visibilityService
     ) {}
 
     /**
      * Render the unified Access Governance & Risk Center.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, AccessGovernancePresenter $presenter): Response
     {
-        $incidents = AccessRiskIncident::query()
-            ->with(['user', 'resolver'])
-            ->latest('occurred_at')
-            ->limit(50)
-            ->get();
-
-        $approvalRequests = AccessApprovalRequest::query()
-            ->with(['homeowner', 'gatePass'])
-            ->latest()
-            ->get();
-
-        $documents = AuthorizationDocument::query()
-            ->with(['gatePass', 'user'])
-            ->latest()
-            ->get();
-
-        $recentTimeline = AccessAuditTimelineEvent::query()
-            ->latest('occurred_at')
-            ->limit(40)
-            ->get();
-
-        // Metrics for summary badges
-        $activeIncidentsCount = AccessRiskIncident::where('status', 'NEW')->count();
-        $criticalIncidentsCount = AccessRiskIncident::where('status', 'NEW')->where('risk_level', 'CRITICAL')->count();
-        $pendingApprovalsCount = AccessApprovalRequest::where('status', 'pending')->count();
-        $expiringDocsCount = AuthorizationDocument::whereIn('status', ['expiring_soon', 'expired'])->count();
-        $expiredPassesTodayCount = AccessAuditTimelineEvent::where('event_type', 'CREDENTIAL_DENIED')
-            ->where('headline', 'Policy Window Expired')
-            ->whereDate('occurred_at', today())
-            ->count();
-
-        $userScope = $request->user() ? [
-            'role' => $this->visibilityService->resolveUserRole($request->user()),
-            'associatedProperties' => $this->visibilityService->getUserAssociatedProperties($request->user()),
-        ] : null;
-
-        return Inertia::render('Dashboard/AccessGovernance', [
-            'incidents' => $incidents,
-            'approvalRequests' => $approvalRequests,
-            'documents' => $documents,
-            'recentTimeline' => $recentTimeline,
-            'visibilityMatrix' => $this->visibilityService->getVisibilityMatrix(),
-            'userScope' => $userScope,
-            'metrics' => [
-                'activeIncidents' => $activeIncidentsCount,
-                'criticalIncidents' => $criticalIncidentsCount,
-                'pendingApprovals' => $pendingApprovalsCount,
-                'expiringDocuments' => $expiringDocsCount,
-                'expiredPassesToday' => $expiredPassesTodayCount,
-            ],
-        ]);
+        return Inertia::render('Dashboard/AccessGovernance', $presenter->props($request->user()));
     }
 
     /**
