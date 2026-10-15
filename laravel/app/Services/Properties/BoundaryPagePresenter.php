@@ -47,21 +47,9 @@ class BoundaryPagePresenter
             ] : null,
             'publishedCoordinates' => $published?->published_coordinates ?? [],
             'validation' => $draft ? $this->geofence->validateBoundary($draft->coordinatePairs()) : null,
-            'auditHistory' => $draft ? $draft->auditLogs()->limit(50)->get()->map(fn (BoundaryAuditLog $l) => [
-                'id' => $l->id,
-                'community' => $l->community,
-                'action' => $l->action,
-                'changedBy' => $l->changed_by,
-                'role' => $l->role,
-                'previousVersion' => $l->previous_version,
-                'newVersion' => $l->new_version,
-                'pointsCount' => $l->points_count,
-                'timestamp' => $l->occurred_at->toIso8601String(),
-                'published' => $l->published,
-                'notes' => $l->notes,
-                'areaAcres' => $l->area_acres,
-                'perimeterMeters' => $l->perimeter_meters,
-            ]) : [],
+            'auditHistory' => $draft
+                ? $draft->auditLogs()->limit(50)->get()->map(fn (BoundaryAuditLog $l) => $l->toHistoryEntry())
+                : [],
             'previousVersions' => $community->boundaryConfigs()
                 ->with('points')
                 ->orderByDesc('version')

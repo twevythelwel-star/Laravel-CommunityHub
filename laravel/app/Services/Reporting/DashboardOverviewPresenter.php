@@ -330,7 +330,7 @@ class DashboardOverviewPresenter
                 'description' => $l->description,
                 'coordinates' => [$l->lat, $l->lng],
                 'elevation' => $this->geofence->estimateElevation($l->lat, $l->lng),
-                'color' => $this->landmarkColor($l->category),
+                'color' => $l->pinColor(),
             ])
             : [];
     }
@@ -343,16 +343,5 @@ class DashboardOverviewPresenter
             ->take(2)
             ->map(fn (string $part) => mb_strtoupper(mb_substr($part, 0, 1)))
             ->implode('');
-    }
-
-    /** Pin colour per landmark category, matching LANDMARK_PIN_CONFIGS. */
-    private function landmarkColor(?string $category): string
-    {
-        return match ($category) {
-            'Security Gate' => '#10B981',
-            'Community Center' => '#EF4444',
-            'Park' => '#3B82F6',
-            default => '#64748B',
-        };
     }
 }

@@ -184,6 +184,29 @@ class MapAndSettingsTest extends TestCase
         $this->assertSame('SUPERSEDED', $first->fresh()->status);
     }
 
+    public function test_the_map_and_the_boundary_editor_share_the_audit_history(): void
+    {
+        $community = Community::default();
+        $community->landmarks()->create(['name' => 'Clubhouse', 'category' => 'Community Center', 'lat' => 18.4766, 'lng' => -77.9257]);
+        $sysAdmin = User::factory()->role(UserRole::SystemAdmin)->create();
+
+        $this->actingAs($sysAdmin)
+            ->post('/dashboard/map/boundary/publish', ['points' => $this->pointsPayload($this->validPolygon()), 'notes' => 'First survey'])
+            ->assertSessionHasNoErrors();
+
+        $entry = fn ($page, string $path) => $page
+            ->where("{$path}.0.notes", 'First survey')
+            ->where("{$path}.0.published", true)
+            ->where("{$path}.0.pointsCount", 4)
+            ->has("{$path}.0.timestamp");
+
+        $this->get('/dashboard/map')->assertInertia(fn (Assert $page) => $entry($page, 'boundaryConfig.auditHistory')
+            ->where('landmarks.0.color', '#EF4444')
+            ->where('landmarks.0.iconType', 'building'));
+
+        $this->get('/dashboard/map/boundary')->assertInertia(fn (Assert $page) => $entry($page, 'auditHistory'));
+    }
+
     public function test_a_self_intersecting_boundary_is_refused(): void
     {
         Community::default();

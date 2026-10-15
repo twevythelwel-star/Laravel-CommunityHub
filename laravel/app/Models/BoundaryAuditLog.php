@@ -21,4 +21,30 @@ class BoundaryAuditLog extends Model
     {
         return $this->belongsTo(BoundaryConfig::class, 'boundary_config_id');
     }
+
+    /**
+     * One row of the boundary's audit history, as the map and the boundary
+     * editor show it. $communityFallback names the community on rows that
+     * did not record one.
+     *
+     * @return array<string, mixed>
+     */
+    public function toHistoryEntry(?string $communityFallback = null): array
+    {
+        return [
+            'id' => $this->id,
+            'community' => $communityFallback === null ? $this->community : ($this->community ?: $communityFallback),
+            'action' => $this->action,
+            'changedBy' => $this->changed_by,
+            'role' => $this->role,
+            'previousVersion' => $this->previous_version,
+            'newVersion' => $this->new_version,
+            'pointsCount' => $this->points_count,
+            'timestamp' => $this->occurred_at->toIso8601String(),
+            'published' => $this->published,
+            'notes' => $this->notes,
+            'areaAcres' => $this->area_acres,
+            'perimeterMeters' => $this->perimeter_meters,
+        ];
+    }
 }

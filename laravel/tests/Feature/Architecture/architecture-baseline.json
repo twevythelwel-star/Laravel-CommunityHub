@@ -16,7 +16,6 @@
         "Dashboard\\DigitalAccessWalletController@index": 33,
         "Dashboard\\GatePassController@index": 41,
         "Dashboard\\GatePassController@scanner": 30,
-        "Dashboard\\MapController@index": 46,
         "Dashboard\\RenterController@index": 41,
         "Dashboard\\ReviewFeedbackController@index": 30,
         "Dashboard\\StripeCheckoutController@checkout": 29,
