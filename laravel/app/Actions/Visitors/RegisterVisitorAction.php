@@ -4,20 +4,20 @@ namespace App\Actions\Visitors;
 
 use App\Enums\PassCategory;
 use App\Enums\PassStatus;
-use App\Enums\UserRole;
 use App\Models\BlocklistEntry;
 use App\Models\GatePass;
-use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GatePassEngine;
+use App\Services\People\TemporaryStayGuard;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class RegisterVisitorAction
 {
     public function __construct(
-        protected GatePassEngine $engine
+        protected GatePassEngine $engine,
+        protected TemporaryStayGuard $stay,
     ) {}
 
     /**
@@ -34,25 +34,7 @@ class RegisterVisitorAction
         $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
         unset($validated['pass_category']);
 
-        // Server-side stay timeframe enforcement for Temporary Homeowners
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if (! $stay || $stay->leaseHasExpired()) {
-                throw ValidationException::withMessages([
-                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot register visitors.',
-                ]);
-            }
-
-            $expectedDate = Carbon::parse($validated['expected_at'])->startOfDay();
-            $leaseStart = $stay->lease_start->startOfDay();
-            $leaseEnd = $stay->lease_end->endOfDay();
-
-            if ($expectedDate->lt($leaseStart) || $expectedDate->gt($leaseEnd)) {
-                throw ValidationException::withMessages([
-                    'expected_at' => "Visitors can only be registered within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
-                ]);
-            }
-        }
+        $this->stay->ensureCanManageVisitors($user, 'register', Carbon::parse($validated['expected_at']));
 
         // Server-side blocklist enforcement
         if (BlocklistEntry::blocks($validated['name'])) {

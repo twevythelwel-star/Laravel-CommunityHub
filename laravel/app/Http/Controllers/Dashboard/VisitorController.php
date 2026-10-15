@@ -8,11 +8,6 @@ use App\Actions\Visitors\RegisterBulkVisitorsAction;
 use App\Actions\Visitors\RegisterVisitorAction;
 use App\Actions\Visitors\UpdateVisitorAction;
 use App\Enums\GateId;
-use App\Enums\PassCategory;
-use App\Enums\PassStatus;
-use App\Enums\UserRole;
-use App\Enums\VisitorStatus;
-use App\Events\VisitorCheckedInEvent;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Visitors\CheckInVisitorRequest;
@@ -22,21 +17,16 @@ use App\Http\Requests\Visitors\RegisterVisitorRequest;
 use App\Http\Requests\Visitors\ResendVisitorPassRequest;
 use App\Http\Requests\Visitors\StoreBulkVisitorsRequest;
 use App\Http\Requests\Visitors\UpdateVisitorRequest;
-use App\Models\AccessLogEntry;
 use App\Models\BlocklistEntry;
 use App\Models\GatePass;
-use App\Models\Renter;
-use App\Models\User;
 use App\Models\Visitor;
 use App\Repositories\VisitorRepository;
 use App\Services\GatePassEngine;
 use App\Services\GateScanner;
-use Carbon\Carbon;
+use App\Services\People\TemporaryStayGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -66,19 +56,6 @@ class VisitorController extends Controller
         $tabCounts = $this->repository->getTabCounts($user, $isStaff, $securityStats);
         $visitors = $this->repository->getPaginatedVisitors($request, $user, $isStaff, $tab);
 
-        $userStay = null;
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if ($stay) {
-                $userStay = [
-                    'stayType' => $stay->stay_type ?? 'Long-term (Renter)',
-                    'leaseStart' => $stay->lease_start->toDateString(),
-                    'leaseEnd' => $stay->lease_end->toDateString(),
-                    'expired' => $stay->leaseHasExpired(),
-                ];
-            }
-        }
-
         return Inertia::render('Dashboard/Visitors', [
             'visitors' => $visitors,
             'filters' => [
@@ -91,7 +68,7 @@ class VisitorController extends Controller
             'activeTab' => $tab,
             'canManage' => $isStaff,
             'canRegister' => $user->can('registerVisitors'),
-            'userStay' => $userStay,
+            'userStay' => $user->staySummary(),
             'graceHours' => 12,
             // An owner or authorized representative says which property a visitor is coming to.
             'hostProperties' => $manageableProperties->map(fn ($p) => ['id' => $p->id, 'label' => $p->hostLabel()])->values(),
@@ -176,19 +153,11 @@ class VisitorController extends Controller
         return back()->with('success', "{$visitor->name} checked out.");
     }
 
-    public function destroy(Request $request, Visitor $visitor): RedirectResponse
+    public function destroy(Request $request, Visitor $visitor, TemporaryStayGuard $stay): RedirectResponse
     {
         $this->authorize('delete', $visitor);
 
-        $user = $request->user();
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if (! $stay || $stay->leaseHasExpired()) {
-                return back()->withErrors([
-                    'visitor' => 'Your temporary stay has expired. You cannot modify visitor entries.',
-                ]);
-            }
-        }
+        $stay->ensureCanManageVisitors($request->user(), 'remove', field: 'visitor');
 
         $visitor->delete();
 

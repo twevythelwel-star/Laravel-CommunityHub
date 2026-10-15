@@ -2,19 +2,19 @@
 
 namespace App\Actions\Visitors;
 
-use App\Enums\UserRole;
 use App\Models\BlocklistEntry;
-use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
 use App\Services\GatePassEngine;
+use App\Services\People\TemporaryStayGuard;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class UpdateVisitorAction
 {
     public function __construct(
-        protected GatePassEngine $engine
+        protected GatePassEngine $engine,
+        protected TemporaryStayGuard $stay,
     ) {}
 
     /**
@@ -35,27 +35,7 @@ class UpdateVisitorAction
             }
         }
 
-        // Temporary Homeowners can only edit visitors within their approved timeframe
-        if ($user->role === UserRole::TemporaryHomeowner) {
-            $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-            if (! $stay || $stay->leaseHasExpired()) {
-                throw ValidationException::withMessages([
-                    'expected_at' => 'Your temporary stay has expired or is inactive. You cannot modify visitors.',
-                ]);
-            }
-
-            if (isset($validated['expected_at'])) {
-                $expectedDate = Carbon::parse($validated['expected_at'])->startOfDay();
-                $leaseStart = $stay->lease_start->startOfDay();
-                $leaseEnd = $stay->lease_end->endOfDay();
-
-                if ($expectedDate->lt($leaseStart) || $expectedDate->gt($leaseEnd)) {
-                    throw ValidationException::withMessages([
-                        'expected_at' => "Visitors can only be scheduled within your approved stay timeframe ({$stay->lease_start->format('M d, Y')} to {$stay->lease_end->format('M d, Y')}).",
-                    ]);
-                }
-            }
-        }
+        $this->stay->ensureCanManageVisitors($user, 'modify', isset($validated['expected_at']) ? Carbon::parse($validated['expected_at']) : null);
 
         $visitor->update($validated);
 

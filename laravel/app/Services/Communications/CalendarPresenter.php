@@ -2,9 +2,7 @@
 
 namespace App\Services\Communications;
 
-use App\Enums\UserRole;
 use App\Models\CommunityEvent;
-use App\Models\Renter;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Support\Collection;
@@ -32,7 +30,7 @@ class CalendarPresenter
             ]),
             'entrySlots' => config('visitor_pass.entry_slots', []),
             'myVisitors' => $this->recentVisitors($user),
-            'userStay' => $this->stay($user),
+            'userStay' => $user->staySummary(),
             'canManage' => $user->can('broadcastNotices'),
             'canRegisterVisitors' => $user->can('registerVisitors'),
         ];
@@ -52,27 +50,5 @@ class CalendarPresenter
                 'expectedAt' => $v->expected_at->toIso8601String(),
                 'dateRange' => $v->date_range,
             ]);
-    }
-
-    /**
-     * A temporary homeowner's current stay, else their latest, for the lease
-     * markers; null for everyone else.
-     *
-     * @return array{stayType: string, leaseStart: string, leaseEnd: string, expired: bool}|null
-     */
-    private function stay(User $user): ?array
-    {
-        if ($user->role !== UserRole::TemporaryHomeowner) {
-            return null;
-        }
-
-        $stay = $user->activeStay() ?? Renter::where('user_id', $user->id)->first();
-
-        return $stay ? [
-            'stayType' => $stay->stay_type ?? 'Long-term (Renter)',
-            'leaseStart' => $stay->lease_start->toDateString(),
-            'leaseEnd' => $stay->lease_end->toDateString(),
-            'expired' => $stay->leaseHasExpired(),
-        ] : null;
     }
 }

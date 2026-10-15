@@ -19,7 +19,7 @@
         "Dashboard\\StripeCheckoutController@checkout": 29,
         "Dashboard\\VehicleController@anprLookup": 31,
         "Dashboard\\VehicleController@index": 29,
-        "Dashboard\\VisitorController@index": 42,
+        "Dashboard\\VisitorController@index": 29,
         "Dashboard\\WarningController@index": 27,
         "Dashboard\\WarningController@store": 27,
         "GuestPassController@show": 28,

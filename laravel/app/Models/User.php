@@ -335,6 +335,28 @@ class User extends Authenticatable implements HasMedia
         return $this->renter()->active()->first();
     }
 
+    /**
+     * A temporary homeowner's current stay, else their latest, as the visitor
+     * and calendar pages show it; null for everyone else.
+     *
+     * @return array{stayType: string, leaseStart: string, leaseEnd: string, expired: bool}|null
+     */
+    public function staySummary(): ?array
+    {
+        if ($this->role !== UserRole::TemporaryHomeowner) {
+            return null;
+        }
+
+        $stay = $this->activeStay() ?? Renter::where('user_id', $this->id)->first();
+
+        return $stay ? [
+            'stayType' => $stay->stay_type ?? 'Long-term (Renter)',
+            'leaseStart' => $stay->lease_start->toDateString(),
+            'leaseEnd' => $stay->lease_end->toDateString(),
+            'expired' => $stay->leaseHasExpired(),
+        ] : null;
+    }
+
     public function isLongTermRenter(): bool
     {
         return $this->role === UserRole::TemporaryHomeowner
