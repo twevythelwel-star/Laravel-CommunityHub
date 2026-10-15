@@ -18,7 +18,6 @@
         "Dashboard\\BillingController@exportTransactions": 31,
         "Dashboard\\BlocklistController@index": 50,
         "Dashboard\\BlocklistController@reviewRemoval": 29,
-        "Dashboard\\CalendarController@index": 79,
         "Dashboard\\DeactivationController@store": 41,
         "Dashboard\\DealsController@index": 34,
         "Dashboard\\DelegatedAccessController@activateEmergency": 26,

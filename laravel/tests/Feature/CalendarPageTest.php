@@ -41,6 +41,23 @@ class CalendarPageTest extends TestCase
             );
     }
 
+    public function test_entry_windows_come_from_configuration(): void
+    {
+        $homeowner = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($homeowner)->get('/dashboard/calendar')
+            ->assertInertia(fn ($page) => $page
+                ->has('entrySlots', 4)
+                ->where('entrySlots.0.id', 'slot-morning')
+                ->where('userStay', null)
+            );
+
+        config(['visitor_pass.entry_slots' => [['id' => 'slot-day', 'name' => 'Day', 'timeRange' => '08:00 AM – 05:00 PM', 'status' => 'Available', 'description' => 'Daytime only.']]]);
+
+        $this->get('/dashboard/calendar')
+            ->assertInertia(fn ($page) => $page->has('entrySlots', 1)->where('entrySlots.0.id', 'slot-day'));
+    }
+
     public function test_an_all_day_event_can_be_created_without_an_end_date(): void
     {
         $admin = User::factory()->role(UserRole::Admin)->create();
