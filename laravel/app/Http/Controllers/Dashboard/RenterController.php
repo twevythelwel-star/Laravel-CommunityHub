@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Dashboard;
 
-use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Renters\StoreRenterRequest;
 use App\Http\Requests\Renters\UpdateRenterRequest;
 use App\Models\Property;
 use App\Models\Renter;
 use App\Models\User;
+use App\Services\People\RenterPresenter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,46 +17,12 @@ use Inertia\Response;
 /** Backs src/app/dashboard/renters/page.tsx and register-renter-form.tsx. */
 class RenterController extends Controller
 {
-    public function index(Request $request): Response
+    /** See RenterPresenter for what homeowners and the estate office each see. */
+    public function index(Request $request, RenterPresenter $presenter): Response
     {
         $this->authorize('viewAny', Renter::class);
 
-        $user = $request->user();
-        $isHomeowner = $user->role === UserRole::Homeowner;
-
-        $query = Renter::with(['user', 'homeowner'])
-            ->when($isHomeowner, fn ($q) => $q->where('homeowner_id', $user->id))
-            ->orderBy('name');
-
-        return Inertia::render('Dashboard/Renters', [
-            'renters' => $query
-                ->paginate(25)
-                ->through(fn (Renter $r) => [
-                    'id' => $r->id,
-                    'name' => $r->name,
-                    'stayType' => $r->stay_type ?? 'Long-term (Renter)',
-                    'contact' => $r->contact,
-                    'notes' => $r->notes,
-                    'status' => $r->leaseHasExpired() ? 'Expired' : $r->status,
-                    'leaseStart' => $r->lease_start->toDateString(),
-                    'leaseEnd' => $r->lease_end->toDateString(),
-                    'lot' => $r->lot,
-                    'street' => $r->street,
-                    'expired' => $r->leaseHasExpired(),
-                    'homeownerId' => $r->homeowner_id,
-                    'homeownerName' => $r->homeowner?->display_name ?? $r->homeowner?->name,
-                ]),
-            'isHomeowner' => $isHomeowner,
-            'canRegister' => $user->can('manageUsers'),
-            // Whose property a new stay is for; only the estate office registers one.
-            'homeowners' => $user->can('manageUsers')
-                ? User::where('role', UserRole::Homeowner)
-                    ->orderBy('name')
-                    ->get(['id', 'name', 'display_name', 'lot', 'street'])
-                    ->map(fn (User $h) => ['id' => $h->id, 'name' => $h->display_name ?: $h->name, 'property' => $h->propertyLabel()])
-                    ->values()
-                : [],
-        ]);
+        return Inertia::render('Dashboard/Renters', $presenter->props($request->user()));
     }
 
     /**

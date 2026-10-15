@@ -91,4 +91,31 @@ class RentalPortfolioTest extends TestCase
             ->has('renters.data')
         );
     }
+
+    public function test_a_homeowner_sees_only_their_own_stays_and_the_office_sees_all(): void
+    {
+        $mine = User::factory()->create(['role' => UserRole::Homeowner, 'display_name' => 'Ann Owner']);
+        $theirs = User::factory()->create(['role' => UserRole::Homeowner]);
+        $stay = fn (User $owner, string $name) => Renter::create([
+            'homeowner_id' => $owner->id, 'name' => $name, 'stay_type' => 'Long-term (Renter)', 'status' => 'Active',
+            'lease_start' => now()->subMonth()->toDateString(), 'lease_end' => now()->addMonths(5)->toDateString(),
+        ]);
+        $stay($mine, 'My Tenant');
+        $stay($theirs, 'Their Tenant');
+
+        $this->actingAs($mine)->get(route('dashboard.renters'))->assertInertia(fn (Assert $page) => $page
+            ->has('renters.data', 1)
+            ->where('renters.data.0.name', 'My Tenant')
+            ->where('renters.data.0.homeownerName', 'Ann Owner')
+            ->where('isHomeowner', true)
+            ->where('canRegister', false)
+            ->where('homeowners', []));
+
+        $this->actingAs(User::factory()->create(['role' => UserRole::Admin]))->get(route('dashboard.renters'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('renters.total', Renter::count())
+                ->where('canRegister', true)
+                ->has('homeowners', User::where('role', UserRole::Homeowner)->count())
+                ->where('homeowners', fn ($homeowners) => collect($homeowners)->contains('name', 'Ann Owner')));
+    }
 }
