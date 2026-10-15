@@ -5,7 +5,6 @@
     },
     "fat_actions": {
         "Api\\AuthApiController@login": 29,
-        "Api\\V1\\TokenApiController@store": 40,
         "Api\\V1\\WebhookApiController@store": 26,
         "Auth\\AuthenticatedSessionController@store": 29,
         "Dashboard\\DeactivationController@store": 41,

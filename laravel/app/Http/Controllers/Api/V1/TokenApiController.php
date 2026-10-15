@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\TokenAbility;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\CreateTokenApiRequest;
 use App\Http\Resources\TokenResource;
 use App\Http\Responses\ApiResponse;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,33 +26,18 @@ class TokenApiController extends Controller
 
     public function store(CreateTokenApiRequest $request): JsonResponse
     {
-        $user = $request->user();
-        $validated = $request->validated();
-
-        // A token may be narrower than its account, never wider.
-        $allowed = TokenAbility::forUser($user);
-        $abilities = $validated['abilities'] ?? $allowed;
-
-        if ($beyond = array_values(array_diff($abilities, $allowed))) {
+        if ($beyond = $request->abilitiesBeyondAccount()) {
             return ApiResponse::error(
                 message: 'This account cannot grant: '.implode(', ', $beyond).'.',
                 code: 'ABILITY_NOT_PERMITTED',
                 status: 422,
             );
         }
-        // Without one asked for, the token gets the configured lifetime, so
-        // its expiresAt tells the holder the truth instead of null.
-        $maxMinutes = (int) config('sanctum.expiration');
-        $expiresAt = isset($validated['expires_at'])
-            ? Carbon::parse($validated['expires_at'])
-            : ($maxMinutes > 0 ? now()->addMinutes($maxMinutes) : null);
 
-        $tokenName = $validated['token_name'] ?? $validated['name'];
-
-        $tokenResult = $user->createToken(
-            name: $tokenName,
-            abilities: $abilities,
-            expiresAt: $expiresAt
+        $tokenResult = $request->user()->createToken(
+            name: $request->tokenName(),
+            abilities: $request->abilities(),
+            expiresAt: $request->expiresAt()
         );
 
         return ApiResponse::success(
