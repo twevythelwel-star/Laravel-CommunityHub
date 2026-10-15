@@ -95,4 +95,19 @@ class SafetyProfile extends Model
     {
         return $this->armed_until?->isFuture() ?? false;
     }
+
+    /**
+     * The saved contact list, or the single contact stored in the older
+     * emergency_contact_* columns when no list has been saved yet.
+     *
+     * @return list<array{name: ?string, phone: ?string, relationship: ?string}>
+     */
+    public function emergencyContactList(): array
+    {
+        return $this->emergency_contacts ?: array_values(array_filter([[
+            'name' => $this->emergency_contact_name,
+            'phone' => $this->emergency_contact_phone,
+            'relationship' => $this->emergency_contact_relationship,
+        ]], fn ($contact) => filled($contact['name']) || filled($contact['phone'])));
+    }
 }

@@ -127,27 +127,13 @@ class DistressAlertQueuePresenter
                 ->filter(fn ($type) => in_array($type, ['security', 'police', 'medical', 'fire', 'emergency_services'], true))
                 ->values()
                 ->all() ?: ['security'],
-            'emergencyContacts' => $personal ? $this->emergencyContacts($profile) : [],
+            'emergencyContacts' => $personal ? $profile->emergencyContactList() : [],
             'preferredGate' => $this->gateLabel($profile->preferred_gate),
             'preferredVehicle' => $preferredVehicle
                 ? $preferredVehicle->fullDescription().' · '.$preferredVehicle->formattedPlate()
                 : null,
             'medicalNotes' => $personal ? $profile->medical_notes : null,
         ];
-    }
-
-    /**
-     * The contact list, or the single legacy contact when no list was saved.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function emergencyContacts(SafetyProfile $profile): array
-    {
-        return $profile->emergency_contacts ?: array_values(array_filter([[
-            'name' => $profile->emergency_contact_name,
-            'phone' => $profile->emergency_contact_phone,
-            'relationship' => $profile->emergency_contact_relationship,
-        ]], fn ($contact) => filled($contact['name']) || filled($contact['phone'])));
     }
 
     /** A gate's configured name, else its enum label, else the raw id. */

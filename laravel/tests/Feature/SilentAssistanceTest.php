@@ -246,6 +246,48 @@ class SilentAssistanceTest extends TestCase
         $this->assertSame('Type 1 diabetic', SafetyProfile::sole()->medical_notes);
     }
 
+    public function test_a_profile_update_mirrors_the_first_contact_and_keeps_what_it_omits(): void
+    {
+        $this->actingAs($this->resident)->patch('/dashboard/safety/profile', [
+            'emergency_contacts' => [
+                ['name' => 'Ann Lee', 'phone' => '876-555-0101', 'relationship' => 'Sister'],
+                ['name' => 'Bo Lee', 'phone' => '876-555-0102'],
+            ],
+            'medical_notes' => 'Asthma',
+            'silent_alerts_enabled' => true,
+        ])->assertSessionHasNoErrors();
+
+        $this->patch('/dashboard/safety/profile', ['silent_alerts_enabled' => false])->assertSessionHasNoErrors();
+
+        $profile = SafetyProfile::sole();
+        $this->assertCount(2, $profile->emergency_contacts, 'contacts were not in the second request');
+        $this->assertSame('Ann Lee', $profile->emergency_contact_name);
+        $this->assertSame('Sister', $profile->emergency_contact_relationship);
+        $this->assertSame('Asthma', $profile->medical_notes);
+        $this->assertFalse($profile->silent_alerts_enabled);
+    }
+
+    public function test_an_older_client_sets_or_clears_a_single_contact(): void
+    {
+        $this->actingAs($this->resident)->patch('/dashboard/safety/profile', [
+            'emergency_contact_name' => 'Ann Lee',
+            'emergency_contact_phone' => '876-555-0101',
+            'silent_alerts_enabled' => true,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame([['name' => 'Ann Lee', 'phone' => '876-555-0101', 'relationship' => null]], SafetyProfile::sole()->emergency_contacts);
+        $this->assertSame('Ann Lee', SafetyProfile::sole()->emergencyContactList()[0]['name']);
+
+        $this->patch('/dashboard/safety/profile', [
+            'emergency_contact_name' => '',
+            'emergency_contact_phone' => '876-555-0101',
+            'silent_alerts_enabled' => true,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame([], SafetyProfile::sole()->emergency_contacts);
+        $this->assertNull(SafetyProfile::sole()->emergency_contact_name);
+    }
+
     public function test_rotating_the_safety_credential_retires_the_old_one(): void
     {
         $safety = app(SilentAssistanceService::class);

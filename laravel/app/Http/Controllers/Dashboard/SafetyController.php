@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
-use App\Enums\GateId;
+use App\Actions\Safety\UpdateSafetyProfileAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Safety\HoldSafetyQrRequest;
 use App\Http\Requests\Safety\RequestAccountCredentialAssistanceRequest;
@@ -12,6 +12,7 @@ use App\Http\Requests\Safety\SetDuressPinRequest;
 use App\Http\Requests\Safety\UpdateSafetyProfileRequest;
 use App\Models\DistressAlert;
 use App\Models\User;
+use App\Services\Safety\SafetyPagePresenter;
 use App\Services\Safety\SilentAssistanceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -32,118 +33,18 @@ class SafetyController extends Controller
 {
     public function __construct(private readonly SilentAssistanceService $safety) {}
 
-    public function show(Request $request): Response
+    /** The user's safety page; see SafetyPagePresenter for what each role sees. */
+    public function show(Request $request, SafetyPagePresenter $presenter): Response
     {
-        $user = $this->resident($request);
-        $context = $this->safety->accessContextFor($user);
-        $context['assistanceOptions'] = $this->safety->optionsForUser($user);
-        $profile = $this->safety->profileFor($user);
-        $mayViewOwnIncidents = $user->role->isResident() || $user->role->isAdministrative();
-        $incidents = $mayViewOwnIncidents ? $this->safety->accountIncidents($user)
-            ->map(fn (DistressAlert $alert) => [
-                'incidentId' => $alert->incident_id,
-                'assistance' => $alert->assistance_type,
-                'status' => $alert->status,
-                'assistanceLabel' => ucfirst($alert->assistance_type),
-                'activatedAt' => $alert->triggered_at?->toIso8601String(),
-                'closedAt' => $alert->resolved_at?->toIso8601String(),
-                'auditTrail' => $alert->auditEvents->map(fn ($event) => [
-                    'eventType' => $event->event_type,
-                    'occurredAt' => $event->occurred_at?->toIso8601String(),
-                ])->values(),
-            ]) : collect();
-
-        return Inertia::render('Dashboard/Safety', [
-            'incidents' => $incidents,
-            'holderLabel' => $context['label'],
-            'assistanceOptions' => $context['assistanceOptions'],
-            'profile' => [
-                'emergencyContactName' => $mayViewOwnIncidents ? $profile->emergency_contact_name : null,
-                'emergencyContactPhone' => $mayViewOwnIncidents ? $profile->emergency_contact_phone : null,
-                'emergencyContactRelationship' => $mayViewOwnIncidents ? $profile->emergency_contact_relationship : null,
-                'preferredAssistance' => $profile->preferred_assistance,
-                'assistancePreferences' => $mayViewOwnIncidents
-                    ? (collect($profile->assistance_preferences ?: [$profile->preferred_assistance])
-                        ->filter(fn ($type) => in_array($type, $context['assistanceOptions'], true))
-                        ->values()
-                        ->all() ?: ['security'])
-                    : ['security'],
-                'emergencyContacts' => $mayViewOwnIncidents ? ($profile->emergency_contacts ?: array_values(array_filter([[
-                    'name' => $profile->emergency_contact_name,
-                    'phone' => $profile->emergency_contact_phone,
-                    'relationship' => $profile->emergency_contact_relationship,
-                ]], fn ($contact) => filled($contact['name']) || filled($contact['phone'])))) : [],
-                'preferredGate' => $mayViewOwnIncidents ? $profile->preferred_gate : null,
-                'preferredVehicleId' => $mayViewOwnIncidents ? $profile->preferred_vehicle_id : null,
-                'medicalNotes' => $mayViewOwnIncidents ? $profile->medical_notes : null,
-                'silentAlertsEnabled' => $profile->silent_alerts_enabled,
-                'hasDuressPin' => ($user->role->isResident() || $user->role->isAdministrative()) && $profile->hasDuressPin(),
-            ],
-            'publicEmergencyNumber' => config('safety.public_emergency_number'),
-            'gateOptions' => $mayViewOwnIncidents ? collect(GateId::cases())
-                ->reject(fn (GateId $gate) => $gate === GateId::Any)
-                ->map(fn (GateId $gate) => ['value' => $gate->value, 'label' => config('gatepass.gates.'.$gate->value, $gate->label())])
-                ->values() : [],
-            'vehicleOptions' => $mayViewOwnIncidents ? $user->vehicles->map(fn ($vehicle) => [
-                'value' => (string) $vehicle->id,
-                'label' => $vehicle->fullDescription().' · '.$vehicle->formattedPlate(),
-            ])->values() : [],
-            'severityOptions' => $mayViewOwnIncidents ? [
-                ['value' => DistressAlert::SEVERITY_ASSISTANCE, 'label' => 'Assistance'],
-                ['value' => DistressAlert::SEVERITY_URGENT_ASSISTANCE, 'label' => 'Urgent Assistance'],
-                ['value' => DistressAlert::SEVERITY_SILENT_EMERGENCY, 'label' => 'Silent Emergency'],
-            ] : [],
-            'profileEnabled' => $mayViewOwnIncidents,
-            'holdSeconds' => (int) config('safety.qr_hold_seconds', 3),
-            'armedMinutes' => (int) config('safety.armed_minutes', 15),
-        ]);
+        return Inertia::render('Dashboard/Safety', $presenter->props($this->resident($request)));
     }
 
-    public function updateProfile(UpdateSafetyProfileRequest $request): RedirectResponse
+    public function updateProfile(UpdateSafetyProfileRequest $request, UpdateSafetyProfileAction $update): RedirectResponse
     {
         $user = $this->requester($request);
         abort_unless($user->role->isResident() || $user->role->isAdministrative(), 403);
 
-        $allowedOptions = $this->safety->optionsForUser($user);
-        $validated = $request->validated();
-
-        $profile = $this->safety->profileFor($user);
-        $assistancePreferences = $validated['assistance_preferences'] ?? $profile->assistance_preferences ?? [$profile->preferred_assistance];
-        $assistancePreferences = array_values(array_intersect($assistancePreferences, $allowedOptions));
-        if (! $assistancePreferences) {
-            $assistancePreferences = [$allowedOptions[0] ?? 'security'];
-        }
-        $preferredAssistance = in_array($profile->preferred_assistance, $assistancePreferences, true)
-            ? $profile->preferred_assistance
-            : $assistancePreferences[0];
-        abort_unless($assistancePreferences && count(array_diff($assistancePreferences, $allowedOptions)) === 0, 422);
-        $contacts = $validated['emergency_contacts'] ?? ($profile->emergency_contacts ?: array_values(array_filter([[
-            'name' => $profile->emergency_contact_name,
-            'phone' => $profile->emergency_contact_phone,
-            'relationship' => $profile->emergency_contact_relationship,
-        ]], fn ($contact) => filled($contact['name']) || filled($contact['phone']))));
-
-        if (! array_key_exists('emergency_contacts', $validated) && array_key_exists('emergency_contact_name', $validated)) {
-            $contacts = filled($validated['emergency_contact_name']) && filled($validated['emergency_contact_phone']) ? [[
-                'name' => $validated['emergency_contact_name'],
-                'phone' => $validated['emergency_contact_phone'],
-                'relationship' => $validated['emergency_contact_relationship'] ?? null,
-            ]] : [];
-        }
-
-        $primaryContact = $contacts[0] ?? ['name' => null, 'phone' => null, 'relationship' => null];
-        $profile->update([
-            'preferred_assistance' => $preferredAssistance,
-            'assistance_preferences' => array_values(array_unique($assistancePreferences)),
-            'emergency_contacts' => $contacts,
-            'emergency_contact_name' => $primaryContact['name'] ?? null,
-            'emergency_contact_phone' => $primaryContact['phone'] ?? null,
-            'emergency_contact_relationship' => $primaryContact['relationship'] ?? null,
-            'preferred_gate' => array_key_exists('preferred_gate', $validated) ? $validated['preferred_gate'] : $profile->preferred_gate,
-            'preferred_vehicle_id' => array_key_exists('preferred_vehicle_id', $validated) ? $validated['preferred_vehicle_id'] : $profile->preferred_vehicle_id,
-            'medical_notes' => array_key_exists('medical_notes', $validated) ? $validated['medical_notes'] : $profile->medical_notes,
-            'silent_alerts_enabled' => $validated['silent_alerts_enabled'],
-        ]);
+        $update->execute($user, $request->validated());
 
         return back()->with('success', 'Safety profile saved.');
     }
