@@ -56,7 +56,7 @@
         "Dashboard/FundraisingController.php": 3,
         "Dashboard/ParkingPassController.php": 2,
         "Dashboard/PaymentReturnController.php": 2,
-        "Dashboard/SafetyController.php": 39,
+        "Dashboard/SafetyController.php": 16,
         "Dashboard/StripeCheckoutController.php": 2,
         "Dashboard/VehicleController.php": 5,
         "PdfController.php": 2,

@@ -172,6 +172,23 @@ class SilentAssistanceService
             ->get();
     }
 
+    /**
+     * The staff member's own current gate pass (not a visitor's or a
+     * delegate's), if it matches their role and is valid right now.
+     */
+    public function staffCredentialPassFor(User $user): ?GatePass
+    {
+        $pass = $user->gatePasses()->whereNull('visitor_id')->whereNull('delegated_access_id')->active()->latest('id')->first();
+
+        return $pass
+            && $user->passCategory() === $pass->category
+            && in_array($pass->category->value, ['STAFF', 'SECURITY', 'HOMEOWNER_STAFF'], true)
+            && $pass->isActive()
+            && $pass->isWithinValidity(now())
+            ? $pass
+            : null;
+    }
+
     public function raiseForAccountCredential(User $user, GatePass $pass, string $assistance, array $requestContext = []): ?DistressAlert
     {
         if ($pass->user_id !== $user->id || $pass->visitor_id || ! $pass->isActive() || ! $pass->isWithinValidity(now())) {

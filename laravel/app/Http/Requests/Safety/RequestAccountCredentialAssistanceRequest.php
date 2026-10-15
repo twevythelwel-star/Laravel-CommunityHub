@@ -10,7 +10,7 @@ class RequestAccountCredentialAssistanceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        return (bool) $this->user()?->can('useStaffSafetyCredential');
     }
 
     public function rules(SilentAssistanceService $safety): array

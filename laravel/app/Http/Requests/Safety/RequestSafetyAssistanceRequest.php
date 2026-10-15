@@ -11,14 +11,7 @@ class RequestSafetyAssistanceRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
-        if (! $user) {
-            return false;
-        }
-
-        return $user->role->isResident()
-            || $user->role->isAdministrative()
-            || $user->activeAuthorizedAppointments()->exists();
+        return (bool) $this->user()?->can('requestSafetyAssistance');
     }
 
     public function rules(SilentAssistanceService $safety): array

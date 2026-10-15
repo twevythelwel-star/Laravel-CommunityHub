@@ -11,12 +11,7 @@ class UpdateSafetyProfileRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
-        if (! $user) {
-            return false;
-        }
-
-        return $user->role->isResident() || $user->role->isAdministrative() || $user->role->isOperational();
+        return (bool) $this->user()?->can('keepSafetyProfile');
     }
 
     protected function prepareForValidation(): void

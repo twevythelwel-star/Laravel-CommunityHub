@@ -73,6 +73,25 @@ class SilentAssistanceTest extends TestCase
         Event::assertDispatched(SilentAssistanceRequested::class);
     }
 
+    public function test_the_profile_pin_and_hold_are_residents_only_and_the_staff_page_staff_only(): void
+    {
+        $confirmed = ['auth.password_confirmed_at' => time()];
+
+        $this->actingAs($this->guard)->withSession($confirmed);
+        $this->patch('/dashboard/safety/profile', ['silent_alerts_enabled' => true])->assertForbidden();
+        $this->put('/dashboard/safety/duress-pin', ['pin' => '4826', 'pin_confirmation' => '4826'])->assertForbidden();
+        $this->delete('/dashboard/safety/duress-pin')->assertForbidden();
+        // The hold gesture never refuses visibly; it just arms nothing.
+        $this->postJson('/dashboard/safety/hold')->assertNoContent();
+        $this->assertFalse(SafetyProfile::where('user_id', $this->guard->id)->where('armed_until', '>', now())->exists());
+        // A guard with no valid staff credential has nothing to show.
+        $this->get('/dashboard/safety/credential')->assertNotFound();
+
+        $this->actingAs($this->resident)->get('/dashboard/safety/credential')->assertForbidden();
+        $this->postJson('/dashboard/safety/account-credential/assist', ['assistance' => 'police'])->assertForbidden();
+        $this->withSession($confirmed)->delete('/dashboard/safety/duress-pin')->assertRedirect();
+    }
+
     public function test_only_people_who_live_here_can_use_it(): void
     {
         $this->actingAs($this->guard)->get('/dashboard/safety')->assertForbidden();

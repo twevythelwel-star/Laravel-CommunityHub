@@ -8,12 +8,7 @@ class SetDuressPinRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $user = $this->user();
-        if (! $user) {
-            return false;
-        }
-
-        return $user->role->isResident() || $user->role->isAdministrative();
+        return (bool) $this->user()?->can('keepSafetyProfile');
     }
 
     public function rules(): array

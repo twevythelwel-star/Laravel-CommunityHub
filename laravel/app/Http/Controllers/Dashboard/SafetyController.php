@@ -11,6 +11,7 @@ use App\Http\Requests\Safety\RequestSafetyAssistanceRequest;
 use App\Http\Requests\Safety\SetDuressPinRequest;
 use App\Http\Requests\Safety\UpdateSafetyProfileRequest;
 use App\Models\DistressAlert;
+use App\Models\GatePass;
 use App\Models\User;
 use App\Services\Safety\SafetyPagePresenter;
 use App\Services\Safety\SilentAssistanceService;
@@ -26,6 +27,10 @@ use Inertia\Response;
  * A resident's side of silent assistance: their safety profile, the duress
  * PIN, and the two ways of asking for help from the app.
  *
+ * Who may use what is decided by the keepSafetyProfile,
+ * requestSafetyAssistance and useStaffSafetyCredential gates, on the routes
+ * and form requests.
+ *
  * Every request answers the same plain way whatever it does, so nothing on
  * the screen tells someone nearby that help was called.
  */
@@ -36,28 +41,20 @@ class SafetyController extends Controller
     /** The user's safety page; see SafetyPagePresenter for what each role sees. */
     public function show(Request $request, SafetyPagePresenter $presenter): Response
     {
-        return Inertia::render('Dashboard/Safety', $presenter->props($this->resident($request)));
+        return Inertia::render('Dashboard/Safety', $presenter->props($request->user()));
     }
 
     public function updateProfile(UpdateSafetyProfileRequest $request, UpdateSafetyProfileAction $update): RedirectResponse
     {
-        $user = $this->requester($request);
-        abort_unless($user->role->isResident() || $user->role->isAdministrative(), 403);
-
-        $update->execute($user, $request->validated());
+        $update->execute($request->user(), $request->validated());
 
         return back()->with('success', 'Safety profile saved.');
     }
 
     public function setDuressPin(SetDuressPinRequest $request): RedirectResponse
     {
-        $user = $this->resident($request);
-        abort_unless($this->mayUseResidentTriggers($user), 403);
-
-        $validated = $request->validated();
-
         try {
-            $this->safety->setDuressPin($user, $validated['pin']);
+            $this->safety->setDuressPin($request->user(), $request->validated('pin'));
         } catch (\DomainException $e) {
             throw ValidationException::withMessages(['pin' => $e->getMessage()]);
         }
@@ -67,9 +64,7 @@ class SafetyController extends Controller
 
     public function clearDuressPin(Request $request): RedirectResponse
     {
-        $user = $this->resident($request);
-        abort_unless($this->mayUseResidentTriggers($user), 403);
-        $this->safety->clearDuressPin($user);
+        $this->safety->clearDuressPin($request->user());
 
         return back()->with('success', 'Duress PIN removed.');
     }
@@ -77,25 +72,25 @@ class SafetyController extends Controller
     /**
      * "Request assistance?" from the app. The answer is a plain
      * acknowledgement whichever kind of help was asked for.
+     *
+     * Someone acting under an appointment asks through their own staff
+     * credential, as on the credential safety page.
      */
     public function requestAssistance(RequestSafetyAssistanceRequest $request): JsonResponse
     {
-        $user = $this->resident($request);
-
+        $user = $request->user();
         $validated = $request->validated();
+        $assistance = $validated['assistance'];
+        abort_unless(in_array($assistance, $this->safety->optionsForUser($user), true), 422);
 
-        abort_unless(in_array($validated['assistance'], $this->safety->optionsForUser($user), true), 422);
+        $context = [...$validated, 'severity_level' => $validated['severity'] ?? DistressAlert::SEVERITY_ASSISTANCE];
 
-        $severity = $validated['severity'] ?? DistressAlert::SEVERITY_ASSISTANCE;
-        if ($user->role->isResident() || $user->role->isAdministrative()) {
-            abort_unless($this->safety->raise($user, 'app', $validated['assistance'], [...$validated, 'severity_level' => $severity]), 422);
+        if ($user->can('keepSafetyProfile')) {
+            abort_unless($this->safety->raise($user, 'app', $assistance, $context), 422);
         } else {
-            $pass = $user->gatePasses()->whereNull('visitor_id')->whereNull('delegated_access_id')->active()->latest('id')->first();
-            abort_unless($pass && $user->passCategory() === $pass->category && in_array($pass->category->value, ['STAFF', 'SECURITY', 'HOMEOWNER_STAFF'], true), 404);
-            abort_unless($pass && $pass->isActive() && $pass->isWithinValidity(now()), 404);
-            $context = $this->safety->guestContextForPass($pass);
-            abort_unless($context, 404);
-            abort_unless($this->safety->raiseForAccountCredential($user, $pass, $validated['assistance'], [...$validated, 'severity_level' => $severity]), 422);
+            $pass = $this->staffPass($user);
+            abort_unless($this->safety->guestContextForPass($pass), 404);
+            abort_unless($this->safety->raiseForAccountCredential($user, $pass, $assistance, $context), 422);
         }
 
         return response()->json(['message' => 'Request sent.']);
@@ -103,12 +98,7 @@ class SafetyController extends Controller
 
     public function credentialSafety(Request $request): Response
     {
-        $user = $this->requester($request);
-        abort_unless($user->role->isOperational(), 403);
-        $pass = $user->gatePasses()->whereNull('visitor_id')->whereNull('delegated_access_id')->active()->latest('id')->first();
-        abort_unless($pass && $user->passCategory() === $pass->category && in_array($pass->category->value, ['STAFF', 'SECURITY', 'HOMEOWNER_STAFF'], true), 404);
-        abort_unless($pass && $pass->isActive() && $pass->isWithinValidity(now()), 404);
-        $context = $this->safety->accessContextForPass($pass);
+        $context = $this->safety->accessContextForPass($this->staffPass($request->user()));
         abort_unless($context, 404);
 
         return Inertia::render('Dashboard/CredentialSafety', [
@@ -122,17 +112,13 @@ class SafetyController extends Controller
 
     public function requestAccountCredentialAssistance(RequestAccountCredentialAssistanceRequest $request): JsonResponse
     {
-        $user = $this->requester($request);
-        abort_unless($user->role->isOperational(), 403);
-        $pass = $user->gatePasses()->whereNull('visitor_id')->whereNull('delegated_access_id')->active()->latest('id')->first();
-        abort_unless($pass && $user->passCategory() === $pass->category && in_array($pass->category->value, ['STAFF', 'SECURITY', 'HOMEOWNER_STAFF'], true), 404);
-        abort_unless($pass && $pass->isActive() && $pass->isWithinValidity(now()), 404);
+        $user = $request->user();
+        $pass = $this->staffPass($user);
         $context = $this->safety->guestContextForPass($pass);
         abort_unless($context, 404);
+
         $validated = $request->validated();
-
         abort_unless(in_array($validated['assistance'], $context['assistanceOptions'], true), 422);
-
         abort_unless($this->safety->raiseForAccountCredential($user, $pass, $validated['assistance'], $validated), 422);
 
         return response()->json(['message' => 'Request received.']);
@@ -140,38 +126,17 @@ class SafetyController extends Controller
 
     /**
      * The discreet QR gesture. No content back, success or not: the screen
-     * the resident is holding up must not change.
+     * the resident is holding up must not change, so no 403 either.
      */
     public function hold(HoldSafetyQrRequest $request): HttpResponse
     {
         $user = $request->user();
-        if (! $user) {
-            return response()->noContent();
-        }
 
-        if ($user && $this->mayUseResidentTriggers($user)) {
-            $validated = $request->validated();
-
-            $this->safety->arm($user, $validated);
+        if ($user?->can('keepSafetyProfile')) {
+            $this->safety->arm($user, $request->validated());
         }
 
         return response()->noContent();
-    }
-
-    private function resident(Request $request): User
-    {
-        $user = $request->user();
-        abort_unless($this->mayUseResidentTriggers($user) || $user->activeAuthorizedAppointments()->exists(), 403);
-
-        return $user;
-    }
-
-    private function requester(Request $request): User
-    {
-        $user = $request->user();
-        abort_unless($this->mayUse($user), 403);
-
-        return $user;
     }
 
     public function showCredential(Request $request, string $token): Response
@@ -206,14 +171,12 @@ class SafetyController extends Controller
         return response()->json(['message' => 'Request received.']);
     }
 
-    /** Residents, staff and administrators may use account-based assistance. */
-    private function mayUse(User $user): bool
+    /** The user's own valid staff credential; 404 without one. */
+    private function staffPass(User $user): GatePass
     {
-        return $user->role->isResident() || $user->role->isAdministrative() || $user->role->isOperational();
-    }
+        $pass = $this->safety->staffCredentialPassFor($user);
+        abort_unless($pass, 404);
 
-    private function mayUseResidentTriggers(User $user): bool
-    {
-        return $user->role->isResident() || $user->role->isAdministrative();
+        return $pass;
     }
 }

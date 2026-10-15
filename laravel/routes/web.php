@@ -337,19 +337,20 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
         ->name('directory.properties.destroy');
 
     // ── Discreet distress / silent assistance ──
-    // The resident's side checks residency in the controller; security's is behind manageSecurity.
-    Route::get('/safety', [SafetyController::class, 'show'])->name('safety');
+    // Who may use each part is a gate (see AuthServiceProvider); the form
+    // requests check the same gates. Security's side is behind manageSecurity.
+    Route::get('/safety', [SafetyController::class, 'show'])->middleware('can:requestSafetyAssistance')->name('safety');
     Route::patch('/safety/profile', [SafetyController::class, 'updateProfile'])->name('safety.profile');
     Route::put('/safety/duress-pin', [SafetyController::class, 'setDuressPin'])
         ->middleware('password.confirm')
         ->name('safety.duress-pin');
     Route::delete('/safety/duress-pin', [SafetyController::class, 'clearDuressPin'])
-        ->middleware('password.confirm')
+        ->middleware(['can:keepSafetyProfile', 'password.confirm'])
         ->name('safety.duress-pin.clear');
     Route::post('/safety/assist', [SafetyController::class, 'requestAssistance'])
         ->middleware('throttle:10,1')
         ->name('safety.assist');
-    Route::get('/safety/credential', [SafetyController::class, 'credentialSafety'])->name('safety.credential');
+    Route::get('/safety/credential', [SafetyController::class, 'credentialSafety'])->middleware('can:useStaffSafetyCredential')->name('safety.credential');
     Route::post('/safety/account-credential/assist', [SafetyController::class, 'requestAccountCredentialAssistance'])
         ->middleware('throttle:10,1')
         ->name('safety.account-credential.assist');

@@ -161,6 +161,16 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('triggerEmergencyPanic', fn (User $user) => $user->role->isResident()
             || $user->role->isAdministrative());
 
+        // Silent assistance. Residents and administrators keep a safety
+        // profile, a duress PIN and the QR hold gesture; someone acting under
+        // an active appointment may also ask for help; staff ask through their
+        // own gate credential.
+        Gate::define('keepSafetyProfile', fn (User $user) => $user->role->isResident()
+            || $user->role->isAdministrative());
+        Gate::define('requestSafetyAssistance', fn (User $user) => $user->can('keepSafetyProfile')
+            || $user->activeAuthorizedAppointments()->exists());
+        Gate::define('useStaffSafetyCredential', fn (User $user) => $user->role->isOperational());
+
         // Who runs the estate's occupancy picture and an emergency muster:
         // security, administrators and staff. They see every unit and export
         // the rosters; anyone else sees the totals and their own unit only.
