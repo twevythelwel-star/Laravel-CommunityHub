@@ -43,6 +43,26 @@ class FamilyHouseholdManagementTest extends TestCase
         ]);
     }
 
+    public function test_the_household_page_lists_members_with_a_live_pass_token(): void
+    {
+        $homeowner = User::factory()->create(['role' => UserRole::Homeowner, 'name' => 'John Smith', 'lot' => '14', 'phone' => '+18765550101']);
+        app(HouseholdManagementService::class)->seedExampleSmithHousehold($homeowner);
+
+        $this->actingAs($homeowner)->get('/dashboard/household')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Dashboard/Household')
+                ->where('isOwner', true)
+                ->has('household.members', 5)
+                ->where('household.members', fn ($members) => collect($members)->every(
+                    fn ($m) => $m['gate_pass'] === null
+                        || ($m['gate_pass']['status'] !== PassStatus::Active->value) === ($m['gate_pass']['token'] === null)
+                ))
+                ->where('household.members', fn ($members) => filled(collect($members)->firstWhere('name', 'John Smith')['gate_pass']['token']))
+                ->has('availablePermissions')
+            );
+    }
+
     public function test_homeowner_can_seed_and_manage_smith_household_with_all_five_personas(): void
     {
         $homeowner = User::factory()->create([
