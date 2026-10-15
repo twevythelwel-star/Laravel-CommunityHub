@@ -5,8 +5,22 @@ namespace App\Http\Requests\Settings;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
+/**
+ * One form for three kinds of setting: the user's own preferences, the
+ * estate's branding and name (manageUsers only), and the user's password.
+ */
 class UpdateSettingsRequest extends FormRequest
 {
+    private const PERSONAL = [
+        'theme', 'map_show_boundary', 'map_show_landmarks',
+        'notify_email', 'notify_push', 'notify_sms',
+    ];
+
+    private const BRANDING = [
+        'app_name', 'logo_url', 'primary_color', 'accent_color',
+        'background_color', 'default_theme', 'theme_tokens',
+    ];
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -14,26 +28,11 @@ class UpdateSettingsRequest extends FormRequest
             return false;
         }
 
-        $brandingKeys = [
-            'app_name', 'logo_url', 'primary_color', 'accent_color',
-            'background_color', 'default_theme', 'theme_tokens',
-        ];
+        $changesEstate = $this->hasAny(self::BRANDING)
+            || $this->has('community_name')
+            || $this->input('theme_tokens.communityName') !== null;
 
-        $hasBranding = false;
-        foreach ($brandingKeys as $k) {
-            if ($this->has($k)) {
-                $hasBranding = true;
-                break;
-            }
-        }
-
-        $hasCommunityName = $this->has('community_name') || $this->input('theme_tokens.communityName') !== null;
-
-        if ($hasBranding || $hasCommunityName) {
-            return $user->can('manageUsers');
-        }
-
-        return true;
+        return ! $changesEstate || $user->can('manageUsers');
     }
 
     public function rules(): array
@@ -62,5 +61,23 @@ class UpdateSettingsRequest extends FormRequest
             'current_password' => ['sometimes', 'required_with:password', 'current_password'],
             'password' => ['sometimes', 'confirmed', Password::defaults()],
         ];
+    }
+
+    /** @return array<string, mixed> The user's own preferences in the request. */
+    public function personalPreferences(): array
+    {
+        return array_intersect_key($this->validated(), array_flip(self::PERSONAL));
+    }
+
+    /** @return array<string, mixed> The estate branding in the request. */
+    public function branding(): array
+    {
+        return array_intersect_key($this->validated(), array_flip(self::BRANDING));
+    }
+
+    /** The community's new name, given directly or as the communityName theme token. */
+    public function communityName(): ?string
+    {
+        return $this->validated('community_name') ?? $this->validated('theme_tokens.communityName');
     }
 }

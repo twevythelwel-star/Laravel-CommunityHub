@@ -397,6 +397,49 @@ class MapAndSettingsTest extends TestCase
             ->assertSessionHasErrors('current_password');
     }
 
+    public function test_a_password_change_with_the_current_one_takes_effect(): void
+    {
+        $user = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($user)
+            ->patch('/dashboard/settings', [
+                'current_password' => 'password',
+                'password' => 'Str0ng-New-Password!23',
+                'password_confirmation' => 'Str0ng-New-Password!23',
+                'notify_sms' => true,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $user->refresh();
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('Str0ng-New-Password!23', $user->password));
+        $this->assertTrue($user->preferences->notify_sms, 'preferences in the same request are saved too');
+    }
+
+    public function test_the_community_name_set_through_the_theme_token_renames_the_estate(): void
+    {
+        $community = Community::default();
+        BrandingSetting::create(['app_name' => 'Community Hub', 'theme_tokens' => ['themePreset' => 'ocean']]);
+        $admin = User::factory()->role(UserRole::Admin)->create();
+
+        $this->actingAs($admin)
+            ->patch('/dashboard/settings', ['theme_tokens' => ['communityName' => '  Palm Grove  ']])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('Palm Grove', $community->fresh()->name);
+        // The client sends the whole token set (see the theme test above); the
+        // stored name token is the trimmed one.
+        $this->assertSame(['communityName' => 'Palm Grove'], BrandingSetting::first()->theme_tokens);
+
+        // A blank name is refused rather than wiping the estate's name.
+        $this->patch('/dashboard/settings', ['community_name' => '   '])->assertSessionHasErrors('community_name');
+        $this->assertSame('Palm Grove', $community->fresh()->name);
+
+        $this->actingAs(User::factory()->role(UserRole::Homeowner)->create())
+            ->patch('/dashboard/settings', ['theme_tokens' => ['communityName' => 'Hijacked']])
+            ->assertForbidden();
+        $this->assertSame('Palm Grove', $community->fresh()->name);
+    }
+
     public function test_export_geojson_returns_valid_features(): void
     {
         $community = Community::default();

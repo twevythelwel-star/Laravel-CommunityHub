@@ -19,8 +19,6 @@
         "Dashboard\\MapController@index": 46,
         "Dashboard\\RenterController@index": 41,
         "Dashboard\\ReviewFeedbackController@index": 30,
-        "Dashboard\\SettingsController@index": 39,
-        "Dashboard\\SettingsController@update": 51,
         "Dashboard\\StripeCheckoutController@checkout": 29,
         "Dashboard\\VehicleController@anprLookup": 31,
         "Dashboard\\VehicleController@index": 29,
