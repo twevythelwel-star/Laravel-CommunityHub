@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Realtime\BroadcastRealtimeEventAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Realtime\BroadcastRealtimeEventApiRequest;
 use App\Services\Realtime\RealtimeBroadcasterService;
@@ -33,48 +34,7 @@ class RealtimeApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Real-time channel catalog retrieved successfully.',
-            'data' => [
-                'infrastructure' => 'Laravel Reverb (WebSocket Server)',
-                'client_library' => 'Laravel Echo + Pusher JS',
-                'channels' => [
-                    [
-                        'name' => 'community-chat-stream',
-                        'type' => 'public',
-                        'events' => ['chat.message'],
-                        'use_case' => 'Estate-wide chat and incident bulletin stream',
-                    ],
-                    [
-                        'name' => 'chat.room.{roomId}',
-                        'type' => 'presence',
-                        'events' => ['chat.message', 'whisper:typing'],
-                        'use_case' => 'Room collaboration and active participant presence',
-                    ],
-                    [
-                        'name' => 'dashboard-telemetry',
-                        'type' => 'public',
-                        'events' => ['dashboard.telemetry-updated'],
-                        'use_case' => 'Live counters and operational KPI widgets',
-                    ],
-                    [
-                        'name' => 'users.{id}',
-                        'type' => 'private',
-                        'events' => ['notification.received', 'gatepass.status-updated'],
-                        'use_case' => 'User-specific real-time toast alerts and pass notifications',
-                    ],
-                    [
-                        'name' => 'gatehouse-stream',
-                        'type' => 'public',
-                        'events' => ['gatepass.status-updated', 'visitor.checked-in'],
-                        'use_case' => 'Gatehouse traffic feed and automated barrier clearance',
-                    ],
-                    [
-                        'name' => 'operations-center',
-                        'type' => 'presence',
-                        'events' => ['operations.command-event'],
-                        'use_case' => 'Command center operator presence and security monitor dispatch',
-                    ],
-                ],
-            ],
+            'data' => $this->realtime->channelCatalog(),
         ]);
     }
 
@@ -87,62 +47,9 @@ class RealtimeApiController extends Controller
      * notification pushed to another user is an administrator's
      * (`broadcastNotices`).
      */
-    public function broadcast(BroadcastRealtimeEventApiRequest $request): JsonResponse
+    public function broadcast(BroadcastRealtimeEventApiRequest $request, BroadcastRealtimeEventAction $action): JsonResponse
     {
-        $validated = $request->validated();
-
-        $currentUser = $request->user();
-
-        switch ($validated['type']) {
-            case 'chat':
-                $event = $this->realtime->broadcastChatMessage(
-                    roomId: $validated['room_id'] ?? 'general',
-                    user: $currentUser,
-                    message: $validated['message'] ?? 'Real-time broadcast test message'
-                );
-                break;
-
-            case 'telemetry':
-                $event = $this->realtime->broadcastDashboardTelemetry(
-                    telemetry: $validated['telemetry'] ?? [
-                        'active_visitors_count' => rand(12, 38),
-                        'active_passes_count' => rand(40, 95),
-                        'system_health' => 'optimal',
-                        'gate_clearance_seconds' => rand(15, 30),
-                    ]
-                );
-                break;
-
-            case 'notification':
-                $event = $this->realtime->broadcastLiveNotification(
-                    userId: $validated['user_id'] ?? $currentUser->id,
-                    title: $validated['title'] ?? 'Real-time Alert',
-                    body: $validated['body'] ?? 'Live notification dispatched via Laravel Reverb.'
-                );
-                break;
-
-            case 'pass':
-                $event = $this->realtime->broadcastGatePassUpdate(
-                    passId: $validated['pass_id'] ?? 101,
-                    passCode: 'GP-'.rand(1000, 9999),
-                    status: $validated['status'] ?? 'scanned',
-                    visitorName: 'Visitor Demo',
-                    gate: 'Main Gate 1',
-                    ownerId: $currentUser->id
-                );
-                break;
-
-            case 'operations':
-            default:
-                $event = $this->realtime->broadcastOperationsAlert(
-                    type: 'perimeter_monitoring',
-                    severity: $validated['severity'] ?? 'warning',
-                    headline: $validated['headline'] ?? 'Sensor Alert: North Sector Perimeter Activity',
-                    location: 'North Zone Gate 3',
-                    operatorName: $currentUser->name
-                );
-                break;
-        }
+        $event = $action->execute($request->user(), $request->validated());
 
         return response()->json([
             'success' => true,

@@ -168,4 +168,55 @@ class RealtimeBroadcasterService
             'cluster' => 'mt1',
         ];
     }
+
+    /**
+     * The channels this service broadcasts on, their events and purpose.
+     *
+     * @return array{infrastructure: string, client_library: string, channels: list<array{name: string, type: string, events: list<string>, use_case: string}>}
+     */
+    public function channelCatalog(): array
+    {
+        return [
+            'infrastructure' => 'Laravel Reverb (WebSocket Server)',
+            'client_library' => 'Laravel Echo + Pusher JS',
+            'channels' => [
+                [
+                    'name' => 'community-chat-stream',
+                    'type' => 'public',
+                    'events' => ['chat.message'],
+                    'use_case' => 'Estate-wide chat and incident bulletin stream',
+                ],
+                [
+                    'name' => 'chat.room.{roomId}',
+                    'type' => 'presence',
+                    'events' => ['chat.message', 'whisper:typing'],
+                    'use_case' => 'Room collaboration and active participant presence',
+                ],
+                [
+                    'name' => 'dashboard-telemetry',
+                    'type' => 'public',
+                    'events' => ['dashboard.telemetry-updated'],
+                    'use_case' => 'Live counters and operational KPI widgets',
+                ],
+                [
+                    'name' => 'users.{id}',
+                    'type' => 'private',
+                    'events' => ['notification.received', 'gatepass.status-updated'],
+                    'use_case' => 'User-specific real-time toast alerts and pass notifications',
+                ],
+                [
+                    'name' => 'gatehouse-stream',
+                    'type' => 'public',
+                    'events' => ['gatepass.status-updated', 'visitor.checked-in'],
+                    'use_case' => 'Gatehouse traffic feed and automated barrier clearance',
+                ],
+                [
+                    'name' => 'operations-center',
+                    'type' => 'presence',
+                    'events' => ['operations.command-event'],
+                    'use_case' => 'Command center operator presence and security monitor dispatch',
+                ],
+            ],
+        ];
+    }
 }
