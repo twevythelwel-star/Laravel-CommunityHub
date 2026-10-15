@@ -233,4 +233,27 @@ class GatePassPageTest extends TestCase
                 ->etc()
             );
     }
+
+    public function test_the_scanner_shows_every_gate_and_the_latest_scans(): void
+    {
+        foreach (range(1, 15) as $i) {
+            \App\Models\AccessLogEntry::create([
+                'user_name' => "Person {$i}", 'user_role' => 'Visitor', 'method' => 'Digital Pass', 'gate' => 'Main Gate',
+                'result' => $i === 15 ? 'DENY' : 'ALLOW', 'deny_reason' => $i === 15 ? 'Expired pass' : null,
+                'occurred_at' => now()->subMinutes(20 - $i),
+            ]);
+        }
+        $guard = User::factory()->role(UserRole::Security)->create(['display_name' => 'Officer Brown']);
+
+        $this->actingAs($guard)->get('/dashboard/gate-scanner')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dashboard/GateScanner')
+                ->has('gates', count(\App\Enums\GateId::cases()))
+                ->has('recentScans', 12)
+                ->where('recentScans.0.userName', 'Person 15')
+                ->where('recentScans.0.denyReason', 'Expired pass')
+                ->where('guard.name', 'Officer Brown')
+            );
+    }
 }

@@ -9,8 +9,6 @@
         "Auth\\AuthenticatedSessionController@store": 29,
         "Dashboard\\DealsController@index": 34,
         "Dashboard\\DigitalAccessWalletController@index": 33,
-        "Dashboard\\GatePassController@index": 41,
-        "Dashboard\\GatePassController@scanner": 30,
         "Dashboard\\RenterController@index": 41,
         "Dashboard\\ReviewFeedbackController@index": 30,
         "Dashboard\\StripeCheckoutController@checkout": 29,

@@ -7,7 +7,6 @@ use App\Actions\GatePass\RevokePassAction;
 use App\Actions\GatePass\ScanGatePassAction;
 use App\Actions\GatePass\SyncOfflineScansAction;
 use App\Actions\GatePass\TransitionPassAction;
-use App\Enums\GateId;
 use App\Enums\PassStatus;
 use App\Exceptions\InvalidPassTransition;
 use App\Exceptions\ScanNotConfirmable;
@@ -17,12 +16,10 @@ use App\Http\Requests\GatePass\RevokePassRequest;
 use App\Http\Requests\GatePass\ScanGatePassRequest;
 use App\Http\Requests\GatePass\SyncOfflineScansRequest;
 use App\Http\Requests\GatePass\TransitionPassRequest;
-use App\Models\AccessLogEntry;
 use App\Models\GatePass;
 use App\Models\User;
-use App\Repositories\GatePassRepository;
+use App\Services\Credentials\GatePassPagePresenter;
 use App\Services\GatePassEngine;
-use App\Services\GateScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,56 +30,18 @@ use Inertia\Response;
 /**
  * GatePassController handles passes and gate security interactions.
  * Refactored to delegate validation to Form Requests, mutations to Actions,
- * and data aggregation to GatePassRepository.
+ * and page data to GatePassPagePresenter.
  */
 class GatePassController extends Controller
 {
     public function __construct(
         private readonly GatePassEngine $engine,
-        private readonly GateScanner $scanner,
-        private readonly GatePassRepository $repository,
     ) {}
 
-    public function index(Request $request): Response
+    /** The user's own pass; see GatePassPagePresenter::pass(). */
+    public function index(Request $request, GatePassPagePresenter $presenter): Response
     {
-        $user = $request->user();
-        $pass = $this->engine->issuePassFor($user);
-
-        $category = $pass->category;
-        $canManage = $user->can('manageSecurity');
-
-        return Inertia::render('Dashboard/GatePass', [
-            'pass' => [
-                'id' => $pass->id,
-                'passId' => $pass->pass_id,
-                'category' => $category->value,
-                'holderName' => $pass->holder_name,
-                'property' => $pass->property,
-                'accessZone' => $pass->access_zone,
-                'gate' => $pass->designated_gate->value,
-                'rotationSeq' => $pass->rotation_seq,
-                'status' => $pass->status->value,
-            ],
-
-            'visual' => [
-                'variant' => $this->engine->variantFor($pass),
-                'shape' => $category->shape()->value,
-            ],
-
-            'policy' => $this->repository->camelPolicy($this->engine->policyFor($category)),
-            'categoryConfigs' => $this->repository->getCategoryConfigs(),
-            'directory' => $canManage ? $this->repository->getDirectory() : [],
-            'staff' => $canManage ? $this->repository->getStaffList() : [],
-
-            'windowSeconds' => (int) config('gatepass.window_seconds'),
-            'gates' => config('gatepass.gates'),
-
-            'can' => [
-                'scan' => $user->can('scanPasses'),
-                'manageSecurity' => $canManage,
-                'manageUsers' => $user->can('manageUsers'),
-            ],
-        ]);
+        return Inertia::render('Dashboard/GatePass', $presenter->pass($request->user()));
     }
 
     /**
@@ -219,34 +178,9 @@ class GatePassController extends Controller
     /**
      * Dedicated Gate Scanner Kiosk view for security officers.
      */
-    public function scanner(Request $request): Response
+    /** The guard's scanner; see GatePassPagePresenter::scanner(). */
+    public function scanner(Request $request, GatePassPagePresenter $presenter): Response
     {
-        $user = $request->user();
-        $gates = array_map(fn (GateId $g) => [
-            'id' => $g->value,
-            'name' => $g->label(),
-        ], GateId::cases());
-
-        $recentScans = AccessLogEntry::latest('occurred_at')
-            ->take(12)
-            ->get()
-            ->map(fn ($e) => [
-                'id' => $e->id,
-                'userName' => $e->user_name,
-                'userRole' => $e->user_role,
-                'result' => $e->result,
-                'gate' => $e->gate,
-                'occurredAt' => $e->occurred_at?->diffForHumans() ?? 'Just now',
-                'denyReason' => $e->deny_reason,
-            ]);
-
-        return Inertia::render('Dashboard/GateScanner', [
-            'gates' => $gates,
-            'recentScans' => $recentScans,
-            'guard' => [
-                'name' => $user->display_name,
-                'role' => $user->role->value,
-            ],
-        ]);
+        return Inertia::render('Dashboard/GateScanner', $presenter->scanner($request->user()));
     }
 }
