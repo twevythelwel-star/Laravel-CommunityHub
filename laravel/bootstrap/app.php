@@ -10,6 +10,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RequirePasswordConfirmation;
 use App\Http\Middleware\ResolveCommunityContext;
 use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\VerifyTwilioSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -58,6 +59,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'ability' => CheckForAnyAbility::class,
             'api.log' => ApiLoggingMiddleware::class,
             'gate.device' => AuthenticateGateDevice::class,
+            'twilio.signature' => VerifyTwilioSignature::class,
             // Replaces Laravel's: Inertia submissions get a validation error, not a redirect.
             'password.confirm' => RequirePasswordConfirmation::class,
         ]);

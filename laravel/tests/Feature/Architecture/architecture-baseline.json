@@ -22,7 +22,6 @@
         "Dashboard\\WarningController@index": 27,
         "Dashboard\\WarningController@store": 27,
         "GuestPassController@show": 28,
-        "TwilioWebhookController@messagingStatus": 45,
         "UniversalPaymentLinkController@process": 44
     },
     "logic_closures": [],
@@ -40,7 +39,6 @@
         "PdfController.php": 2,
         "ProviderWebhookController.php": 1,
         "StripeWebhookController.php": 1,
-        "TwilioWebhookController.php": 3,
         "UniversalPaymentLinkController.php": 1
     },
     "services_root_files": {

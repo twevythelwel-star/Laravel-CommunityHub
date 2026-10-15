@@ -55,6 +55,7 @@ Route::post('/webhooks/{provider}', ProviderWebhookController::class)
 // Twilio calls this for messaging status callbacks (queued -> sent -> delivered / failed).
 // Verified with X-Twilio-Signature via Twilio SDK RequestValidator.
 Route::post('/webhooks/twilio/status', [TwilioWebhookController::class, 'messagingStatus'])
+    ->middleware('twilio.signature')
     ->name('webhooks.twilio.status');
 
 // ── Physical Gate Devices & Scanners ──
