@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\DelegatedAccess;
 use App\Models\Donation;
 use App\Models\GatePass;
 use App\Models\HouseholdMember;
@@ -10,6 +11,7 @@ use App\Models\Renter;
 use App\Models\Staff;
 use App\Models\User;
 use App\Models\Visitor;
+use App\Policies\DelegatedAccessPolicy;
 use App\Policies\DonationPolicy;
 use App\Policies\GatePassPolicy;
 use App\Policies\HouseholdMemberPolicy;
@@ -45,6 +47,7 @@ class AuthServiceProvider extends ServiceProvider
         Renter::class => RenterPolicy::class,
         Staff::class => StaffPolicy::class,
         User::class => UserPolicy::class,
+        DelegatedAccess::class => DelegatedAccessPolicy::class,
     ];
 
     public function boot(): void
@@ -56,6 +59,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(Renter::class, RenterPolicy::class);
         Gate::policy(Staff::class, StaffPolicy::class);
         Gate::policy(User::class, UserPolicy::class);
+        Gate::policy(DelegatedAccess::class, DelegatedAccessPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {

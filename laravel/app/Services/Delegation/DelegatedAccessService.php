@@ -3,10 +3,12 @@
 namespace App\Services\Delegation;
 
 use App\Enums\AuthorizationType;
+use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Events\Realtime\OperationsCommandCenterEvent;
 use App\Models\DelegatedAccess;
 use App\Models\EmergencyContinuityPlan;
+use App\Models\GatePass;
 use App\Models\InAppNotification;
 use App\Models\User;
 use App\Services\GatePassEngine;
@@ -53,17 +55,7 @@ class DelegatedAccessService
 
             $authEnum = AuthorizationType::tryFrom($authorizationType);
             $defaultRules = $authEnum?->defaultAccessRules() ?? [];
-            $inputRules = $data['access_rules'] ?? [];
-            if (! empty($inputRules['entry_start_time']) && ! empty($inputRules['entry_end_time'])) {
-                $inputRules['time_window'] = [
-                    'start' => $inputRules['entry_start_time'],
-                    'end' => $inputRules['entry_end_time'],
-                ];
-            }
-            if (! empty($inputRules['allowed_days'])) {
-                $inputRules['days_permitted'] = $inputRules['allowed_days'];
-            }
-            $accessRules = array_merge($defaultRules, $inputRules);
+            $accessRules = array_merge($defaultRules, $this->normalizeRules($data['access_rules'] ?? []));
 
             $permissions = $data['permissions'] ?? [];
             if ($accessLevel === 'Long-Term Occupant' && ! in_array('gate_access', $permissions)) {
@@ -72,14 +64,7 @@ class DelegatedAccessService
 
             $durationType = $data['duration_type'] ?? 'custom';
             $startsAt = ! empty($data['starts_at']) ? Carbon::parse($data['starts_at']) : now();
-            $expiresAt = match ($durationType) {
-                '2_hours' => (clone $startsAt)->addHours(2),
-                '1_day' => (clone $startsAt)->isToday() ? (clone $startsAt)->endOfDay() : (clone $startsAt)->addDay(),
-                '1_week' => (clone $startsAt)->addDays(7)->endOfDay(),
-                'manual_revocation' => null,
-                'recurring' => ! empty($data['expires_at']) ? Carbon::parse($data['expires_at']) : (clone $startsAt)->endOfYear(),
-                default => ! empty($data['expires_at']) ? Carbon::parse($data['expires_at']) : null,
-            };
+            $expiresAt = $this->expiresAt($durationType, $startsAt, $data['expires_at'] ?? null, null);
 
             $delegation = DelegatedAccess::create([
                 'grantor_user_id' => $grantor->id,
@@ -139,6 +124,87 @@ class DelegatedAccessService
 
             return $delegation;
         });
+    }
+
+    /**
+     * Change an authorization's access rules, permissions and duration, and
+     * carry the new validity and rules onto its live gate passes.
+     *
+     * Rules given are merged over the saved ones; a duration given
+     * recomputes the window from the new (or saved) start.
+     *
+     * @param  array{access_rules: array<string, mixed>, permissions?: array<int, string>, duration_type?: ?string, starts_at?: ?string, expires_at?: ?string}  $data
+     */
+    public function updateRules(DelegatedAccess $delegation, array $data, User $actor): DelegatedAccess
+    {
+        $updates = [
+            'access_rules' => array_merge($delegation->access_rules ?? [], $this->normalizeRules($data['access_rules'])),
+            'permissions' => $data['permissions'] ?? $delegation->permissions,
+        ];
+
+        if (! empty($data['duration_type'])) {
+            $startsAt = ! empty($data['starts_at']) ? Carbon::parse($data['starts_at']) : ($delegation->starts_at ?? now());
+            $updates['duration_type'] = $data['duration_type'];
+            $updates['starts_at'] = $startsAt;
+            $updates['expires_at'] = $this->expiresAt($data['duration_type'], $startsAt, $data['expires_at'] ?? null, $delegation->expires_at);
+        }
+
+        $delegation->update($updates);
+
+        $validUntil = $delegation->passValidUntil();
+        $delegation->gatePasses()
+            ->whereIn('status', [PassStatus::Active, PassStatus::Issued, PassStatus::CheckedIn])
+            ->get()
+            ->each(fn (GatePass $pass) => $pass->update([
+                'valid_until' => $validUntil,
+                'metadata' => array_merge($pass->metadata ?? [], [
+                    'duration_type' => $delegation->duration_type,
+                    'access_rules' => $delegation->access_rules,
+                ]),
+            ]));
+
+        $delegation->logEvent('rules_updated', "Access permissions & operational rules updated for {$delegation->name}", [
+            'access_rules' => $delegation->access_rules,
+            'permissions' => $delegation->permissions,
+            'duration_type' => $delegation->duration_type,
+        ], $actor);
+
+        return $delegation;
+    }
+
+    /**
+     * The form's entry_start_time/entry_end_time and allowed_days, also
+     * stored as the time_window and days_permitted the scanner enforces.
+     *
+     * @param  array<string, mixed>  $rules
+     * @return array<string, mixed>
+     */
+    private function normalizeRules(array $rules): array
+    {
+        if (! empty($rules['entry_start_time']) && ! empty($rules['entry_end_time'])) {
+            $rules['time_window'] = ['start' => $rules['entry_start_time'], 'end' => $rules['entry_end_time']];
+        }
+        if (! empty($rules['allowed_days'])) {
+            $rules['days_permitted'] = $rules['allowed_days'];
+        }
+
+        return $rules;
+    }
+
+    /**
+     * When an authorization of this duration, starting then, ends. A custom
+     * duration uses the requested end, else $fallback.
+     */
+    private function expiresAt(string $durationType, Carbon $startsAt, ?string $requested, ?Carbon $fallback): ?Carbon
+    {
+        return match ($durationType) {
+            '2_hours' => (clone $startsAt)->addHours(2),
+            '1_day' => (clone $startsAt)->isToday() ? (clone $startsAt)->endOfDay() : (clone $startsAt)->addDay(),
+            '1_week' => (clone $startsAt)->addDays(7)->endOfDay(),
+            'manual_revocation' => null,
+            'recurring' => $requested ? Carbon::parse($requested) : (clone $startsAt)->endOfYear(),
+            default => $requested ? Carbon::parse($requested) : $fallback,
+        };
     }
 
     /**
