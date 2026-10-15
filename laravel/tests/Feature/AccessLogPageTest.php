@@ -214,17 +214,28 @@ class AccessLogPageTest extends TestCase
         $response = $this->actingAs($this->security())->get('/dashboard/access-log/export');
 
         $response->assertOk();
-        // Laravel appends the charset to the type given to streamDownload().
-        $response->assertHeader('Content-Type', 'text/csv; charset=utf-8');
+        $this->assertStringStartsWith('text/csv', $response->headers->get('Content-Type'));
+        $this->assertStringStartsWith('attachment; filename="access-log-', $response->headers->get('Content-Disposition'));
 
         $csv = $response->streamedContent();
 
-        // fputcsv quotes the fields containing a space.
+        // Csv quotes every cell.
         $this->assertStringContainsString(
-            'Timestamp,Name,Role,Method,Gate,"Pass ID",Result,"Deny Reason"',
+            '"Timestamp","Name","Role","Method","Gate","Pass ID","Result","Deny Reason"',
             $csv,
         );
-        $this->assertStringContainsString('Liam Johnson', $csv);
+        $this->assertStringContainsString('"Liam Johnson"', $csv);
+    }
+
+    public function test_the_export_does_not_run_spreadsheet_formulas(): void
+    {
+        // Names come from visitor registration and the API: anyone can choose one.
+        $this->entry(['user_name' => '=HYPERLINK("http://evil.example","Click")']);
+
+        $csv = $this->actingAs($this->security())->get('/dashboard/access-log/export')->streamedContent();
+
+        $this->assertStringContainsString('"\'=HYPERLINK(""http://evil.example"",""Click"")"', $csv);
+        $this->assertStringNotContainsString(',=HYPERLINK', $csv);
     }
 
     public function test_the_export_honours_the_active_filters(): void

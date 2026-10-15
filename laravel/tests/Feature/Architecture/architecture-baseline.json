@@ -11,8 +11,6 @@
         "Api\\VisitorApiController@checkIn": 36,
         "Api\\VisitorApiController@store": 40,
         "Auth\\AuthenticatedSessionController@store": 32,
-        "Dashboard\\AccessLogController@export": 40,
-        "Dashboard\\AccessLogController@index": 52,
         "Dashboard\\BillingController@downloadReceipt": 27,
         "Dashboard\\BillingController@exportTransactions": 31,
         "Dashboard\\BlocklistController@index": 50,
