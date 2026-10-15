@@ -31,7 +31,6 @@
         "Dashboard\\HouseholdController@index": 53,
         "Dashboard\\MapController@index": 46,
         "Dashboard\\RenterController@index": 41,
-        "Dashboard\\ResidentEmergencyController@panic": 94,
         "Dashboard\\ReviewFeedbackController@index": 30,
         "Dashboard\\SafetyController@show": 66,
         "Dashboard\\SafetyController@updateProfile": 48,
