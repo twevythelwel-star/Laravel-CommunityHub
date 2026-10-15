@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Actions\GatePass\DeactivateAccountAction;
 use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Directory\StoreDirectoryPropertyRequest;
@@ -103,7 +104,7 @@ class DirectoryController extends Controller
         return back()->with('success', 'User created.');
     }
 
-    public function updateUser(UpdateUserRequest $request, User $user): RedirectResponse
+    public function updateUser(UpdateUserRequest $request, User $user, DeactivateAccountAction $deactivate): RedirectResponse
     {
         $validated = $request->validated();
         if (isset($validated['role'])) {
@@ -111,10 +112,13 @@ class DirectoryController extends Controller
         }
         $this->allowOrFail('manageAccount', [$user], 'role');
 
-        $user->update($validated);
+        // Reactivating clears deactivated_at too: isActive() needs both, and an
+        // account that deactivated itself carries one.
+        $status = $validated['status'] ?? null;
+        $user->update([...$validated, ...($status === 'Active' ? ['deactivated_at' => null] : [])]);
 
-        if (! $user->isActive()) {
-            $user->tokens()->delete();
+        if ($status === 'Inactive' && $user->wasChanged('status')) {
+            $deactivate->execute($user, $request->user());
         }
 
         $this->recordAccountProperty($user);

@@ -7,7 +7,6 @@
         "Api\\AuthApiController@login": 29,
         "Api\\V1\\WebhookApiController@store": 26,
         "Auth\\AuthenticatedSessionController@store": 29,
-        "Dashboard\\DeactivationController@store": 41,
         "Dashboard\\DealsController@index": 34,
         "Dashboard\\DigitalAccessWalletController@index": 33,
         "Dashboard\\GatePassController@index": 41,

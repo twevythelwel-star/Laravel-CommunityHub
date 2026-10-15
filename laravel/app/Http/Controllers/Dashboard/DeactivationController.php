@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Actions\GatePass\DeactivateAccountAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Profile\StoreDeactivationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -28,33 +28,12 @@ class DeactivationController extends Controller
         ]);
     }
 
-    public function store(StoreDeactivationRequest $request): SymfonyResponse
+    public function store(StoreDeactivationRequest $request, DeactivateAccountAction $deactivate): SymfonyResponse
     {
-        $validated = $request->validated();
-
         $user = $request->user();
 
-        $user->update([
-            'status' => 'Inactive',
-            'deactivated_at' => now(),
-        ]);
-
-        /*
-         | A deactivated account must not keep a working pass.
-         |
-         | `->get()` matters: the higher-order `->each->` proxy exists on
-         | Collection, not on Builder, so calling it on the query threw
-         | "Undefined property: HasMany::$each" and deactivation 500'd.
-         */
-        $user->gatePasses()->active()->get()->each->revoke($user, 'Account deactivated by holder');
-        $user->tokens()->delete();
-
+        $deactivate->execute($user, $user, $request->validated('reason'));
         $user->recordActivity('Deactivated own account');
-
-        Log::channel('security')->notice('Account deactivated', [
-            'uid' => $user->uid,
-            'reason' => $validated['reason'] ?? null,
-        ]);
 
         Auth::guard('web')->logout();
         $request->session()->invalidate();

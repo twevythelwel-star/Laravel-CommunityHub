@@ -449,6 +449,25 @@ class DashboardAccessTest extends TestCase
         $this->assertTrue($pass->fresh()->isRevoked());
     }
 
+    public function test_an_account_deactivated_by_an_administrator_loses_its_gate_pass(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $engine = app(GatePassEngine::class);
+        $pass = $engine->issuePassFor($resident);
+        $token = $engine->issueToken($pass)['token'];
+
+        $this->actingAs(User::factory()->role(UserRole::Admin)->create())
+            ->patch("/dashboard/directory/users/{$resident->id}", ['status' => 'Inactive'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($pass->fresh()->isRevoked(), 'a deactivated account must not keep a working pass');
+
+        $scan = $this->actingAs(User::factory()->role(UserRole::Security)->create())
+            ->postJson('/dashboard/gate-pass/scan', ['token' => $token, 'gate' => GateId::Gate01->value])
+            ->json();
+        $this->assertNotSame('CHECK_IN', $scan['decision'] ?? null);
+    }
+
     public function test_deactivation_requires_the_current_password(): void
     {
         $user = User::factory()->create();

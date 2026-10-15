@@ -206,6 +206,18 @@ class DirectoryPageTest extends TestCase
         $this->assertSame('Active', $resident->fresh()->status);
     }
 
+    public function test_an_account_that_deactivated_itself_can_be_reactivated_and_sign_in(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create(['status' => 'Inactive', 'deactivated_at' => now()->subWeek()]);
+
+        $this->actingAs($this->admin())
+            ->patch("/dashboard/directory/users/{$resident->id}", ['status' => 'Active'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($resident->fresh()->isActive(), 'reactivated, not just relabelled');
+        $this->assertNull($resident->fresh()->signInRefusal());
+    }
+
     public function test_editing_updates_the_display_name_and_address(): void
     {
         $resident = User::factory()->role(UserRole::Homeowner)->create();
