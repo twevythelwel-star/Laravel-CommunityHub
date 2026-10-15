@@ -38,7 +38,16 @@ class PlatformOperationsAccessTest extends TestCase
 
     public function test_a_system_admins_token_can_read_metrics(): void
     {
-        $this->getJson('/api/v1/metrics', $this->bearer($this->as(UserRole::SystemAdmin)))->assertOk();
+        $this->getJson('/api/v1/metrics', $this->bearer($this->as(UserRole::SystemAdmin)))
+            ->assertOk()
+            ->assertJsonPath('data.period', '24_hours')
+            ->assertJsonPath('data.webhooks.success_rate_percent', 100)
+            ->assertJsonStructure(['data' => [
+                'api' => ['total_requests', 'average_latency_ms', 'status_breakdown' => ['2xx_success', '4xx_client_error', '5xx_server_error']],
+                'tokens' => ['active_count'],
+                'webhooks' => ['total_deliveries', 'successful_deliveries'],
+                'generated_at',
+            ]]);
     }
 
     public function test_the_liveness_probe_stays_public(): void
