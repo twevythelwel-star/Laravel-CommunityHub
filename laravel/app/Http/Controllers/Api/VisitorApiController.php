@@ -2,27 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Visitors\CheckInVisitorAction;
+use App\Actions\Visitors\RegisterVisitorAction;
 use App\Enums\GateId;
-use App\Enums\PassCategory;
-use App\Enums\PassStatus;
 use App\Exceptions\ScanNotConfirmable;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Visitors\CheckInApiVisitorRequest;
 use App\Http\Requests\Visitors\CheckOutApiVisitorRequest;
 use App\Http\Requests\Visitors\StoreApiVisitorRequest;
 use App\Http\Resources\VisitorResource;
-use App\Models\AccessLogEntry;
-use App\Models\BlocklistEntry;
 use App\Models\Visitor;
-use App\Services\GatePassEngine;
 use App\Services\GateScanner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class VisitorApiController extends Controller
 {
     public function __construct(
-        private readonly GatePassEngine $engine,
         private readonly GateScanner $scanner,
     ) {}
 
@@ -41,40 +38,13 @@ class VisitorApiController extends Controller
         return response()->json(['visitors' => VisitorResource::collection($visitors)->resolve()]);
     }
 
-    public function store(StoreApiVisitorRequest $request): JsonResponse
+    /**
+     * Same rules as the dashboard (RegisterVisitorAction): blocklist, a
+     * temporary homeowner's stay dates, the visit's property, notifications.
+     */
+    public function store(StoreApiVisitorRequest $request, RegisterVisitorAction $register): JsonResponse
     {
-        $validated = $request->validated();
-
-        $passCategory = PassCategory::from($validated['pass_category'] ?? PassCategory::Visitor->value);
-        unset($validated['pass_category']);
-
-        if ($this->isOnBlocklist($validated['name'])) {
-            return response()->json([
-                'message' => 'This person is on the community blocklist and cannot be registered.',
-                'errors' => ['name' => ['Blocked by community security.']],
-            ], 422);
-        }
-
-        $user = $request->user();
-
-        $visitor = Visitor::create([
-            ...$validated,
-            'status' => 'Expected',
-            'homeowner_id' => $user->id,
-            'homeowner_name' => $user->display_name,
-            'notify_email' => $validated['notify_email'] ?? true,
-            'notify_sms' => $validated['notify_sms'] ?? false,
-            'notify_whatsapp' => $validated['notify_whatsapp'] ?? false,
-        ]);
-
-        $pass = $this->engine->issueGuestPass($visitor, $user, $passCategory);
-
-        // Send the pass on whichever chosen channels can actually deliver it.
-        $channels = $visitor->passNotificationChannels();
-
-        if ($channels !== [] && $pass->status !== PassStatus::Requested) {
-            $visitor->sendPassNotification($channels);
-        }
+        ['visitor' => $visitor, 'pass' => $pass] = $register->execute($request->validated(), $request->user());
 
         return response()->json([
             'visitor' => ['id' => $visitor->id],
@@ -82,41 +52,22 @@ class VisitorApiController extends Controller
         ], 201);
     }
 
-    public function checkIn(CheckInApiVisitorRequest $request, Visitor $visitor): JsonResponse
+    /**
+     * Same rules as the dashboard (CheckInVisitorAction): refuses an expired
+     * clearance, a second check-in and a blocklisted visitor (logging the
+     * denial). Answers {allowed, reason} as gate tablets expect.
+     */
+    public function checkIn(CheckInApiVisitorRequest $request, Visitor $visitor, CheckInVisitorAction $checkIn): JsonResponse
     {
-        if ($visitor->gatePass) {
-            try {
-                $this->scanner->manualCheckIn($visitor->gatePass, $request->user(), $this->gateFrom($request));
-            } catch (ScanNotConfirmable $e) {
-                return response()->json(['allowed' => false, 'reason' => $e->getMessage()], 422);
-            }
-
-            return response()->json(['allowed' => true, 'status' => $visitor->fresh()->status->value]);
+        try {
+            $checkIn->execute($visitor, $request->user(), $this->gateFrom($request), $request->string('gate')->toString() ?: 'Main Gate');
+        } catch (ValidationException $e) {
+            return response()->json(['allowed' => false, 'reason' => collect($e->errors())->flatten()->first()], 422);
+        } catch (ScanNotConfirmable $e) {
+            return response()->json(['allowed' => false, 'reason' => $e->getMessage()], 422);
         }
 
-        if ($this->isOnBlocklist($visitor->name)) {
-            $visitor->update(['is_blocked' => true]);
-
-            return response()->json([
-                'allowed' => false,
-                'reason' => 'BLOCKLIST: Visitor is on the community blocklist.',
-            ], 422);
-        }
-
-        $visitor->checkIn();
-
-        AccessLogEntry::create([
-            'user_id' => $visitor->homeowner_id,
-            'user_name' => $visitor->name,
-            'user_role' => 'Visitor',
-            'method' => 'Visitor Pass',
-            'gate' => $request->string('gate')->toString() ?: 'Main Gate',
-            'result' => 'ALLOW',
-            'scanned_by' => $request->user()->id,
-            'occurred_at' => now(),
-        ]);
-
-        return response()->json(['allowed' => true, 'status' => $visitor->status->value]);
+        return response()->json(['allowed' => true, 'status' => $visitor->fresh()->status->value]);
     }
 
     public function checkOut(CheckOutApiVisitorRequest $request, Visitor $visitor): JsonResponse
@@ -134,11 +85,6 @@ class VisitorApiController extends Controller
         $visitor->checkOut();
 
         return response()->json(['status' => $visitor->status->value]);
-    }
-
-    private function isOnBlocklist(string $name): bool
-    {
-        return BlocklistEntry::blocks($name);
     }
 
     private function gateFrom(Request $request): GateId

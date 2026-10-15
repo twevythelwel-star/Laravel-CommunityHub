@@ -8,8 +8,6 @@
         "Api\\V1\\TokenApiController@store": 40,
         "Api\\V1\\WebhookApiController@incoming": 46,
         "Api\\V1\\WebhookApiController@store": 26,
-        "Api\\VisitorApiController@checkIn": 36,
-        "Api\\VisitorApiController@store": 40,
         "Auth\\AuthenticatedSessionController@store": 32,
         "Dashboard\\DeactivationController@store": 41,
         "Dashboard\\DealsController@index": 34,
