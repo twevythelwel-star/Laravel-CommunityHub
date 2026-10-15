@@ -209,4 +209,20 @@ class AuthApiTest extends TestCase
 
         $this->assertCount(0, $user->fresh()->tokens);
     }
+
+    public function test_a_temporary_homeowner_whose_stay_ended_is_told_why(): void
+    {
+        $tenant = User::factory()->role(UserRole::TemporaryHomeowner)->create(['password' => 'correct-password']);
+        Renter::create([
+            'homeowner_id' => User::factory()->role(UserRole::Homeowner)->create()->id,
+            'user_id' => $tenant->id, 'name' => $tenant->display_name, 'stay_type' => 'Short-term (Airbnb)', 'status' => 'Active',
+            'lease_start' => now()->subDays(7)->toDateString(), 'lease_end' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->postJson('/api/auth/login', ['email' => $tenant->email, 'password' => 'correct-password', 'device_name' => 'Test device'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.email.0', fn (string $message) => str_starts_with($message, 'Your temporary homeowner access expired on'));
+
+        $this->assertCount(0, $tenant->fresh()->tokens);
+    }
 }

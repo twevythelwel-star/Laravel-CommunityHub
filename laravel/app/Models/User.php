@@ -304,6 +304,20 @@ class User extends Authenticatable implements HasMedia
         return true;
     }
 
+    /**
+     * Why this account may not sign in, for the web form and the API alike;
+     * null when it may. A temporary homeowner whose stay has ended is told
+     * so rather than that the account was deactivated.
+     */
+    public function signInRefusal(): ?string
+    {
+        if ($this->isActive()) {
+            return null;
+        }
+
+        return $this->temporaryStayExpirationMessage() ?? 'This account has been deactivated. Contact community administration.';
+    }
+
     public function temporaryStayExpirationMessage(): ?string
     {
         if ($this->role === UserRole::TemporaryHomeowner) {

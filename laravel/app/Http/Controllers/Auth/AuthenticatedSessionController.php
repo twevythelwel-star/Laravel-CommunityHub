@@ -44,13 +44,10 @@ class AuthenticatedSessionController extends Controller
 
         $user = Auth::user();
 
-        if (! $user->isActive()) {
-            $expiredMessage = $user->temporaryStayExpirationMessage();
+        if ($refusal = $user->signInRefusal()) {
             Auth::logout();
 
-            throw ValidationException::withMessages([
-                'email' => $expiredMessage ?: 'This account has been deactivated. Contact community administration.',
-            ]);
+            throw ValidationException::withMessages(['email' => $refusal]);
         }
 
         $request->session()->regenerate();

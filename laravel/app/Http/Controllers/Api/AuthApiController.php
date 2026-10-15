@@ -28,10 +28,8 @@ class AuthApiController extends Controller
             ]);
         }
 
-        if (! $user->isActive()) {
-            throw ValidationException::withMessages([
-                'email' => 'This account has been deactivated.',
-            ]);
+        if ($refusal = $user->signInRefusal()) {
+            throw ValidationException::withMessages(['email' => $refusal]);
         }
 
         $engine->issuePassFor($user);
