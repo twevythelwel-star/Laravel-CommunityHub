@@ -19,21 +19,35 @@ class NotificationBoardPresenter
 
         // Backward-compatible paginated notices for the notice board feed
         $notifications = Notification::forRole($user->role->value)
+            ->with(['recipients' => fn ($q) => $q->where('user_id', $user->id)])
             ->published()
             ->latest('published_at')
             ->paginate(20)
             ->withQueryString()
-            ->through(fn (Notification $n) => [
-                'id' => $n->id,
-                'title' => $n->title,
-                'content' => $n->content,
-                'author' => $n->author_name,
-                'timestamp' => $n->published_at?->toIso8601String() ?? $n->created_at->toIso8601String(),
-                'targetRoles' => $n->target_roles,
-                'targetType' => $n->target_type,
-                'channels' => $n->channels,
-                'stats' => $n->stats,
-            ]);
+            ->through(function (Notification $n) {
+                $recipient = $n->recipients->first();
+
+                return [
+                    'id' => $n->id,
+                    'title' => $n->title,
+                    'content' => $n->content,
+                    'category' => $n->category ?? 'general',
+                    'priority' => $n->priority ?? 'normal',
+                    'author' => $n->author_name,
+                    'timestamp' => $n->published_at?->toIso8601String() ?? $n->created_at->toIso8601String(),
+                    'targetRoles' => $n->target_roles,
+                    'targetType' => $n->target_type,
+                    'channels' => $n->channels,
+                    'stats' => $n->stats,
+                    'requiresAcknowledgement' => (bool) $n->requires_acknowledgement,
+                    'acknowledgementDeadline' => $n->acknowledgement_deadline?->toIso8601String(),
+                    'isRead' => $recipient?->read_at !== null,
+                    'readAt' => $recipient?->read_at?->toIso8601String(),
+                    'isAcknowledged' => $recipient?->acknowledged_at !== null,
+                    'acknowledgedAt' => $recipient?->acknowledged_at?->toIso8601String(),
+                    'acknowledgementNote' => $recipient?->acknowledgement_note,
+                ];
+            });
 
         // Scheduled broadcasts list
         $scheduledAnnouncements = $canBroadcast
@@ -48,6 +62,8 @@ class NotificationBoardPresenter
                     'scheduledFor' => $n->scheduled_for?->toIso8601String(),
                     'targetType' => $n->target_type,
                     'channels' => $n->channels,
+                    'requiresAcknowledgement' => (bool) $n->requires_acknowledgement,
+                    'acknowledgementDeadline' => $n->acknowledgement_deadline?->toIso8601String(),
                 ])
             : [];
 
@@ -58,6 +74,11 @@ class NotificationBoardPresenter
                 ->limit(50)
                 ->get()
                 ->map(function (Notification $n) {
+                    $totalRecipients = $n->recipients->count();
+                    $deliveredCount = $n->recipients->where('delivery_state', 'delivered')->count();
+                    $readCount = $n->recipients->whereNotNull('read_at')->count();
+                    $acknowledgedCount = $n->recipients->whereNotNull('acknowledged_at')->count();
+
                     return [
                         'id' => $n->id,
                         'title' => $n->title,
@@ -65,18 +86,20 @@ class NotificationBoardPresenter
                         'category' => $n->category ?? 'general',
                         'priority' => $n->priority ?? 'normal',
                         'status' => $n->isExpired() ? 'expired' : $n->status,
-                        // A scheduled notice has not gone out yet: its published_at is
-                        // the planned time, which the board shows as "Scheduled: …".
                         'publishTime' => $n->isScheduled() ? null : $n->published_at?->toIso8601String(),
                         'scheduledTime' => $n->scheduled_for?->toIso8601String(),
                         'expiresAt' => $n->expires_at?->toIso8601String(),
                         'isExpired' => $n->isExpired(),
+                        'requiresAcknowledgement' => (bool) $n->requires_acknowledgement,
+                        'acknowledgementDeadline' => $n->acknowledgement_deadline?->toIso8601String(),
                         'author' => $n->author_name,
                         'targetType' => $n->target_type ?? 'entire_community',
                         'targetCriteria' => $n->target_criteria,
-                        'recipientCount' => $n->recipients->count(),
-                        'deliveredCount' => $n->recipients->where('delivery_state', 'delivered')->count(),
+                        'recipientCount' => $totalRecipients,
+                        'deliveredCount' => $deliveredCount,
                         'failureCount' => $n->recipients->where('delivery_state', 'failed')->count(),
+                        'readCount' => $readCount,
+                        'acknowledgedCount' => $acknowledgedCount,
                         'stats' => $n->stats,
                     ];
                 })
@@ -92,19 +115,20 @@ class NotificationBoardPresenter
                 'expired' => Notification::expired()->count(),
                 'totalRecipientsReached' => AnnouncementRecipient::where('delivery_state', 'delivered')->count(),
                 'totalDeliveryFailures' => AnnouncementRecipient::where('delivery_state', 'failed')->count(),
+                'totalReads' => AnnouncementRecipient::whereNotNull('read_at')->count(),
+                'totalAcknowledgements' => AnnouncementRecipient::whereNotNull('acknowledged_at')->count(),
             ]
             : null;
 
-        // Delivery Reports with proof of read vs provider acceptance
+        // Delivery Reports with proof of read vs provider acceptance vs explicit acknowledgement
         $deliveryReports = $canBroadcast
             ? Notification::with('recipients.user')
                 ->where('status', 'published')
                 ->has('recipients')
                 ->latest('published_at')
-                ->limit(10)
+                ->limit(20)
                 ->get()
                 ->map(function (Notification $n) {
-                    // In-app notices carry the announcement's id, so a read receipt is a read in-app copy.
                     $readUserIds = InAppNotification::whereJsonContains('data->announcement_id', $n->id)
                         ->whereNotNull('read_at')
                         ->pluck('user_id')
@@ -122,8 +146,20 @@ class NotificationBoardPresenter
                         'channelOutcomes' => $r->channel_outcomes ?? [],
                         'failureDetails' => $r->failure_details,
                         'deliveredAt' => $r->delivered_at?->toIso8601String(),
-                        'isRead' => isset($readUserIds[$r->user_id]),
+                        'isRead' => $r->read_at !== null || isset($readUserIds[$r->user_id]),
+                        'readAt' => $r->read_at?->toIso8601String(),
+                        'isAcknowledged' => $r->acknowledged_at !== null,
+                        'acknowledgedAt' => $r->acknowledged_at?->toIso8601String(),
+                        'acknowledgementNote' => $r->acknowledgement_note,
                     ]);
+
+                    $totalRecipients = $recipients->count();
+                    $deliveredCount = $recipients->where('deliveryState', 'delivered')->count();
+                    $readCount = $recipients->where('isRead', true)->count();
+                    $acknowledgedCount = $recipients->where('isAcknowledged', true)->count();
+                    $pendingAckCount = $n->requires_acknowledgement
+                        ? $recipients->where('deliveryState', 'delivered')->where('isAcknowledged', false)->count()
+                        : 0;
 
                     return [
                         'announcementId' => $n->id,
@@ -131,11 +167,15 @@ class NotificationBoardPresenter
                         'category' => $n->category,
                         'priority' => $n->priority,
                         'publishedAt' => $n->published_at?->toIso8601String(),
+                        'requiresAcknowledgement' => (bool) $n->requires_acknowledgement,
+                        'acknowledgementDeadline' => $n->acknowledgement_deadline?->toIso8601String(),
                         'stats' => $n->stats,
-                        'totalRecipients' => $recipients->count(),
-                        'deliveredCount' => $recipients->where('deliveryState', 'delivered')->count(),
+                        'totalRecipients' => $totalRecipients,
+                        'deliveredCount' => $deliveredCount,
                         'failedCount' => $recipients->where('deliveryState', 'failed')->count(),
-                        'readCount' => count($readUserIds),
+                        'readCount' => $readCount,
+                        'acknowledgedCount' => $acknowledgedCount,
+                        'pendingAcknowledgementCount' => $pendingAckCount,
                         'recipients' => $recipients->values(),
                     ];
                 })

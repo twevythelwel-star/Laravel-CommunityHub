@@ -23,6 +23,7 @@ use App\Http\Controllers\Dashboard\GateSensorEventController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\HouseholdController;
 use App\Http\Controllers\Dashboard\InAppNotificationController;
+use App\Http\Controllers\Dashboard\MaintenanceController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OccupancyController;
@@ -477,6 +478,10 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/notifications/broadcast', [NotificationController::class, 'broadcastEmergency'])
         ->middleware('can:broadcastNotices')
         ->name('notifications.broadcast');
+    Route::post('/notifications/{announcement}/read', [NotificationController::class, 'markAsRead'])
+        ->name('notifications.read');
+    Route::post('/notifications/{announcement}/acknowledge', [NotificationController::class, 'acknowledge'])
+        ->name('notifications.acknowledge');
     Route::post('/in-app-notifications/{notification}/read', [InAppNotificationController::class, 'markRead'])
         ->name('in-app-notifications.read');
     Route::post('/in-app-notifications/read-all', [InAppNotificationController::class, 'markAllRead'])
@@ -526,6 +531,11 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::patch('/review-feedback/{feedback}', [ReviewFeedbackController::class, 'update'])
         ->middleware('can:reviewFeedback')
         ->name('review-feedback.update');
+
+    // ── Maintenance & Issue Reporting ──
+    Route::get('/maintenance', [MaintenanceController::class, 'index'])->name('maintenance.index');
+    Route::post('/maintenance', [MaintenanceController::class, 'store'])->name('maintenance.store');
+    Route::patch('/maintenance/{maintenanceIssue}', [MaintenanceController::class, 'update'])->name('maintenance.update');
 
     // ── Community life ──
     Route::get('/deals', [DealsController::class, 'index'])

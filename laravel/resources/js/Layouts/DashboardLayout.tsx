@@ -65,6 +65,7 @@ import {
   LogOut,
   Landmark,
   FileText,
+  Wrench,
 } from 'lucide-react';
 import { useDarkMode } from '@/hooks/use-dark-mode';
 import { Logo } from '@/components/logo';
@@ -260,6 +261,7 @@ interface NavSection {
           icon: Bell,
           subItems: [
             { href: '/dashboard/notifications', label: 'Notifications', icon: Bell },
+            { href: '/dashboard/maintenance', label: 'Maintenance Work Orders', icon: Wrench },
             { href: '/dashboard/feedback', label: 'Submit Feedback', icon: MessageSquarePlus },
           ],
         },
@@ -334,6 +336,7 @@ interface NavSection {
           href: '/dashboard/settings',
           icon: Settings,
           subItems: [
+            { href: '/dashboard/maintenance', label: 'Maintenance & Triage', icon: Wrench },
             { href: '/dashboard/settings', label: 'System Settings', icon: Settings },
             { href: '/dashboard/review-feedback', label: 'Review Feedback', icon: ClipboardCheck },
             ...(role === 'System Admin'
@@ -387,6 +390,7 @@ interface NavSection {
         href: '/dashboard/billing',
         icon: CreditCard,
         subItems: [
+          { href: '/dashboard/maintenance', label: 'Maintenance & Issues', icon: Wrench },
           { href: '/dashboard/billing', label: 'Dues & Payments', icon: CreditCard },
           { href: '/dashboard/fundraising', label: 'Fundraising', icon: PiggyBank },
           { href: '/dashboard/map', label: 'Community Map', icon: Map },
@@ -637,6 +641,12 @@ interface NavSection {
                     <Link href="/dashboard/visitors?action=register" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       <span>Register Visitor</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard/maintenance?action=report" className="cursor-pointer">
+                      <Wrench className="mr-2 h-4 w-4" />
+                      <span>Report Issue</span>
                     </Link>
                   </DropdownMenuItem>
                   {(user?.role === 'Homeowner' || user?.role === 'Admin' || user?.role === 'System Admin') && (

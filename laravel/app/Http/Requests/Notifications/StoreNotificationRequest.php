@@ -39,6 +39,8 @@ class StoreNotificationRequest extends FormRequest
             'channels.*' => ['string', 'in:in_app,email,sms,whatsapp'],
             'scheduled_for' => ['nullable', 'date'],
             'expires_at' => ['nullable', 'date'],
+            'requires_acknowledgement' => ['nullable', 'boolean'],
+            'acknowledgement_deadline' => ['nullable', 'date'],
         ];
     }
 

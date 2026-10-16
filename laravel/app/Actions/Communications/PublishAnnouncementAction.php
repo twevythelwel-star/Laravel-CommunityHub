@@ -35,6 +35,11 @@ class PublishAnnouncementAction
             ? Carbon::parse($expiresAt, $communityTz)->setTimezone('UTC')
             : null;
 
+        $acknowledgementDeadline = $validated['acknowledgement_deadline'] ?? null;
+        $parsedAckDeadline = filled($acknowledgementDeadline)
+            ? Carbon::parse($acknowledgementDeadline, $communityTz)->setTimezone('UTC')
+            : null;
+
         // 2. Content safety: sanitize untrusted HTML & strip unsafe link protocols
         $sanitizedContent = strip_tags($validated['content'], '<p><br><strong><em><ul><ol><li><a>');
         $sanitizedContent = preg_replace('/href=[\'"]\s*(javascript|data|vbscript):[^\'"]*[\'"]/i', 'href="#"', $sanitizedContent);
@@ -68,6 +73,8 @@ class PublishAnnouncementAction
             'status' => $isScheduled ? 'scheduled' : 'published',
             'scheduled_for' => $isScheduled ? $parsedSchedule : null,
             'expires_at' => $parsedExpiresAt,
+            'requires_acknowledgement' => (bool) ($validated['requires_acknowledgement'] ?? false),
+            'acknowledgement_deadline' => $parsedAckDeadline,
             'author_id' => $user->id,
             'author_name' => $user->display_name,
             'published_at' => $isScheduled ? $parsedSchedule : now(),

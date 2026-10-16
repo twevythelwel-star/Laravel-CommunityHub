@@ -28,6 +28,9 @@ class AnnouncementRecipient extends Model
         'channel_outcomes',
         'failure_details',
         'delivered_at',
+        'read_at',
+        'acknowledged_at',
+        'acknowledgement_note',
     ];
 
     protected function casts(): array
@@ -36,6 +39,8 @@ class AnnouncementRecipient extends Model
             'attempted_channels' => 'array',
             'channel_outcomes' => 'array',
             'delivered_at' => 'datetime',
+            'read_at' => 'datetime',
+            'acknowledged_at' => 'datetime',
         ];
     }
 
@@ -47,5 +52,35 @@ class AnnouncementRecipient extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function isRead(): bool
+    {
+        return $this->read_at !== null;
+    }
+
+    public function isAcknowledged(): bool
+    {
+        return $this->acknowledged_at !== null;
+    }
+
+    public function markAsRead(): self
+    {
+        if (is_null($this->read_at)) {
+            $this->update(['read_at' => now()]);
+        }
+
+        return $this;
+    }
+
+    public function acknowledge(?string $note = null): self
+    {
+        $this->update([
+            'read_at' => $this->read_at ?? now(),
+            'acknowledged_at' => now(),
+            'acknowledgement_note' => $note,
+        ]);
+
+        return $this;
     }
 }

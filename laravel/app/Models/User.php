@@ -470,4 +470,20 @@ class User extends Authenticatable implements HasMedia
             'street' => $this->street,
         ];
     }
+
+    /**
+     * Maintenance issues reported by this user.
+     */
+    public function reportedMaintenanceIssues(): HasMany
+    {
+        return $this->hasMany(MaintenanceIssue::class, 'reporter_id');
+    }
+
+    /**
+     * Maintenance issues assigned to this user.
+     */
+    public function assignedMaintenanceIssues(): HasMany
+    {
+        return $this->hasMany(MaintenanceIssue::class, 'assigned_to_user_id');
+    }
 }

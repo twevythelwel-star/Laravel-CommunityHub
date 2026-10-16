@@ -41,6 +41,8 @@ class Notification extends Model
         'stats',
         'published_at',
         'expires_at',
+        'requires_acknowledgement',
+        'acknowledgement_deadline',
     ];
 
     protected function casts(): array
@@ -52,6 +54,8 @@ class Notification extends Model
             'sent_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'approved_at' => 'datetime',
+            'acknowledgement_deadline' => 'datetime',
+            'requires_acknowledgement' => 'boolean',
             'target_roles' => 'array',
             'target_criteria' => 'array',
             'channels' => 'array',
@@ -83,6 +87,38 @@ class Notification extends Model
     public function recipients(): HasMany
     {
         return $this->hasMany(AnnouncementRecipient::class);
+    }
+
+    /**
+     * This resident's recipient row, created on first contact for a notice
+     * they reached in-app before (or without) a dispatch run recording them.
+     */
+    public function recipientRecordFor(User $user): AnnouncementRecipient
+    {
+        return $this->recipients()->firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'recipient_name' => $user->display_name ?: $user->name,
+                'recipient_email' => $user->email,
+                'recipient_phone' => $user->phone,
+                'delivery_state' => 'delivered',
+                'attempted_channels' => ['in_app'],
+                'delivered_at' => now(),
+            ],
+        );
+    }
+
+    /** Mark it read by this resident, on the board and in their in-app notification centre. */
+    public function markReadBy(User $user): AnnouncementRecipient
+    {
+        $recipient = $this->recipientRecordFor($user)->markAsRead();
+
+        InAppNotification::where('user_id', $user->id)
+            ->whereJsonContains('data->announcement_id', $this->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return $recipient;
     }
 
     public function isPublished(): bool

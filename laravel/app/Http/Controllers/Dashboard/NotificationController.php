@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Dashboard;
 use App\Actions\Communications\BroadcastEmergencyAction;
 use App\Actions\Communications\PublishAnnouncementAction;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Notifications\AcknowledgeAnnouncementRequest;
 use App\Http\Requests\Notifications\BroadcastEmergencyNotificationRequest;
 use App\Http\Requests\Notifications\CancelAnnouncementRequest;
 use App\Http\Requests\Notifications\PreviewAudienceRequest;
+use App\Http\Requests\Notifications\ReadAnnouncementRequest;
 use App\Http\Requests\Notifications\StoreNotificationRequest;
 use App\Http\Requests\Notifications\SuggestAudienceRequest;
 use App\Models\Community;
@@ -119,6 +121,30 @@ class NotificationController extends Controller
         }
 
         return back()->with('success', $summary);
+    }
+
+    /** Mark an announcement as read by the current authenticated user. */
+    /** A resident marks a notice read; see Notification::markReadBy(). */
+    public function markAsRead(ReadAnnouncementRequest $request, Notification $announcement): JsonResponse|RedirectResponse
+    {
+        $recipient = $announcement->markReadBy($request->user());
+
+        return $request->wantsJson()
+            ? response()->json(['success' => true, 'read_at' => $recipient->read_at])
+            : back()->with('success', 'Notice marked as read.');
+    }
+
+    /** Explicitly acknowledge an important announcement (separate from reading it). */
+    /** A resident confirms they have read and understood a notice. */
+    public function acknowledge(AcknowledgeAnnouncementRequest $request, Notification $announcement): JsonResponse|RedirectResponse
+    {
+        $user = $request->user();
+        $recipient = $announcement->recipientRecordFor($user)->acknowledge($request->validated('note'));
+        $user->recordActivity("Resident acknowledged notice '{$announcement->title}'");
+
+        return $request->wantsJson()
+            ? response()->json(['success' => true, 'acknowledged_at' => $recipient->acknowledged_at, 'note' => $recipient->acknowledgement_note])
+            : back()->with('success', "Thank you — your acknowledgement of '{$announcement->title}' has been recorded.");
     }
 
     private function communityName(): string

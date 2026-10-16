@@ -9,6 +9,7 @@ use App\Models\Donation;
 use App\Models\GatePass;
 use App\Models\HouseholdMember;
 use App\Models\Invoice;
+use App\Models\MaintenanceIssue;
 use App\Models\Notification;
 use App\Models\OwnershipEntity;
 use App\Models\ParkingPass;
@@ -28,6 +29,7 @@ use App\Policies\DonationPolicy;
 use App\Policies\GatePassPolicy;
 use App\Policies\HouseholdMemberPolicy;
 use App\Policies\InvoicePolicy;
+use App\Policies\MaintenanceIssuePolicy;
 use App\Policies\OwnershipEntityPolicy;
 use App\Policies\ParkingPassPolicy;
 use App\Policies\PaymentPolicy;
@@ -72,6 +74,7 @@ class AuthServiceProvider extends ServiceProvider
         Transaction::class => TransactionPolicy::class,
         WebhookSubscription::class => WebhookSubscriptionPolicy::class,
         Vehicle::class => VehiclePolicy::class,
+        MaintenanceIssue::class => MaintenanceIssuePolicy::class,
         Property::class => PropertyPolicy::class,
         ParkingPass::class => ParkingPassPolicy::class,
         Payment::class => PaymentPolicy::class,
@@ -94,6 +97,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(Transaction::class, TransactionPolicy::class);
         Gate::policy(WebhookSubscription::class, WebhookSubscriptionPolicy::class);
         Gate::policy(Vehicle::class, VehiclePolicy::class);
+        Gate::policy(MaintenanceIssue::class, MaintenanceIssuePolicy::class);
         Gate::policy(Property::class, PropertyPolicy::class);
         Gate::policy(ParkingPass::class, ParkingPassPolicy::class);
         Gate::policy(Payment::class, PaymentPolicy::class);

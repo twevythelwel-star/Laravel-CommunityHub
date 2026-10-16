@@ -74,6 +74,8 @@ const formSchema = z.object({
   isScheduled: z.boolean().default(false),
   scheduledFor: z.string().optional(),
   expiresAt: z.string().optional(),
+  requiresAcknowledgement: z.boolean().default(false),
+  acknowledgementDeadline: z.string().optional(),
 });
 
 export type NotificationFormValues = z.infer<typeof formSchema>;
@@ -159,6 +161,8 @@ export function NotificationForm({
       isScheduled: false,
       scheduledFor: '',
       expiresAt: '',
+      requiresAcknowledgement: false,
+      acknowledgementDeadline: '',
     },
   });
 
@@ -302,6 +306,8 @@ export function NotificationForm({
         channels: activeChannels,
         scheduled_for: values.isScheduled ? values.scheduledFor : null,
         expires_at: values.expiresAt ? values.expiresAt : null,
+        requires_acknowledgement: values.requiresAcknowledgement ? 1 : 0,
+        acknowledgement_deadline: values.requiresAcknowledgement && values.acknowledgementDeadline ? values.acknowledgementDeadline : null,
       },
       {
         preserveScroll: true,
@@ -322,6 +328,8 @@ export function NotificationForm({
             isScheduled: false,
             scheduledFor: '',
             expiresAt: '',
+            requiresAcknowledgement: false,
+            acknowledgementDeadline: '',
           });
           toast({
             title: values.isScheduled ? 'Broadcast Scheduled' : 'Announcement Dispatched',
@@ -1024,6 +1032,67 @@ export function NotificationForm({
                 )}
               />
             </div>
+
+            {/* Acknowledgement Tracking Requirement */}
+            <div className="col-span-1 md:col-span-2 p-4 rounded-xl border bg-card/60 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <h4 className="font-semibold text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Resident Acknowledgement Tracking</span>
+                  </h4>
+                  <p className="text-[11px] text-muted-foreground">
+                    Require residents to explicitly confirm understanding (e.g. water interruptions, power maintenance, or office closures).
+                  </p>
+                </div>
+                <FormField
+                  control={form.control}
+                  name="requiresAcknowledgement"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center space-x-2 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          id="requiresAcknowledgement"
+                        />
+                      </FormControl>
+                      <FormLabel htmlFor="requiresAcknowledgement" className="text-xs font-semibold cursor-pointer">
+                        Require Explicit Agreement
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {form.watch('requiresAcknowledgement') && (
+                <div className="pt-2 border-t grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                  <div className="text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">Strict Separation Standard:</p>
+                    <p className="text-[11px]">
+                      Ordinary read receipts are recorded automatically when opened. Acknowledgement requires explicit active resident sign-off.
+                    </p>
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="acknowledgementDeadline"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-[11px]">Optional Acknowledgement Deadline</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="datetime-local"
+                            className="h-8 text-xs"
+                            min={new Date().toISOString().slice(0, 16)}
+                            {...field}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
@@ -1160,6 +1229,15 @@ export function NotificationForm({
                 <div className="p-2.5 rounded-lg border bg-muted/40 text-muted-foreground text-[11px] flex items-center gap-2">
                   <Calendar className="h-4 w-4 shrink-0" />
                   <span>Notice automatically expires and hides from resident feeds on <strong>{pendingValues.expiresAt}</strong>.</span>
+                </div>
+              )}
+
+              {pendingValues.requiresAcknowledgement && (
+                <div className="p-2.5 rounded-lg border bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-[11px] flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span>
+                    <strong>Acknowledgement Tracking Active:</strong> Residents will be required to explicitly acknowledge this notice. Ordinary read receipts will be tracked separately.
+                  </span>
                 </div>
               )}
             </div>
