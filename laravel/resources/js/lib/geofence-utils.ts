@@ -31,6 +31,10 @@ export type CommunityLandmark = {
     description: string;
     iconType?: 'shield' | 'building' | 'trees';
     color?: string;
+    /** Residents can book it for a time slot (security gates cannot be booked). */
+    bookable?: boolean;
+    /** Most guests one booking may bring. */
+    guestLimit?: number;
 };
 
 /** Pin styling per landmark category. Presentation only. */

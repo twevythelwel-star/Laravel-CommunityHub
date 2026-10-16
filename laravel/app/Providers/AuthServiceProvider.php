@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\BoundaryConfig;
 use App\Models\DelegatedAccess;
 use App\Models\Donation;
+use App\Models\FacilityBooking;
 use App\Models\GatePass;
 use App\Models\HouseholdMember;
 use App\Models\Invoice;
@@ -26,6 +27,7 @@ use App\Policies\AnnouncementPolicy;
 use App\Policies\BoundaryPolicy;
 use App\Policies\DelegatedAccessPolicy;
 use App\Policies\DonationPolicy;
+use App\Policies\FacilityBookingPolicy;
 use App\Policies\GatePassPolicy;
 use App\Policies\HouseholdMemberPolicy;
 use App\Policies\InvoicePolicy;
@@ -75,6 +77,7 @@ class AuthServiceProvider extends ServiceProvider
         WebhookSubscription::class => WebhookSubscriptionPolicy::class,
         Vehicle::class => VehiclePolicy::class,
         MaintenanceIssue::class => MaintenanceIssuePolicy::class,
+        FacilityBooking::class => FacilityBookingPolicy::class,
         Property::class => PropertyPolicy::class,
         ParkingPass::class => ParkingPassPolicy::class,
         Payment::class => PaymentPolicy::class,
@@ -98,6 +101,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(WebhookSubscription::class, WebhookSubscriptionPolicy::class);
         Gate::policy(Vehicle::class, VehiclePolicy::class);
         Gate::policy(MaintenanceIssue::class, MaintenanceIssuePolicy::class);
+        Gate::policy(FacilityBooking::class, FacilityBookingPolicy::class);
         Gate::policy(Property::class, PropertyPolicy::class);
         Gate::policy(ParkingPass::class, ParkingPassPolicy::class);
         Gate::policy(Payment::class, PaymentPolicy::class);

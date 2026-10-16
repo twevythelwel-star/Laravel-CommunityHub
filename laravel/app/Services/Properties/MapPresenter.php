@@ -47,6 +47,8 @@ class MapPresenter
                 'elevation' => $this->geofence->estimateElevation($l->lat, $l->lng),
                 'iconType' => $l->iconType(),
                 'color' => $l->pinColor(),
+                'bookable' => $l->bookable,
+                'guestLimit' => $l->guestLimit(),
             ]),
             'community' => [
                 'name' => $community->name,

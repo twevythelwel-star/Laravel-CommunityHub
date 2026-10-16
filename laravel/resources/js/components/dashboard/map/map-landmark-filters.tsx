@@ -163,7 +163,7 @@ export function MapLandmarkFilters({
                 </span>
 
                 <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  {!isSecurity && (
+                  {lm.bookable && (
                     <button
                       type="button"
                       onClick={() => onReserveFacility(lm.name)}

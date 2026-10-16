@@ -15,6 +15,7 @@ use App\Http\Controllers\Dashboard\DealsController;
 use App\Http\Controllers\Dashboard\DelegatedAccessController;
 use App\Http\Controllers\Dashboard\DigitalAccessWalletController;
 use App\Http\Controllers\Dashboard\DirectoryController;
+use App\Http\Controllers\Dashboard\FacilityBookingController;
 use App\Http\Controllers\Dashboard\FeedbackController;
 use App\Http\Controllers\Dashboard\FundraisingController;
 use App\Http\Controllers\Dashboard\GatePass\ScanGatePassController;
@@ -52,6 +53,7 @@ use App\Http\Controllers\UniversalPaymentLinkController;
 use App\Http\Controllers\UniversalSearchController;
 use App\Livewire\Realtime\RealtimeOperationsHub;
 use App\Livewire\Spreadsheets\SpreadsheetOperationsHub;
+use App\Models\FacilityBooking;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -536,6 +538,13 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::get('/maintenance', [MaintenanceController::class, 'index'])->name('maintenance.index');
     Route::post('/maintenance', [MaintenanceController::class, 'store'])->name('maintenance.store');
     Route::patch('/maintenance/{maintenanceIssue}', [MaintenanceController::class, 'update'])->name('maintenance.update');
+
+    // ── Facility booking ──
+    Route::get('/facility-bookings', [FacilityBookingController::class, 'index'])
+        ->middleware('can:create,'.FacilityBooking::class)
+        ->name('facility-bookings.index');
+    Route::post('/facility-bookings', [FacilityBookingController::class, 'store'])->name('facility-bookings.store');
+    Route::post('/facility-bookings/{facilityBooking}/cancel', [FacilityBookingController::class, 'cancel'])->name('facility-bookings.cancel');
 
     // ── Community life ──
     Route::get('/deals', [DealsController::class, 'index'])

@@ -5,16 +5,28 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Landmark extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['community_id', 'name', 'category', 'description', 'lat', 'lng', 'icon', 'created_by'];
+    protected $fillable = ['community_id', 'name', 'category', 'description', 'lat', 'lng', 'icon', 'created_by', 'bookable', 'capacity'];
 
     protected function casts(): array
     {
-        return ['lat' => 'float', 'lng' => 'float'];
+        return ['lat' => 'float', 'lng' => 'float', 'bookable' => 'boolean', 'capacity' => 'integer'];
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(FacilityBooking::class);
+    }
+
+    /** How many guests one booking may bring. */
+    public function guestLimit(): int
+    {
+        return $this->capacity ?? FacilityBooking::DEFAULT_CAPACITY;
     }
 
     public function community(): BelongsTo

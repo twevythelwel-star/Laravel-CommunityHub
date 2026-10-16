@@ -886,8 +886,8 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
         onOpenChange={setIsBookingOpen}
         initialAmenityName={bookingAmenityName}
         availableAmenities={landmarks
-          .filter((l) => l.category !== 'Security Gate')
-          .map((l) => ({ id: l.id, name: l.name, category: l.category }))}
+          .filter((l) => l.bookable)
+          .map((l) => ({ id: Number(l.id), name: l.name, category: l.category, maxGuests: l.guestLimit }))}
       />
     </div>
   );
