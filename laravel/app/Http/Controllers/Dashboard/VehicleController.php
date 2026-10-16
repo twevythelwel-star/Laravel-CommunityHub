@@ -26,7 +26,7 @@ class VehicleController extends Controller
         $user = $request->user();
 
         $myVehicles = $this->vehicleService->getVehiclesForUser($user);
-        $isSecurityOrAdmin = $user->role->isAdministrative() || $user->role->isOperational();
+        $isSecurityOrAdmin = $user->can('viewAny', Vehicle::class);
         $allEstateVehicles = $isSecurityOrAdmin ? $this->vehicleService->getAllVehicles() : [];
 
         $household = Household::where('primary_homeowner_id', $user->id)->first();

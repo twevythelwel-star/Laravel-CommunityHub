@@ -341,4 +341,31 @@ class NotificationPageTest extends TestCase
             ->get('/dashboard/notifications')
             ->assertInertia(fn (Assert $page) => $page->where('aiEnabled', true));
     }
+
+    public function test_admin_interface_supplies_data_for_the_four_main_screens(): void
+    {
+        $admin = $this->admin();
+
+        // Screen 1: Announcement Dashboard data
+        $response = $this->actingAs($admin)
+            ->get('/dashboard/notifications')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dashboard/Notifications')
+                ->where('canBroadcast', true)
+                ->has('announcements')
+                ->has('summaryStats')
+                ->has('summaryStats.total')
+                ->has('summaryStats.drafts')
+                ->has('summaryStats.scheduled')
+                ->has('summaryStats.published')
+                ->has('summaryStats.expired')
+                ->has('summaryStats.totalRecipientsReached')
+                ->has('summaryStats.totalDeliveryFailures')
+                ->has('deliveryReports')
+                ->has('streets')
+                ->has('blocks')
+                ->has('sections')
+            );
+    }
 }

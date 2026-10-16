@@ -50,13 +50,11 @@ class ParkingPassController extends Controller
 
         $validated = $request->validated();
 
+        $this->authorize('issue', [ParkingPass::class, $validated]);
+
         // A resident issues passes for their own property and vehicles; bays and
         // the accessible and loading-zone categories are assigned by staff.
         if (! $isStaff) {
-            abort_if(in_array($validated['category'], ['accessible', 'loading_zone'], true), 403, 'Accessible and loading-zone passes are issued by the estate office.');
-            if (! empty($validated['vehicle_id'])) {
-                abort_unless(Vehicle::whereKey($validated['vehicle_id'])->where('user_id', $user->id)->exists(), 403, 'You can only use your own vehicle.');
-            }
             $validated['property'] = $user->propertyLabel();
             $validated['assigned_bay'] = null;
         }

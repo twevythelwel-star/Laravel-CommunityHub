@@ -116,6 +116,7 @@ class BoundaryController extends Controller
 
     public function replace(Request $request, BoundaryConfig $boundaryConfig): RedirectResponse
     {
+        $this->authorize('manage', $boundaryConfig);
         $this->versions->restore($this->inCommunity($boundaryConfig), $request->user(), $boundaryConfig);
 
         return back()->with('success', "Boundary successfully replaced with Version {$boundaryConfig->version}.");
@@ -123,7 +124,7 @@ class BoundaryController extends Controller
 
     public function destroy(Request $request, BoundaryConfig $boundaryConfig): RedirectResponse
     {
-        $this->authorize('manageBoundary');
+        $this->authorize('manage', $boundaryConfig);
         $community = $this->inCommunity($boundaryConfig);
 
         if ($boundaryConfig->status === 'PUBLISHED') {

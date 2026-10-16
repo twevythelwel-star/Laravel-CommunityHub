@@ -10,6 +10,14 @@ use Illuminate\Auth\Access\Response;
 class VehiclePolicy
 {
     /**
+     * Seeing all estate vehicles: security and administration.
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->role->isAdministrative() || $user->role->isOperational();
+    }
+
+    /**
      * Seeing a vehicle's record (owner, property, parking): gate staff see any
      * plate, everyone else only their own.
      */

@@ -5,6 +5,8 @@ namespace App\Policies;
 use App\Models\OwnershipEntity;
 use App\Models\User;
 
+use Illuminate\Auth\Access\Response;
+
 /**
  * Who may see and act for a legal owner (company, trust, estate, individual).
  *
@@ -14,6 +16,19 @@ use App\Models\User;
  */
 class OwnershipEntityPolicy
 {
+    /** Determine whether the user can access company dashboard or represent any entity. */
+    public function viewAny(User $user): Response
+    {
+        $hasAny = $user->can('manageUsers')
+            || OwnershipEntity::whereHas('authorizedPeople', function ($q) use ($user) {
+                $q->where('user_id', $user->id)->current();
+            })->exists();
+
+        return $hasAny
+            ? Response::allow()
+            : Response::deny('You are not an authorized representative of any company ownership entity.');
+    }
+
     /** Administrators, the entity's current representatives, and owners of its properties. */
     public function view(User $user, OwnershipEntity $entity): bool
     {

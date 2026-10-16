@@ -22,6 +22,7 @@ use App\Http\Controllers\Dashboard\GatePassController;
 use App\Http\Controllers\Dashboard\GateSensorEventController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\HouseholdController;
+use App\Http\Controllers\Dashboard\InAppNotificationController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
 use App\Http\Controllers\Dashboard\OccupancyController;
@@ -108,6 +109,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/search', [UniversalSearchController::class, 'index'])->name('search.index');
     Route::get('/api/search', [UniversalSearchController::class, 'search'])->name('api.search');
     Route::get('/api/search/driver', [UniversalSearchController::class, 'driverInfo'])->name('api.search.driver');
+
+    // ── In-App Notification Center ──
+    Route::post('/in-app-notifications/{notification}/read', [InAppNotificationController::class, 'markRead'])->name('in-app-notifications.read');
+    Route::post('/in-app-notifications/read-all', [InAppNotificationController::class, 'markAllRead'])->name('in-app-notifications.read-all');
 });
 
 /*
@@ -463,9 +468,19 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::post('/notifications/suggest-audience', [NotificationController::class, 'suggestAudience'])
         ->middleware('can:broadcastNotices')
         ->name('notifications.suggest-audience');
+    Route::post('/notifications/preview-audience', [NotificationController::class, 'previewAudience'])
+        ->middleware('can:broadcastNotices')
+        ->name('notifications.preview-audience');
+    Route::post('/notifications/{announcement}/cancel', [NotificationController::class, 'cancel'])
+        ->middleware('can:broadcastNotices')
+        ->name('notifications.cancel');
     Route::post('/notifications/broadcast', [NotificationController::class, 'broadcastEmergency'])
         ->middleware('can:broadcastNotices')
         ->name('notifications.broadcast');
+    Route::post('/in-app-notifications/{notification}/read', [InAppNotificationController::class, 'markRead'])
+        ->name('in-app-notifications.read');
+    Route::post('/in-app-notifications/read-all', [InAppNotificationController::class, 'markAllRead'])
+        ->name('in-app-notifications.read-all');
 
     // ── Resident Emergency SOS Dispatch ──
     Route::post('/emergency/panic', [ResidentEmergencyController::class, 'panic'])

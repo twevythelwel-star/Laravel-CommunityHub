@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Actions\Communications\BroadcastEmergencyAction;
-use App\Enums\UserRole;
+use App\Actions\Communications\PublishAnnouncementAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Notifications\BroadcastEmergencyNotificationRequest;
+use App\Http\Requests\Notifications\CancelAnnouncementRequest;
+use App\Http\Requests\Notifications\PreviewAudienceRequest;
 use App\Http\Requests\Notifications\StoreNotificationRequest;
 use App\Http\Requests\Notifications\SuggestAudienceRequest;
 use App\Models\Community;
 use App\Models\Notification;
+use App\Services\Communications\AudienceResolutionService;
+use App\Services\Communications\NotificationBoardPresenter;
 use App\Services\NotificationEngine\NotificationEngine;
 use App\Services\NotificationTargetingService;
 use Illuminate\Http\JsonResponse;
@@ -20,74 +24,52 @@ use Inertia\Response;
 
 /**
  * Backs src/app/dashboard/notifications/page.tsx and notification-form.tsx.
- *
- * Three things the original page only appeared to do:
- *
- *   1. "Send Notification" called console.log and raised a toast saying the
- *      notice had been sent. Nothing was stored and nobody received it.
- *   2. The notice list was two hardcoded objects, so a published notice could
- *      never have appeared there anyway.
- *   3. The AI helper imported a client-side Genkit flow that never called a
- *      model, under a caption reading "Powered by Google Gemini".
- *
- * And one it did not do at all: the flow is named "generate targeted
- * notifications", the table carries `target_roles` and Notification::forRole()
- * filters on it — but no control ever set an audience, so every notice went to
- * everyone. The composer now picks the audience explicitly.
  */
 class NotificationController extends Controller
 {
-    /**
-     * The notices this viewer's role may see, and the composer.
-     *
-     * aiEnabled says whether the AI helper will reach a model at all. Without
-     * a key the service returns the original stub's four canned lines, and
-     * the composer should not be told Gemini wrote them.
-     */
-    public function index(Request $request, NotificationEngine $engine): Response
+    public function index(Request $request, NotificationBoardPresenter $presenter, NotificationEngine $engine): Response
     {
-        $user = $request->user();
-
-        return Inertia::render('Dashboard/Notifications', [
-            'notifications' => Notification::forRole($user->role->value)
-                ->latest('published_at')
-                ->paginate(20)
-                ->withQueryString()
-                ->through(fn (Notification $n) => [
-                    'id' => $n->id,
-                    'title' => $n->title,
-                    'content' => $n->content,
-                    'author' => $n->author_name,
-                    'timestamp' => $n->published_at->toIso8601String(),
-                    'targetRoles' => $n->target_roles,
-                ]),
-            'canBroadcast' => $user->can('broadcastNotices'),
-            'roles' => array_column(UserRole::cases(), 'value'),
-            'community' => $this->communityName(),
-            'aiEnabled' => filled(config('services.googleai.key')),
-            'notificationChannels' => $engine->getChannelsStatus(),
-        ]);
+        return Inertia::render('Dashboard/Notifications', $presenter->present($request->user(), $engine));
     }
 
-    public function store(StoreNotificationRequest $request): RedirectResponse
+    public function store(StoreNotificationRequest $request, PublishAnnouncementAction $action): RedirectResponse
     {
-        $user = $request->user();
-        $roles = $request->targetRoles();
+        $notification = $action->execute(
+            $request->user(),
+            $request->validated(),
+            $request->targetRoles(),
+            $request->channels()
+        );
 
-        $notification = Notification::create([
-            'title' => $request->validated('title'),
-            'content' => $request->validated('content'),
-            'target_roles' => $roles,
-            'author_id' => $user->id,
-            'author_name' => $user->display_name,
-            'published_at' => now(),
+        return back()->with('success', $notification->isScheduled()
+            ? "Announcement scheduled for {$notification->scheduled_for}."
+            : ($notification->target_roles === null ? 'Notice published to the whole community.' : 'Notice published to '.implode(', ', $notification->target_roles).'.'));
+    }
+
+    public function previewAudience(PreviewAudienceRequest $request, AudienceResolutionService $resolver): JsonResponse
+    {
+        $communityId = $request->validated('community_id') ?? $request->user()->community_id;
+        $community = $communityId ? Community::find($communityId) : Community::query()->where('code', config('gatepass.default_community_id'))->first() ?? Community::first();
+
+        $metrics = $resolver->calculateAudienceMetrics(
+            $community,
+            $request->validated('target_type'),
+            $request->validated('target_criteria')
+        );
+
+        return response()->json($metrics);
+    }
+
+    public function cancel(CancelAnnouncementRequest $request, Notification $announcement): RedirectResponse
+    {
+        $announcement->update([
+            'status' => 'cancelled',
+            'cancelled_at' => now(),
         ]);
 
-        $user->recordActivity("Published notice: {$notification->title}");
+        $request->user()->recordActivity("Cancelled scheduled announcement: {$announcement->title}");
 
-        return back()->with('success', $roles === null
-            ? 'Notice published to the whole community.'
-            : 'Notice published to '.implode(', ', $roles).'.');
+        return back()->with('success', 'Scheduled announcement was cancelled.');
     }
 
     /**

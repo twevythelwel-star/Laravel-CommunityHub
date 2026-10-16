@@ -238,3 +238,9 @@ Artisan::command('gatepass:expire-sweep', function (AccessExpirationPolicyServic
     $this->info("Mandatory expiration sweep completed: {$count} stale gate passes revoked.");
 })->purpose('Sweep and revoke gate passes past their mandatory expiration deadline');
 
+Schedule::command('announcements:dispatch-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->name('announcements:dispatch-scheduled')
+    ->description('announcements:dispatch-scheduled-broadcasts');
+

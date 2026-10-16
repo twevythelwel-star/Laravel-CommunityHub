@@ -3,10 +3,17 @@
 namespace App\Providers;
 
 use App\Enums\UserRole;
+use App\Models\BoundaryConfig;
 use App\Models\DelegatedAccess;
 use App\Models\Donation;
 use App\Models\GatePass;
 use App\Models\HouseholdMember;
+use App\Models\Invoice;
+use App\Models\Notification;
+use App\Models\OwnershipEntity;
+use App\Models\ParkingPass;
+use App\Models\Payment;
+use App\Models\Property;
 use App\Models\Renter;
 use App\Models\Staff;
 use App\Models\Transaction;
@@ -14,10 +21,17 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Visitor;
 use App\Models\WebhookSubscription;
+use App\Policies\AnnouncementPolicy;
+use App\Policies\BoundaryPolicy;
 use App\Policies\DelegatedAccessPolicy;
 use App\Policies\DonationPolicy;
 use App\Policies\GatePassPolicy;
 use App\Policies\HouseholdMemberPolicy;
+use App\Policies\InvoicePolicy;
+use App\Policies\OwnershipEntityPolicy;
+use App\Policies\ParkingPassPolicy;
+use App\Policies\PaymentPolicy;
+use App\Policies\PropertyPolicy;
 use App\Policies\RenterPolicy;
 use App\Policies\StaffPolicy;
 use App\Policies\TransactionPolicy;
@@ -26,6 +40,7 @@ use App\Policies\VehiclePolicy;
 use App\Policies\VisitorPolicy;
 use App\Policies\WebhookSubscriptionPolicy;
 use App\Services\Occupancy\OccupancyCategoryResolver;
+use App\Support\EntityAccess;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -57,6 +72,13 @@ class AuthServiceProvider extends ServiceProvider
         Transaction::class => TransactionPolicy::class,
         WebhookSubscription::class => WebhookSubscriptionPolicy::class,
         Vehicle::class => VehiclePolicy::class,
+        Property::class => PropertyPolicy::class,
+        ParkingPass::class => ParkingPassPolicy::class,
+        Payment::class => PaymentPolicy::class,
+        Invoice::class => InvoicePolicy::class,
+        BoundaryConfig::class => BoundaryPolicy::class,
+        OwnershipEntity::class => OwnershipEntityPolicy::class,
+        Notification::class => AnnouncementPolicy::class,
     ];
 
     public function boot(): void
@@ -72,11 +94,20 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(Transaction::class, TransactionPolicy::class);
         Gate::policy(WebhookSubscription::class, WebhookSubscriptionPolicy::class);
         Gate::policy(Vehicle::class, VehiclePolicy::class);
+        Gate::policy(Property::class, PropertyPolicy::class);
+        Gate::policy(ParkingPass::class, ParkingPassPolicy::class);
+        Gate::policy(Payment::class, PaymentPolicy::class);
+        Gate::policy(Invoice::class, InvoicePolicy::class);
+        Gate::policy(BoundaryConfig::class, BoundaryPolicy::class);
+        Gate::policy(OwnershipEntity::class, OwnershipEntityPolicy::class);
+        Gate::policy(Notification::class, AnnouncementPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {
             return $user->role === UserRole::SystemAdmin ? true : null;
         });
+
+        Gate::define('queryEntity', fn (User $user, string $entity) => EntityAccess::allows($user, $entity));
 
         Gate::define('manageUsers', fn (User $user) => $user->role->isAdministrative());
 

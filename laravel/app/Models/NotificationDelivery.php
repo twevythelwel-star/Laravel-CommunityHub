@@ -13,6 +13,7 @@ class NotificationDelivery extends Model
     protected $fillable = [
         'transaction_id',
         'invoice_id',
+        'notification_id',
         'user_id',
         'channel',
         'recipient',
@@ -38,6 +39,11 @@ class NotificationDelivery extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function notification(): BelongsTo
+    {
+        return $this->belongsTo(Notification::class);
     }
 
     public function user(): BelongsTo

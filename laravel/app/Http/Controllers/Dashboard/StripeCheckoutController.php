@@ -40,8 +40,8 @@ class StripeCheckoutController extends Controller
      */
     public function checkout(Request $request, Invoice $invoice): Response
     {
-        $this->ensureEnabled();
         $this->authorizeInvoice($request->user(), $invoice);
+        $this->ensureEnabled();
 
         if (in_array($invoice->status, ['Paid', 'Waived'], true)) {
             return redirect()->route('dashboard.billing')
@@ -148,7 +148,9 @@ class StripeCheckoutController extends Controller
     /** No processor, no checkout. See StripePaymentService::isLive(). */
     protected function ensureEnabled(): void
     {
-        abort_unless($this->stripe->isLive(), 404);
+        if (! $this->stripe->isLive()) {
+            abort(404);
+        }
     }
 
     /**
@@ -157,10 +159,6 @@ class StripeCheckoutController extends Controller
      */
     protected function authorizeInvoice(User $user, Invoice $invoice): void
     {
-        abort_unless(
-            $invoice->user_id === $user->id || $user->can('manageBilling'),
-            403,
-            'Unauthorized to pay this statement.',
-        );
+        $this->authorize('pay', $invoice);
     }
 }

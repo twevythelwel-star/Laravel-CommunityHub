@@ -7,6 +7,7 @@ use App\Exceptions\InvalidPassTransition;
 use App\Models\GatePass;
 use App\Models\User;
 use App\Services\GatePassEngine;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 
 class TransitionPassAction
@@ -22,10 +23,7 @@ class TransitionPassAction
      */
     public function execute(GatePass $gatePass, PassStatus $target, User $user, ?string $reason): void
     {
-        $isHostCancelling = $target === PassStatus::Cancelled
-            && $gatePass->visitor?->homeowner_id === $user->id;
-
-        abort_unless($user->can('manageSecurity') || $isHostCancelling, 403);
+        Gate::forUser($user)->authorize('transition', [$gatePass, $target]);
 
         $target === PassStatus::Approved
             ? $this->engine->approve($gatePass, $user, $reason)

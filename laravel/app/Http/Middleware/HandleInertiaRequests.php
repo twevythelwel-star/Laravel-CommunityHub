@@ -98,6 +98,20 @@ class HandleInertiaRequests extends Middleware
 
             'activeAlert' => fn () => $user ? $this->activeAlert() : null,
 
+            'inAppNotifications' => fn () => $user ? [
+                'unreadCount' => $user->unreadInAppNotificationsCount(),
+                'recent' => $user->inAppNotifications()->take(8)->get()->map(fn ($n) => [
+                    'id' => $n->id,
+                    'title' => $n->title,
+                    'body' => $n->body,
+                    'category' => $n->category,
+                    'priority' => $n->priority,
+                    'read' => $n->isRead(),
+                    'actionUrl' => $n->action_url,
+                    'createdAt' => $n->created_at->toIso8601String(),
+                ]),
+            ] : null,
+
             /*
              | Which pass-delivery channels have a provider behind them. The
              | visitor forms disable SMS and WhatsApp when these are false; they

@@ -18,7 +18,12 @@ class StoreDelegatedAccessRequest extends FormRequest
             return false;
         }
 
-        return $user->role->isResident() || $user->role->isAdministrative();
+        $response = \Illuminate\Support\Facades\Gate::forUser($user)->inspect('create', [DelegatedAccess::class, $this->all()]);
+        if ($response->denied()) {
+            abort(403, $response->message() ?: 'This action is unauthorized.');
+        }
+
+        return true;
     }
 
     public function rules(): array
@@ -46,13 +51,6 @@ class StoreDelegatedAccessRequest extends FormRequest
     {
         $validator->after(function () {
             $user = $this->user();
-            $propertyId = $this->input('property_id');
-
-            if (! empty($propertyId) && ! $user->role->isAdministrative()) {
-                if (! $user->properties()->whereKey($propertyId)->exists()) {
-                    abort(403, 'You can only authorize people for your own property.');
-                }
-            }
 
             $visibilityService = app(AccessVisibilityService::class);
             $roleName = $visibilityService->resolveUserRole($user);
@@ -81,9 +79,6 @@ class StoreDelegatedAccessRequest extends FormRequest
                         'duration_type' => 'Short-term guests cannot create unrestricted permanent credentials. All passes must have a temporary duration bounded by your reservation check-out.',
                     ]);
                 }
-                if (! in_array($this->input('access_level'), ['Visitor', 'Guest Pass', 'Day Visitor', 'Pre-Cleared Visitor'], true)) {
-                    abort(403, 'Short-term guests can only register visitors for their reservation stay.');
-                }
                 if ($renterRecord && $renterRecord->lease_end) {
                     $inputExpires = ! empty($this->input('expires_at')) ? Carbon::parse($this->input('expires_at')) : null;
                     if (! $inputExpires || $inputExpires->isAfter($renterRecord->lease_end)) {
@@ -95,12 +90,6 @@ class StoreDelegatedAccessRequest extends FormRequest
                     throw ValidationException::withMessages([
                         'duration_type' => 'Renters cannot create unrestricted permanent credentials. All passes must have a temporary duration bounded by your lease.',
                     ]);
-                }
-                if (($this->input('authorization_type') ?? '') === 'short_term_rental' || stripos($this->input('access_level') ?? '', 'short') !== false) {
-                    abort(403, 'Renters are not permitted to authorize short-term rentals.');
-                }
-                if ($this->input('access_level') === 'Homeowner' || $this->input('relationship') === 'Homeowner') {
-                    abort(403, 'Renters cannot configure homeowner credentials or change property ownership.');
                 }
                 if ($renterRecord && $renterRecord->lease_end) {
                     $inputExpires = ! empty($this->input('expires_at')) ? Carbon::parse($this->input('expires_at')) : null;

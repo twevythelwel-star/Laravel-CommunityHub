@@ -20,17 +20,9 @@
     },
     "logic_closures": [],
     "adhoc_authz": {
-        "Api/QueryApiController.php": 1,
         "Dashboard/BillingController.php": 1,
-        "Dashboard/DelegatedAccessController.php": 3,
-        "Dashboard/DirectoryController.php": 1,
         "Dashboard/FundraisingController.php": 3,
-        "Dashboard/ParkingPassController.php": 2,
-        "Dashboard/PaymentReturnController.php": 2,
         "Dashboard/SafetyController.php": 16,
-        "Dashboard/StripeCheckoutController.php": 2,
-        "Dashboard/VehicleController.php": 2,
-        "PdfController.php": 2,
         "ProviderWebhookController.php": 1,
         "StripeWebhookController.php": 1,
         "UniversalPaymentLinkController.php": 1

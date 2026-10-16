@@ -21,7 +21,7 @@ class QueryApiController extends Controller
      */
     public function query(string $entity, Request $request): JsonResponse
     {
-        abort_unless(EntityAccess::allows($request->user(), $entity), 403);
+        $this->authorize('queryEntity', $entity);
 
         $perPage = min(max((int) $request->input('per_page', 15), 1), 100);
 

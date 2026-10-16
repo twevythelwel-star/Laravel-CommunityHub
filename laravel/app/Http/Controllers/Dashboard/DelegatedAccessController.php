@@ -169,7 +169,9 @@ class DelegatedAccessController extends Controller
      */
     public function approve(ApproveDelegationRequest $request, DelegatedAccess $delegation, DelegatedAccessService $service): RedirectResponse|JsonResponse
     {
-        abort_unless($delegation->approval_status === 'pending', 422, 'This delegation is not awaiting approval.');
+        if ($delegation->approval_status !== 'pending') {
+            abort(422, 'This delegation is not awaiting approval.');
+        }
 
         $service->approveDelegation($delegation, $request->user());
 
@@ -183,7 +185,9 @@ class DelegatedAccessController extends Controller
      */
     public function reject(RejectDelegationRequest $request, DelegatedAccess $delegation, DelegatedAccessService $service): RedirectResponse|JsonResponse
     {
-        abort_unless($delegation->approval_status === 'pending', 422, 'This delegation is not awaiting approval.');
+        if ($delegation->approval_status !== 'pending') {
+            abort(422, 'This delegation is not awaiting approval.');
+        }
 
         $validated = $request->validated();
         $service->rejectDelegation($delegation, $request->user(), $validated['reason'] ?? null);
@@ -198,11 +202,14 @@ class DelegatedAccessController extends Controller
      */
     public function accept(Request $request, string $token, DelegatedAccessService $service): RedirectResponse|JsonResponse
     {
-        try {
-            $delegation = $service->acceptInvite($token, $request->user());
-        } catch (\DomainException $e) {
-            abort(403, $e->getMessage());
+        $delegation = DelegatedAccess::where('invite_token', $token)->first();
+        if (! $delegation) {
+            throw new \Illuminate\Auth\Access\AuthorizationException('This invitation is not for your account, or has already been used.');
         }
+
+        $this->authorize('accept', $delegation);
+
+        $delegation = $service->acceptInvite($token, $request->user());
 
         return $request->wantsJson()
             ? response()->json(['success' => true, 'delegation_id' => $delegation->id])

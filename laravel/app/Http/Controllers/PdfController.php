@@ -11,6 +11,7 @@ use App\Services\QrCodePng;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * PDF documents.
@@ -83,13 +84,7 @@ class PdfController extends Controller
      */
     public function downloadGatePass(Request $request, GatePass $gatePass, QrCodePng $qr): Response
     {
-        $user = $request->user();
-
-        abort_unless(
-            $gatePass->user_id === $user->id || $user->can('manageSecurity'),
-            403,
-            'You can only download your own gate pass.',
-        );
+        $this->authorize('download', $gatePass);
 
         $gatePass->load('user');
         $community = Community::first();
@@ -123,10 +118,6 @@ class PdfController extends Controller
      */
     private function authorizeInvoice(User $user, Invoice $invoice): void
     {
-        abort_unless(
-            $invoice->user_id === $user->id || $user->can('manageBilling'),
-            403,
-            'You can only view your own statements.',
-        );
+        Gate::forUser($user)->authorize('view', $invoice);
     }
 }

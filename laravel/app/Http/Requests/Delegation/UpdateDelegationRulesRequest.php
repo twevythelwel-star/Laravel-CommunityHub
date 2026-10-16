@@ -5,7 +5,9 @@ namespace App\Http\Requests\Delegation;
 use App\Models\DelegatedAccess;
 use App\Services\AccessVisibilityService;
 use Carbon\Carbon;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
@@ -13,7 +15,28 @@ class UpdateDelegationRulesRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user() !== null;
+        $user = $this->user();
+        if (! $user) {
+            return false;
+        }
+
+        /** @var DelegatedAccess|int|string|null $delegation */
+        $delegation = $this->route('delegation');
+        if (! $delegation instanceof DelegatedAccess) {
+            $delegation = DelegatedAccess::find($delegation);
+        }
+
+        if (! $delegation) {
+            return false;
+        }
+
+        $response = Gate::forUser($user)->inspect('updateRules', [$delegation, $this->all()]);
+
+        if ($response->denied()) {
+            throw new AuthorizationException($response->message() ?: 'Unauthorized access to this delegation boundary.');
+        }
+
+        return true;
     }
 
     public function rules(): array
@@ -56,9 +79,6 @@ class UpdateDelegationRulesRequest extends FormRequest
             $isRenter = ! $isShortTerm && ($roleName === 'Long-Term Renter' || $viewAs === 'renter');
 
             if ($isShortTerm) {
-                if ($delegation && $delegation->grantor_user_id !== $user->id) {
-                    abort(403, 'Short-term guests cannot modify rules for property services or host credentials.');
-                }
                 if (($this->input('duration_type') ?? '') === 'manual_revocation') {
                     throw ValidationException::withMessages([
                         'duration_type' => 'Short-term guests cannot create unrestricted permanent credentials. Credential duration must be temporary or bounded by your checkout date.',

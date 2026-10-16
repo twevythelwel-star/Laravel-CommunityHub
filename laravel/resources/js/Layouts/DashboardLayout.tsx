@@ -83,6 +83,7 @@ import { PasswordConfirmationDialog } from '@/components/password-confirmation-d
 import { BrandingProvider } from '@/context/branding-context';
 import { ThemeProvider } from '@/context/theme-context';
 import { EmergencyBroadcastBanner } from '@/components/dashboard/emergency-broadcast-banner';
+import { NotificationCenterDropdown } from '@/components/dashboard/notification-center-dropdown';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -598,6 +599,7 @@ interface NavSection {
                  </TooltipTrigger>
                  <TooltipContent>{isDark ? 'Light Mode' : 'Dark Mode'}</TooltipContent>
              </Tooltip>
+             <NotificationCenterDropdown />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button

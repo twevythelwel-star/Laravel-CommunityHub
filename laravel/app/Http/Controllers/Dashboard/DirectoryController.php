@@ -134,12 +134,7 @@ class DirectoryController extends Controller
      */
     public function storeProperty(StoreDirectoryPropertyRequest $request, User $user): RedirectResponse
     {
-        // Homeowners, and administrators who live on the estate.
-        if ($user->role !== UserRole::Homeowner && ! $user->role->isAdministrative()) {
-            return back()->withErrors(['lot_number' => 'Only a Homeowner or an administrator can own a property.']);
-        }
-
-        $this->allowOrFail('manageProperties', [User::class, $user], 'lot_number');
+        $this->allowOrFail('assignProperty', [User::class, $user], 'lot_number');
 
         $validated = $request->validated();
 

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\Visitor;
 use App\Models\DelegatedAccess;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
@@ -74,13 +75,19 @@ class CompanyDashboardPresenter
             return $anyAuthorized;
         }
 
-        // 5. Fallback for admins: first entity or abort 403 for non-admins
+        // 5. Fallback for admins: first entity or policy check for non-admins
         $fallback = OwnershipEntity::first();
         if ($fallback && $user->role->isAdministrative()) {
             return $fallback;
         }
 
-        abort(403, 'You are not an authorized representative of any company ownership entity.');
+        Gate::forUser($user)->authorize('viewAny', OwnershipEntity::class);
+
+        if ($fallback) {
+            return $fallback;
+        }
+
+        throw new AuthorizationException('You are not an authorized representative of any company ownership entity.');
     }
 
     /**
@@ -122,8 +129,17 @@ class CompanyDashboardPresenter
             });
 
             if (! $selectedProperty) {
-                // Deny unauthorized property access attempt
-                abort(403, 'You are not authorized to manage the requested property.');
+                // Deny unauthorized property access attempt via PropertyPolicy
+                $targetProperty = Property::where('id', $requestedPropertyParam)
+                    ->orWhere('lot_number', $requestedPropertyParam)
+                    ->orWhere('property_code', $requestedPropertyParam)
+                    ->first();
+
+                if ($targetProperty) {
+                    Gate::forUser($user)->authorize('manage', $targetProperty);
+                }
+
+                throw new AuthorizationException('You are not authorized to manage the requested property.');
             }
 
             $scopedProperties = collect([$selectedProperty]);

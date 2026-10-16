@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\ChangelogEntry;
+use App\Models\Community;
 use App\Models\CommunityEvent;
 use App\Models\CommunityUpdate;
 use App\Models\Feedback;
@@ -47,6 +48,28 @@ class CommunicationsSeeder extends Seeder
                 ],
             );
         }
+
+        // Example announcement: Community Office Closure (Scheduled, Administrative Notice, Entire Community)
+        $community = Community::first();
+        $scheduledTime = now()->addDays(2)->setTime(9, 0);
+
+        Notification::updateOrCreate(
+            ['title' => 'Community Office Closure'],
+            [
+                'content' => "Please be advised that the community management office will be closed on the designated public holiday. Regular office hours will resume on the next business day.\nFor urgent security matters, please use the established community security contact procedure.",
+                'category' => 'general',
+                'priority' => 'normal',
+                'author_id' => $admin?->id,
+                'author_name' => $admin?->display_name ?? 'Community Administration',
+                'community_id' => $community?->id,
+                'target_type' => 'entire_community',
+                'target_roles' => null,
+                'channels' => ['in_app', 'email'],
+                'status' => 'scheduled',
+                'scheduled_for' => $scheduledTime,
+                'published_at' => $scheduledTime,
+            ]
+        );
 
         $warnings = [
             [

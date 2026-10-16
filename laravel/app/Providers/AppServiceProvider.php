@@ -2,8 +2,10 @@
 
 namespace App\Providers;
 
+use App\Events\Communications\AnnouncementDispatched;
 use App\Events\VisitorCheckedInEvent;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Listeners\AuditAnnouncementDispatched;
 use App\Models\Community;
 use App\Services\Api\RateLimiting\ApiRateLimiter;
 use App\Services\GatePassEngine;
@@ -53,6 +55,8 @@ class AppServiceProvider extends ServiceProvider
                 Log::warning('Failed to dispatch arrival notice: '.$e->getMessage());
             }
         });
+
+        Event::listen(AnnouncementDispatched::class, AuditAnnouncementDispatched::class);
 
         View::composer(['blade.*', 'layouts.public', 'pdf.*'], function ($view) {
             $community = Community::default() ?? Community::first();

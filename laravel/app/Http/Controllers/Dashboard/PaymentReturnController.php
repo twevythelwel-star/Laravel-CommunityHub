@@ -22,10 +22,12 @@ class PaymentReturnController extends Controller
 {
     public function __invoke(Request $request, Payment $payment, ProviderRegistry $providers): RedirectResponse
     {
-        abort_unless($payment->user_id === $request->user()->id, 403);
+        $this->authorize('view', $payment);
 
         $provider = $providers->byKey($payment->provider);
-        abort_unless($provider instanceof ConfirmsReturns, 404);
+        if (! $provider instanceof ConfirmsReturns) {
+            abort(404);
+        }
 
         $payment = $provider->confirmPayment($payment, $request->query());
         $destination = $payment->fundraiser_id ? 'dashboard.fundraising' : 'dashboard.billing';

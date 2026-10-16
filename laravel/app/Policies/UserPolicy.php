@@ -39,6 +39,15 @@ class UserPolicy
             : Response::deny("Only a System Admin can manage an administrator's properties.");
     }
 
+    public function assignProperty(User $actor, User $owner): Response
+    {
+        if ($owner->role !== UserRole::Homeowner && ! $owner->role->isAdministrative()) {
+            return Response::deny('Only a Homeowner or an administrator can own a property.');
+        }
+
+        return $this->manageProperties($actor, $owner);
+    }
+
     private function isSystemAdmin(User $user): bool
     {
         return $user->role === UserRole::SystemAdmin;

@@ -2,9 +2,11 @@
 
 namespace App\Policies;
 
+use App\Enums\PassStatus;
 use App\Enums\UserRole;
 use App\Models\GatePass;
 use App\Models\User;
+use Illuminate\Auth\Access\Response;
 
 class GatePassPolicy
 {
@@ -20,6 +22,16 @@ class GatePassPolicy
         return \App\Models\Household::where('primary_homeowner_id', $user->id)
             ->whereHas('members', fn ($q) => $q->where('gate_pass_id', $pass->id))
             ->exists();
+    }
+
+    /**
+     * Determine whether the user can download the PDF for the gate pass.
+     */
+    public function download(User $user, GatePass $pass): Response
+    {
+        return $pass->user_id === $user->id || $user->can('manageSecurity')
+            ? Response::allow()
+            : Response::deny('You can only download your own gate pass.');
     }
 
     /**
@@ -44,5 +56,16 @@ class GatePassPolicy
     public function revoke(User $user, GatePass $pass): bool
     {
         return $user->can('manageSecurity') || $user->role === UserRole::SystemAdmin;
+    }
+
+    /**
+     * Determine whether the user can transition the pass status.
+     */
+    public function transition(User $user, GatePass $pass, PassStatus $target): bool
+    {
+        $isHostCancelling = $target === PassStatus::Cancelled
+            && $pass->visitor?->homeowner_id === $user->id;
+
+        return $user->can('manageSecurity') || $isHostCancelling;
     }
 }

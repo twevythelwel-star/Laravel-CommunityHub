@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\Delegation;
 
+use App\Models\DelegatedAccess;
 use App\Models\EmergencyContinuityPlan;
-use App\Services\AccessVisibilityService;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 
 class SaveContinuityPlanRequest extends FormRequest
 {
@@ -15,29 +17,10 @@ class SaveContinuityPlanRequest extends FormRequest
             return false;
         }
 
-        $visibilityService = app(AccessVisibilityService::class);
-        $roleName = $visibilityService->resolveUserRole($user);
-        $viewAs = strtolower((string) ($this->input('view_as') ?: $this->query('view_as', '')));
-        $renterRecord = $user->renter ?? $user->activeStay();
+        $response = Gate::forUser($user)->inspect('saveContinuityPlan', [DelegatedAccess::class, $this->all()]);
 
-        $isShortTermRenter = false;
-        if ($renterRecord) {
-            $stay = strtolower((string) ($renterRecord->stay_type ?? ''));
-            $notes = strtolower((string) ($renterRecord->notes ?? ''));
-            if (str_contains($stay, 'short') || str_contains($stay, 'airbnb') || str_contains($notes, 'airbnb') || str_contains($stay, 'vacation')) {
-                $isShortTermRenter = true;
-            }
-        }
-
-        $isShortTerm = in_array($viewAs, ['short_term', 'airbnb', 'guest', 'vacation'], true)
-            || $roleName === 'Short-Term Rental / Airbnb Host/Guest'
-            || $roleName === 'Short-Term Renter'
-            || $isShortTermRenter;
-
-        $isRenter = ! $isShortTerm && ($roleName === 'Long-Term Renter' || $viewAs === 'renter');
-
-        if ($isShortTerm || $isRenter) {
-            abort(403, 'Emergency & Incapacity Continuity Plans are reserved for property homeowners.');
+        if ($response->denied()) {
+            throw new AuthorizationException($response->message() ?: 'Emergency & Incapacity Continuity Plans are reserved for property homeowners.');
         }
 
         return true;

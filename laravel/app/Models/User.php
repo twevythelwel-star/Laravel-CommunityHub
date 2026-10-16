@@ -281,7 +281,10 @@ class User extends Authenticatable implements HasMedia
         return $this->inAppNotifications()->unread()->count();
     }
 
-    // ── Domain helpers ───────────────────────────────────────────────
+    public function getCommunityIdAttribute(): ?int
+    {
+        return $this->properties()->value('community_id');
+    }
 
     public function isActive(): bool
     {
