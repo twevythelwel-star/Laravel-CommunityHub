@@ -98,6 +98,12 @@ Schedule::command('billing:generate-assessments')
     ->onOneServer()
     ->name('billing:generate-assessments');
 
+Schedule::command('billing:send-payment-reminders')
+    ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('billing:send-payment-reminders');
+
 /*
  | Local seeding convenience only.
  |
@@ -243,4 +249,3 @@ Schedule::command('announcements:dispatch-scheduled')
     ->withoutOverlapping()
     ->name('announcements:dispatch-scheduled')
     ->description('announcements:dispatch-scheduled-broadcasts');
-

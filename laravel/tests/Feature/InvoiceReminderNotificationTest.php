@@ -4,11 +4,13 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Jobs\SendInvoicePaymentReminderJob;
+use App\Models\InAppNotification;
 use App\Models\Invoice;
-use App\Models\NotificationDelivery;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationEngine\ChannelDispatchResult;
 use App\Services\NotificationEngine\NotificationEngine;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -145,6 +147,50 @@ class InvoiceReminderNotificationTest extends TestCase
         $freshInvoice = $invoice->fresh();
         $this->assertNotNull($freshInvoice->last_reminded_at);
         $this->assertSame(1, $freshInvoice->reminder_count);
+    }
+
+    public function test_scheduled_reminders_follow_the_cadence(): void
+    {
+        Queue::fake();
+        $owner = $this->resident();
+        $make = fn (array $attributes) => $this->invoice($owner, $attributes);
+
+        $tooSoon = $make(['due_on' => now()->subDays(2)]);
+        $firstDue = $make(['due_on' => now()->subDays(3), 'status' => 'Unpaid']);
+        $remindedRecently = $make(['due_on' => now()->subDays(20), 'last_reminded_at' => now()->subDays(6), 'reminder_count' => 1]);
+        $weekSinceLast = $make(['due_on' => now()->subDays(20), 'last_reminded_at' => now()->subDays(7), 'reminder_count' => 1]);
+        $capped = $make(['due_on' => now()->subDays(40), 'last_reminded_at' => now()->subDays(10), 'reminder_count' => 3]);
+        $paid = $make(['due_on' => now()->subDays(10), 'status' => 'Paid']);
+
+        $this->artisan('billing:send-payment-reminders')->assertSuccessful();
+
+        $reminded = Queue::pushed(SendInvoicePaymentReminderJob::class)->map(fn ($job) => $job->invoice->id)->sort()->values()->all();
+        $this->assertSame([$firstDue->id, $weekSinceLast->id], $reminded);
+        Queue::assertPushed(SendInvoicePaymentReminderJob::class, fn ($job) => $job->channels === ['in_app', 'email']);
+    }
+
+    public function test_a_scheduled_reminder_reaches_the_homeowner_and_counts_towards_the_cap(): void
+    {
+        $owner = $this->resident();
+        $invoice = $this->invoice($owner, ['due_on' => now()->subDays(5)]);
+
+        $this->artisan('billing:send-payment-reminders')->assertSuccessful();
+
+        $this->assertStringContainsString($invoice->reference, InAppNotification::where('user_id', $owner->id)->sole()->title);
+        $this->assertSame(1, $invoice->fresh()->reminder_count);
+        $this->assertSame(0, Notification::count(), 'nothing is posted to the notice board');
+
+        $this->artisan('billing:send-payment-reminders')->assertSuccessful();
+        $this->assertSame(1, $invoice->fresh()->reminder_count, 'not reminded again within the week');
+    }
+
+    public function test_the_reminders_run_daily(): void
+    {
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($event) => str_contains((string) $event->command, 'billing:send-payment-reminders'));
+
+        $this->assertNotNull($event);
+        $this->assertSame('0 9 * * *', $event->expression);
     }
 
     public function test_reminder_job_records_failure_and_handles_retries(): void
