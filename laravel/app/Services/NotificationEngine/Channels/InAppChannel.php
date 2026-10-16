@@ -33,18 +33,19 @@ class InAppChannel implements NotificationChannelInterface
     }
 
     /**
-     * A message addressed to a person goes to that person's notifications; only a broadcast
-     * (role-targeted or flagged) is published on the community notice board.
+     * A broadcast (role-targeted or flagged) is published on the community notice board, with
+     * the payload's user as its author. Anything else is a message to one person and goes to
+     * that person's notifications.
      */
     public function send(NotificationPayload $payload): ChannelDispatchResult
     {
         try {
-            if ($addressee = $this->addressee($payload)) {
-                return $this->deliverTo($addressee, $payload);
-            }
-
             if ($payload->targetRoles !== null || ($payload->metadata['broadcast'] ?? false)) {
                 return $this->publish($payload);
+            }
+
+            if ($addressee = $this->addressee($payload)) {
+                return $this->deliverTo($addressee, $payload);
             }
 
             return ChannelDispatchResult::failed($this->name(), 'In-app message has no addressee; refusing to publish it to the community.');
@@ -86,7 +87,8 @@ class InAppChannel implements NotificationChannelInterface
         $notification = Notification::create([
             'title' => $payload->title,
             'content' => $payload->body,
-            'author_name' => 'Community Hub Management',
+            'author_id' => $payload->user?->id,
+            'author_name' => $payload->user?->display_name ?? 'Community Hub Management',
             'target_roles' => $payload->targetRoles,
             'published_at' => now(),
         ]);
