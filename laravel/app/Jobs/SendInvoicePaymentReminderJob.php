@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\Invoice;
 use App\Models\NotificationDelivery;
-use App\Models\User;
 use App\Services\NotificationEngine\NotificationEngine;
 use App\Services\NotificationEngine\NotificationPayload;
 use Illuminate\Bus\Queueable;
@@ -83,7 +82,9 @@ class SendInvoicePaymentReminderJob implements ShouldQueue
                 title: $title,
                 body: $body,
                 recipient: $recipient,
+                user: $user,
                 metadata: [
+                    'category' => 'billing',
                     'invoice_id' => $invoice->id,
                     'invoice_reference' => $invoice->reference,
                     'amount_minor' => $invoice->balanceRemainingMinor(),

@@ -196,7 +196,9 @@ class NotificationEngine
             title: $title,
             body: $body,
             recipient: $recipient,
+            user: $homeowner,
             metadata: [
+                'category' => 'visitor',
                 'visitor_id' => $visitor->id,
                 'gate' => $gate,
                 'event' => 'visitor_checked_in',
