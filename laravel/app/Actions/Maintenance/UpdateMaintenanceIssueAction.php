@@ -2,10 +2,11 @@
 
 namespace App\Actions\Maintenance;
 
-use App\Models\InAppNotification;
 use App\Models\MaintenanceIssue;
 use App\Models\MaintenanceIssueUpdate;
 use App\Models\User;
+use App\Notifications\Maintenance\MaintenanceIssueClosedOut;
+use App\Notifications\Maintenance\MaintenanceWorkAssigned;
 use App\Services\Maintenance\MaintenancePhotos;
 use Illuminate\Http\UploadedFile;
 
@@ -60,14 +61,7 @@ class UpdateMaintenanceIssueAction
             return $toStatus;
         }
 
-        InAppNotification::create([
-            'user_id' => $assigneeId,
-            'title' => "Assigned Work Order: {$issue->reference_number}",
-            'body' => "You have been assigned to '{$issue->title}' at {$issue->location}.",
-            'category' => 'maintenance',
-            'priority' => $issue->priority === 'emergency' ? 'urgent' : 'normal',
-            'action_url' => '/dashboard/maintenance',
-        ]);
+        User::find($assigneeId)?->notify(new MaintenanceWorkAssigned($issue));
 
         // A fresh report moves on to "assigned" unless the status was set explicitly.
         return $toStatus === 'reported' ? 'assigned' : $toStatus;
@@ -120,27 +114,6 @@ class UpdateMaintenanceIssueAction
 
     private function tellReporter(MaintenanceIssue $issue, string $toStatus, ?string $resolutionNotes): void
     {
-        $message = $toStatus === 'resolved'
-            ? "Your maintenance request '{$issue->title}' has been marked as resolved."
-            : "Your maintenance request '{$issue->title}' has been closed.";
-
-        if ($resolutionNotes) {
-            $message .= " Resolution details: {$resolutionNotes}";
-        }
-
-        InAppNotification::create([
-            'user_id' => $issue->reporter_id,
-            'title' => 'Maintenance '.ucfirst($toStatus).": {$issue->reference_number}",
-            'body' => $message,
-            'category' => 'maintenance',
-            'priority' => 'normal',
-            'action_url' => '/dashboard/maintenance',
-            'metadata' => [
-                'issue_id' => $issue->id,
-                'reference_number' => $issue->reference_number,
-                'status' => $toStatus,
-                'resolution_notes' => $resolutionNotes,
-            ],
-        ]);
+        $issue->reporter?->notify(new MaintenanceIssueClosedOut($issue, $toStatus, $resolutionNotes));
     }
 }

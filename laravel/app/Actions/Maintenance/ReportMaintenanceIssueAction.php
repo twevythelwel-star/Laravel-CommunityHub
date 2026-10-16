@@ -3,12 +3,13 @@
 namespace App\Actions\Maintenance;
 
 use App\Enums\UserRole;
-use App\Models\InAppNotification;
 use App\Models\MaintenanceIssue;
 use App\Models\MaintenanceIssueUpdate;
 use App\Models\User;
+use App\Notifications\Maintenance\MaintenanceEmergencyReported;
 use App\Services\Maintenance\MaintenancePhotos;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * A resident reports a maintenance issue: it gets a reference number and
@@ -57,14 +58,9 @@ class ReportMaintenanceIssueAction
 
     private function alertResponders(MaintenanceIssue $issue): void
     {
-        User::whereIn('role', [UserRole::Admin, UserRole::Staff, UserRole::Security])->get()
-            ->each(fn (User $staff) => InAppNotification::create([
-                'user_id' => $staff->id,
-                'title' => "URGENT Hazard Reported: {$issue->reference_number}",
-                'body' => "Emergency issue '{$issue->title}' reported at {$issue->location}.",
-                'category' => 'maintenance',
-                'priority' => 'urgent',
-                'action_url' => '/dashboard/maintenance',
-            ]));
+        Notification::send(
+            User::whereIn('role', [UserRole::Admin, UserRole::Staff, UserRole::Security])->get(),
+            new MaintenanceEmergencyReported($issue),
+        );
     }
 }

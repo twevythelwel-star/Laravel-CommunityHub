@@ -7,8 +7,11 @@ use App\Models\InAppNotification;
 use App\Models\MaintenanceIssue;
 use App\Models\MaintenanceIssueUpdate;
 use App\Models\User;
+use App\Notifications\Maintenance\MaintenanceEmergencyReported;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Notification as NotificationFake;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -239,6 +242,43 @@ class MaintenanceIssueTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors(['title', 'category', 'description', 'location', 'priority']);
+    }
+
+    public function test_an_emergency_alert_is_a_queued_notification_to_responders_only(): void
+    {
+        NotificationFake::fake();
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $staff = User::factory()->role(UserRole::Staff)->create();
+        $neighbour = User::factory()->role(UserRole::Homeowner)->create();
+
+        $this->actingAs($resident)->post('/dashboard/maintenance', [
+            'category' => 'water_leaks', 'title' => 'Burst main', 'description' => 'Water everywhere on the road.',
+            'location' => 'Palm Ave', 'priority' => 'emergency',
+        ])->assertRedirect();
+
+        NotificationFake::assertSentTo($staff, MaintenanceEmergencyReported::class, fn ($n) => $n instanceof ShouldQueue);
+        NotificationFake::assertNotSentTo([$resident, $neighbour], MaintenanceEmergencyReported::class);
+    }
+
+    public function test_closing_out_an_issue_is_delivered_and_tracked_against_it(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $staff = User::factory()->role(UserRole::Staff)->create();
+        $issue = MaintenanceIssue::create([
+            'reference_number' => 'MNT-2026-0200', 'reporter_id' => $resident->id, 'category' => 'streetlights',
+            'title' => 'Dark pole', 'description' => 'Bulb out.', 'location' => 'Pole 7', 'priority' => 'low', 'status' => 'in_progress',
+        ]);
+
+        $this->actingAs($staff)->patch("/dashboard/maintenance/{$issue->id}", [
+            'status' => 'resolved', 'resolution_notes' => 'Bulb replaced.',
+        ])->assertRedirect();
+
+        $inApp = InAppNotification::where('user_id', $resident->id)->sole();
+        $this->assertSame('Bulb replaced.', $inApp->data['resolution_notes'], 'resolution details reach the resident');
+        $this->assertDatabaseHas('notification_deliveries', [
+            'user_id' => $resident->id, 'channel' => 'in_app', 'status' => 'sent',
+            'subject_type' => $issue->getMorphClass(), 'subject_id' => $issue->id,
+        ]);
     }
 
     public function test_a_resident_cannot_triage_and_never_sees_internal_notes(): void

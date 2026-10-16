@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class NotificationDelivery extends Model
 {
@@ -15,6 +16,8 @@ class NotificationDelivery extends Model
         'invoice_id',
         'notification_id',
         'user_id',
+        'subject_type',
+        'subject_id',
         'channel',
         'recipient',
         'provider',
@@ -49,5 +52,11 @@ class NotificationDelivery extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** What the notification was about (a maintenance issue, a facility booking…). */
+    public function subject(): MorphTo
+    {
+        return $this->morphTo();
     }
 }
