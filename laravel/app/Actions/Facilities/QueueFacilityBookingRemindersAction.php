@@ -7,8 +7,8 @@ use App\Notifications\Facilities\FacilityBookingReminder;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Queues reminders for confirmed facility bookings occurring tomorrow that have not
- * yet been reminded.
+ * Queues a reminder, the day before, for each confirmed facility booking happening
+ * tomorrow that has not been reminded yet (run each morning by the scheduler).
  */
 class QueueFacilityBookingRemindersAction
 {
@@ -17,7 +17,9 @@ class QueueFacilityBookingRemindersAction
     {
         $queued = 0;
 
-        $this->due()->with(['landmark', 'user'])->each(function (FacilityBooking $booking) use (&$queued) {
+        // Loaded up front: marking each reminded changes the query, which would make
+        // chunked iteration skip bookings.
+        $this->due()->with(['landmark', 'user'])->get()->each(function (FacilityBooking $booking) use (&$queued) {
             if ($booking->user) {
                 $booking->user->notify(new FacilityBookingReminder($booking));
                 $booking->update(['reminded_at' => now()]);

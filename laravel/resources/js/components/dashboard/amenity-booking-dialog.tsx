@@ -200,7 +200,7 @@ export function AmenityBookingDialog({
                 Reserve Community Amenity
               </DialogTitle>
               <DialogDescription>
-                Reserve a shared community facility. Automatic reminders are sent 24 hours prior to reservation.
+                Reserve a shared community facility. You get a reminder the morning before.
               </DialogDescription>
             </DialogHeader>
 
@@ -357,7 +357,7 @@ export function AmenityBookingDialog({
                 {/* Automatic reminder disclosure */}
                 <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 px-3 py-2 text-[11px] text-emerald-800 dark:text-emerald-300">
                   <Bell className="w-3.5 h-3.5 shrink-0" />
-                  <span>A reminder will be automatically sent to you 24 hours before your reservation slot.</span>
+                  <span>You will get a reminder in your notifications the morning before your booking.</span>
                 </div>
 
                 {/* Your upcoming bookings */}
@@ -420,7 +420,7 @@ export function AmenityBookingDialog({
               </Badge>
               <h3 className="text-xl font-bold text-foreground mt-2">Reservation Confirmed</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                A confirmation is in your notifications. An automatic reminder will arrive 24h prior.
+                A confirmation is in your notifications. A reminder will arrive the morning before.
               </p>
             </div>
 

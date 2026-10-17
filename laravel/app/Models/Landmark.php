@@ -29,10 +29,10 @@ class Landmark extends Model
         return $this->capacity ?? FacilityBooking::DEFAULT_CAPACITY;
     }
 
-    /** The booking fee formatted for display, e.g. Free or $50.00. */
-    public function feeFormatted(): string
+    /** The booking fee in the billing currency, e.g. "Free" or "$50.00 JMD". */
+    public function feeFormatted(string $currency): string
     {
-        return $this->fee_minor > 0 ? '$'.number_format($this->fee_minor / 100, 2) : 'Free';
+        return $this->fee_minor > 0 ? BillingSetting::format($this->fee_minor, $currency) : 'Free';
     }
 
     public function community(): BelongsTo

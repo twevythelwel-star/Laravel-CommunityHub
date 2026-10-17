@@ -2,6 +2,7 @@
 
 namespace App\Services\Facilities;
 
+use App\Models\BillingSetting;
 use App\Models\FacilityBooking;
 use App\Models\Landmark;
 use App\Models\User;
@@ -21,7 +22,7 @@ class FacilityAvailabilityPresenter
                 : [],
             'guestLimit' => $facility?->guestLimit() ?? FacilityBooking::DEFAULT_CAPACITY,
             'feeMinor' => $facility?->fee_minor ?? 0,
-            'feeFormatted' => $facility?->feeFormatted() ?? 'Free',
+            'feeFormatted' => $facility?->feeFormatted(BillingSetting::currencyCode()) ?? 'Free',
             'myBookings' => FacilityBooking::with(['landmark:id,name', 'invoice:id,reference,status'])
                 ->where('user_id', $viewer->id)->confirmed()->upcoming()
                 ->orderBy('booked_on')->limit(10)->get()

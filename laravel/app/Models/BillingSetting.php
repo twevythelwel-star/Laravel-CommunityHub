@@ -29,4 +29,16 @@ class BillingSetting extends Model
     {
         return static::query()->firstOrCreate([], []);
     }
+
+    /** The currency the community bills in. */
+    public static function currencyCode(): string
+    {
+        return static::current()->currency ?? 'JMD';
+    }
+
+    /** An amount in minor units as the app shows money elsewhere, e.g. "$75.00 JMD". */
+    public static function format(int $amountMinor, string $currency): string
+    {
+        return '$'.number_format($amountMinor / 100, 2).' '.$currency;
+    }
 }

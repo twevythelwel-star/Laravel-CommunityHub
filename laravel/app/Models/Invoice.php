@@ -72,7 +72,6 @@ class Invoice extends Model
         return $this->hasOne(NotificationDelivery::class)->latestOfMany();
     }
 
-
     /**
      * Generate a secure, opaque-token payment link for this invoice.
      * Contains NO sensitive balance, card, or PII information in the URL.
@@ -140,6 +139,23 @@ class Invoice extends Model
         } elseif ($this->amountPaidMinor() > 0) {
             $this->update(['status' => 'Partially Paid']);
         }
+    }
+
+    /**
+     * Cancels an invoice nothing has been paid on, when what it charged for is called off,
+     * so it no longer counts as owed or gets reminders. Anything already paid is left for a
+     * refund instead. Returns whether it was cancelled.
+     */
+    public function cancelUnpaid(): bool
+    {
+        if (! in_array($this->status, ['Unpaid', 'Overdue'], true) || $this->amountPaidMinor() > 0) {
+            return false;
+        }
+
+        $this->update(['status' => 'Cancelled']);
+        $this->items()->update(['status' => 'Cancelled']);
+
+        return true;
     }
 
     public function scopeOutstanding($query)

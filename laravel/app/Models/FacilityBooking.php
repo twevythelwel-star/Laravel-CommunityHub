@@ -66,9 +66,14 @@ class FacilityBooking extends Model
         return $this->belongsTo(Invoice::class);
     }
 
-    public function feeFormatted(): string
+    /** The fee in the currency it was invoiced in, or "Free". */
+    public function feeFormatted(?string $currency = null): string
     {
-        return $this->fee_minor > 0 ? '$'.number_format($this->fee_minor / 100, 2) : 'Free';
+        if ($this->fee_minor <= 0) {
+            return 'Free';
+        }
+
+        return BillingSetting::format($this->fee_minor, $this->invoice?->currency ?? $currency ?? BillingSetting::currencyCode());
     }
 
     public function scopeConfirmed(Builder $query): Builder
@@ -99,7 +104,13 @@ class FacilityBooking extends Model
 
     public function slotLabel(): string
     {
-        [$starts, $ends] = self::SLOTS[$this->slot] ?? ['?', '?'];
+        return self::labelForSlot($this->slot);
+    }
+
+    /** A slot's hours, e.g. "16:00–20:00". */
+    public static function labelForSlot(string $slot): string
+    {
+        [$starts, $ends] = self::SLOTS[$slot] ?? ['?', '?'];
 
         return "{$starts}–{$ends}";
     }

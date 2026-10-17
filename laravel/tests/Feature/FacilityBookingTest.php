@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Actions\Billing\QueueDuePaymentRemindersAction;
 use App\Enums\UserRole;
 use App\Models\Community;
 use App\Models\FacilityBooking;
 use App\Models\InAppNotification;
 use App\Models\Invoice;
 use App\Models\Landmark;
+use App\Models\Property;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -140,6 +142,10 @@ class FacilityBookingTest extends TestCase
     public function test_booking_a_facility_with_a_fee_creates_an_invoice(): void
     {
         $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $home = Property::create([
+            'community_id' => $this->pool->community_id, 'owner_user_id' => $resident->id, 'property_code' => 'P-777',
+            'street_address' => 'Hibiscus Avenue', 'lot_number' => 'L-7', 'property_type' => 'Single Family', 'status' => 'Occupied',
+        ]);
         $clubhouse = Landmark::create([
             'community_id' => $this->pool->community_id,
             'name' => 'Grand Clubhouse',
@@ -148,7 +154,7 @@ class FacilityBookingTest extends TestCase
             'lng' => -76.8,
             'bookable' => true,
             'capacity' => 100,
-            'fee_minor' => 7500, // $75.00
+            'fee_minor' => 7500,
         ]);
 
         $response = $this->actingAs($resident)->postJson('/dashboard/facility-bookings', [
@@ -158,16 +164,22 @@ class FacilityBookingTest extends TestCase
             'guests' => 30,
         ])->assertCreated()
             ->assertJsonPath('fee_minor', 7500)
-            ->assertJsonPath('fee_formatted', '$75.00');
+            ->assertJsonPath('fee_formatted', '$75.00 JMD');
 
         $booking = FacilityBooking::where('landmark_id', $clubhouse->id)->sole();
         $this->assertSame(7500, $booking->fee_minor);
         $this->assertNotNull($booking->invoice_id);
 
+        // Raised through billing: the community's currency, the resident's property, the usual reference.
         $invoice = Invoice::find($booking->invoice_id);
         $this->assertSame(7500, $invoice->amount_minor);
         $this->assertSame('Unpaid', $invoice->status);
+        $this->assertSame('JMD', $invoice->currency);
+        $this->assertSame($home->id, $invoice->property_id);
+        $this->assertMatchesRegularExpression('/^INV-\d{6}-P-777-[0-9A-F]{4}$/', $invoice->reference);
+        $this->assertSame($booking->booked_on->toDateString(), $invoice->due_on->toDateString());
         $this->assertSame($response->json('invoice_reference'), $invoice->reference);
+        $this->assertSame(7500, $resident->invoices()->outstanding()->sum('amount_minor'), 'it is owed like any other invoice');
 
         $item = $invoice->items()->sole();
         $this->assertSame('facility_booking', $item->category);
@@ -205,6 +217,25 @@ class FacilityBookingTest extends TestCase
         $this->assertSame('cancelled', $booking->fresh()->status);
         $this->assertSame('Cancelled', $invoice->fresh()->status);
         $this->assertSame('Cancelled', $invoice->items()->sole()->status);
+
+        // No longer owed, so never chased by the payment reminders.
+        $this->assertSame(0, $resident->invoices()->outstanding()->count());
+        $this->travel(10)->days();
+        $this->assertFalse(app(QueueDuePaymentRemindersAction::class)->due()->whereKey($invoice->id)->exists());
+    }
+
+    public function test_a_fee_already_partly_paid_is_left_for_a_refund_when_the_booking_is_cancelled(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $this->pool->update(['fee_minor' => 5000]);
+        $this->book($resident)->assertCreated();
+        $booking = FacilityBooking::sole();
+        $booking->invoice->update(['status' => 'Partially Paid']);
+
+        $this->actingAs($resident)->postJson("/dashboard/facility-bookings/{$booking->id}/cancel")->assertOk();
+
+        $this->assertSame('cancelled', $booking->fresh()->status);
+        $this->assertSame('Partially Paid', $booking->invoice->fresh()->status);
     }
 
     public function test_scheduled_command_reminds_residents_24_hours_before_booking(): void

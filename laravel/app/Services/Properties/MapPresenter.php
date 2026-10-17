@@ -2,6 +2,7 @@
 
 namespace App\Services\Properties;
 
+use App\Models\BillingSetting;
 use App\Models\BoundaryAuditLog;
 use App\Models\BoundaryConfig;
 use App\Models\Community;
@@ -30,6 +31,7 @@ class MapPresenter
         $community = Community::default();
         $published = $community->publishedBoundary();
         $polygon = $published?->published_coordinates ?? [];
+        $currency = BillingSetting::currencyCode();
 
         return [
             'boundary' => [
@@ -50,7 +52,7 @@ class MapPresenter
                 'bookable' => $l->bookable,
                 'guestLimit' => $l->guestLimit(),
                 'feeMinor' => $l->fee_minor,
-                'feeFormatted' => $l->feeFormatted(),
+                'feeFormatted' => $l->feeFormatted($currency),
             ]),
             'community' => [
                 'name' => $community->name,
