@@ -110,6 +110,12 @@ Schedule::command('facilities:send-booking-reminders')
     ->onOneServer()
     ->name('facilities:send-booking-reminders');
 
+Schedule::command('calendar:send-event-reminders')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('calendar:send-event-reminders');
+
 /*
  | Local seeding convenience only.
  |

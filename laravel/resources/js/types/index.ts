@@ -79,13 +79,26 @@ export type Warning = {
   userStatus: 'confirmed' | 'denied' | null;
 };
 
+export type CommunityEventType =
+  | 'event'
+  | 'public_holiday'
+  | 'office_closure'
+  | 'meeting'
+  | 'maintenance_window'
+  | 'scheduled_notice';
+
 export type CommunityEvent = {
   id: string;
   title: string;
   description: string;
+  eventType?: CommunityEventType;
+  eventTypeLabel?: string;
+  location?: string | null;
+  isAllDay?: boolean;
   startDate: Date;
   endDate?: Date;
   imageUrl?: string;
+  changeSummary?: string | null;
 };
 
 export type CommunityUpdate = {

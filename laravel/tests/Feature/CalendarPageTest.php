@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\UserRole;
 use App\Models\CommunityEvent;
+use App\Models\InAppNotification;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -24,6 +25,8 @@ class CalendarPageTest extends TestCase
         $this->actingAs($admin)->post('/dashboard/calendar', [
             'title' => 'Community Pool Party',
             'description' => 'Bring the whole family to the clubhouse pool.',
+            'event_type' => 'event',
+            'location' => 'Clubhouse Pool',
             'start_date' => '2026-10-03T14:00:00.000Z',
             'end_date' => '2026-10-03T18:00:00.000Z',
             'image_url' => null,
@@ -31,6 +34,8 @@ class CalendarPageTest extends TestCase
 
         $event = CommunityEvent::sole();
         $this->assertSame('Community Pool Party', $event->title);
+        $this->assertSame('event', $event->event_type);
+        $this->assertSame('Clubhouse Pool', $event->location);
         $this->assertSame($admin->id, $event->created_by);
 
         $this->actingAs($admin)->get('/dashboard/calendar')
@@ -38,7 +43,36 @@ class CalendarPageTest extends TestCase
                 ->component('Dashboard/Calendar')
                 ->has('events', 1)
                 ->where('events.0.title', 'Community Pool Party')
+                ->where('events.0.eventType', 'event')
+                ->where('events.0.location', 'Clubhouse Pool')
             );
+    }
+
+    public function test_admin_can_create_holidays_office_closures_and_maintenance_windows(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+
+        $this->actingAs($admin)->post('/dashboard/calendar', [
+            'title' => 'National Heroes Day',
+            'description' => 'Public holiday observances.',
+            'event_type' => 'public_holiday',
+            'location' => null,
+            'is_all_day' => true,
+            'start_date' => '2026-10-19T00:00:00.000Z',
+        ])->assertSessionHas('success', 'Event created.');
+
+        $this->actingAs($admin)->post('/dashboard/calendar', [
+            'title' => 'Main Gate Sensor Maintenance Window',
+            'description' => 'Contractors servicing the north loop sensors.',
+            'event_type' => 'maintenance_window',
+            'location' => 'North Gate',
+            'start_date' => '2026-10-21T08:00:00.000Z',
+            'end_date' => '2026-10-21T12:00:00.000Z',
+        ])->assertSessionHas('success', 'Event created.');
+
+        $this->assertSame(2, CommunityEvent::count());
+        $this->assertTrue(CommunityEvent::where('event_type', 'public_holiday')->exists());
+        $this->assertTrue(CommunityEvent::where('event_type', 'maintenance_window')->exists());
     }
 
     public function test_entry_windows_come_from_configuration(): void
@@ -87,25 +121,119 @@ class CalendarPageTest extends TestCase
         $this->assertDatabaseCount('community_events', 0);
     }
 
-    public function test_an_admin_can_update_an_event(): void
+    public function test_updating_an_event_schedule_notifies_residents_of_change(): void
     {
         $admin = User::factory()->role(UserRole::Admin)->create();
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
         $event = CommunityEvent::create([
-            'title' => 'Board Meeting',
-            'description' => 'Quarterly meeting of the estate board.',
-            'start_date' => '2026-10-15 18:00:00',
+            'title' => 'Annual General Meeting',
+            'description' => 'Annual meeting of all homeowners.',
+            'event_type' => 'meeting',
+            'location' => 'Main Hall',
+            'start_date' => '2026-10-25 18:00:00',
             'created_by' => $admin->id,
         ]);
 
         $this->actingAs($admin)->patch("/dashboard/calendar/{$event->id}", [
-            'title' => 'Board Meeting (moved)',
-            'description' => 'Quarterly meeting of the estate board.',
-            'start_date' => '2026-10-16T18:00:00.000Z',
+            'title' => 'Annual General Meeting',
+            'description' => 'Annual meeting of all homeowners.',
+            'event_type' => 'meeting',
+            'location' => 'Virtual / Zoom Link in Notes',
+            'change_summary' => 'Moved to online Zoom conference due to weather.',
+            'start_date' => '2026-10-25T19:00:00.000Z',
             'end_date' => null,
-            'image_url' => null,
         ])->assertSessionHas('success', 'Event updated.');
 
-        $this->assertSame('Board Meeting (moved)', $event->fresh()->title);
+        $this->assertSame('Virtual / Zoom Link in Notes', $event->fresh()->location);
+
+        // Resident received notification of the schedule update
+        $notification = InAppNotification::where('user_id', $resident->id)->latest('id')->first();
+        $this->assertNotNull($notification);
+        $this->assertStringContainsString('Annual General Meeting', $notification->title);
+        $this->assertStringContainsString('Moved to online Zoom conference', $notification->body);
+    }
+
+    public function test_updating_description_only_does_not_spam_schedule_change_alerts(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        $event = CommunityEvent::create([
+            'title' => 'Yoga in the Park',
+            'description' => 'Morning yoga session.',
+            'event_type' => 'event',
+            'start_date' => '2026-10-25 08:00:00',
+            'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)->patch("/dashboard/calendar/{$event->id}", [
+            'title' => 'Yoga in the Park',
+            'description' => 'Morning yoga session. Please bring your own mat.',
+            'event_type' => 'event',
+            'start_date' => '2026-10-25 08:00:00',
+        ])->assertSessionHas('success', 'Event updated.');
+
+        $this->assertSame(0, InAppNotification::where('user_id', $resident->id)->count());
+    }
+
+    public function test_scheduled_command_reminds_residents_of_events_in_next_24_hours(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+
+        // 1. Event in 12 hours - should be reminded
+        $soonEvent = CommunityEvent::create([
+            'title' => 'Clubhouse Film Screening',
+            'description' => 'Family movie night.',
+            'event_type' => 'event',
+            'location' => 'Clubhouse',
+            'start_date' => now()->addHours(12),
+            'created_by' => $admin->id,
+        ]);
+
+        // 2. Event in 3 days - should not be reminded yet
+        CommunityEvent::create([
+            'title' => 'Tennis Tournament',
+            'description' => 'Annual doubles championship.',
+            'event_type' => 'event',
+            'start_date' => now()->addDays(3),
+            'created_by' => $admin->id,
+        ]);
+
+        // 3. Event already reminded - should not be reminded again
+        CommunityEvent::create([
+            'title' => 'Early Bird Meeting',
+            'description' => 'Morning check-in.',
+            'event_type' => 'meeting',
+            'start_date' => now()->addHours(6),
+            'reminded_at' => now()->subHour(),
+            'created_by' => $admin->id,
+        ]);
+
+        // Dry run
+        $this->artisan('calendar:send-event-reminders', ['--dry-run' => true])
+            ->expectsOutputToContain('1 event reminder(s) would be queued.')
+            ->assertSuccessful();
+
+        $this->assertNull($soonEvent->fresh()->reminded_at);
+
+        // Real command execution
+        $this->artisan('calendar:send-event-reminders')
+            ->expectsOutputToContain('1 calendar event reminder(s) queued.')
+            ->assertSuccessful();
+
+        $this->assertNotNull($soonEvent->fresh()->reminded_at);
+
+        // Verify notification delivered to resident
+        $notification = InAppNotification::where('user_id', $resident->id)->sole();
+        $this->assertStringContainsString('Clubhouse Film Screening', $notification->title);
+        $this->assertStringContainsString('Reminder:', $notification->body);
+
+        // Running again sends 0
+        $this->artisan('calendar:send-event-reminders')
+            ->expectsOutputToContain('0 calendar event reminder(s) queued.')
+            ->assertSuccessful();
     }
 
     public function test_a_homeowner_cannot_create_an_event(): void

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Dashboard;
 
+use App\Actions\Calendar\UpdateCalendarEventAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Calendar\StoreCalendarEventRequest;
 use App\Http\Requests\Calendar\UpdateCalendarEventRequest;
@@ -30,11 +31,9 @@ class CalendarController extends Controller
         return back()->with('success', 'Event created.');
     }
 
-    public function update(UpdateCalendarEventRequest $request, CommunityEvent $communityEvent): RedirectResponse
+    public function update(UpdateCalendarEventRequest $request, CommunityEvent $communityEvent, UpdateCalendarEventAction $update): RedirectResponse
     {
-        $validated = $request->validated();
-
-        $communityEvent->update($validated);
+        $update->execute($communityEvent, $request->validated(), $request->user());
 
         return back()->with('success', 'Event updated.');
     }

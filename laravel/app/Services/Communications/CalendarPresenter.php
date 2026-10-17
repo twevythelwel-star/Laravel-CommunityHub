@@ -8,7 +8,8 @@ use App\Models\Visitor;
 use Illuminate\Support\Collection;
 
 /**
- * The props of the community calendar (Dashboard/Calendar): estate events,
+ * The props of the community calendar (Dashboard/Calendar): estate events and items
+ * (public holidays, office closures, meetings, maintenance windows, community events),
  * the entry windows from config/visitor_pass.php, the viewer's own visitors
  * from the past week on, and a temporary homeowner's lease dates.
  */
@@ -24,10 +25,16 @@ class CalendarPresenter
                 'id' => $e->id,
                 'title' => $e->title,
                 'description' => $e->description,
+                'eventType' => $e->event_type ?? CommunityEvent::TYPE_EVENT,
+                'eventTypeLabel' => $e->typeLabel(),
+                'location' => $e->location,
+                'isAllDay' => (bool) $e->is_all_day,
                 'startDate' => $e->start_date->toIso8601String(),
                 'endDate' => $e->end_date?->toIso8601String(),
                 'imageUrl' => $e->image_url,
+                'changeSummary' => $e->change_summary,
             ]),
+            'eventTypes' => CommunityEvent::TYPES,
             'entrySlots' => config('visitor_pass.entry_slots', []),
             'myVisitors' => $this->recentVisitors($user),
             'userStay' => $user->staySummary(),

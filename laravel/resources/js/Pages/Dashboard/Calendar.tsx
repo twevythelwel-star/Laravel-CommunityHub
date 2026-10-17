@@ -12,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { EventForm } from "@/components/dashboard/event-form";
 import { submit } from "@/lib/submit";
-import type { CommunityEvent } from "@/types";
+import type { CommunityEvent, CommunityEventType } from "@/types";
 import { useAuth } from "@/context/auth-context";
 import { isSameDay, format, isValid, parseISO } from "date-fns";
 import { Image } from "@/components/ui/image";
@@ -26,6 +26,13 @@ import {
   ArrowRight,
   Sparkles,
   CheckCircle2,
+  MapPin,
+  Edit3,
+  Wrench,
+  Building,
+  Flag,
+  Megaphone,
+  Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -53,21 +60,65 @@ type UserStay = {
   expired?: boolean;
 } | null;
 
+type EventProp = {
+  id: number | string;
+  title: string;
+  description: string;
+  eventType?: CommunityEventType;
+  eventTypeLabel?: string;
+  location?: string | null;
+  isAllDay?: boolean;
+  startDate: string;
+  endDate?: string | null;
+  imageUrl?: string | null;
+  changeSummary?: string | null;
+};
+
 type Props = {
-  events: {
-    id: number | string;
-    title: string;
-    description: string;
-    startDate: string;
-    endDate?: string | null;
-    imageUrl?: string | null;
-  }[];
+  events: EventProp[];
+  eventTypes?: Record<string, string>;
   entrySlots?: EntrySlot[];
   myVisitors?: VisitorSummary[];
   userStay?: UserStay;
   canManage?: boolean;
   canRegisterVisitors?: boolean;
 };
+
+function getBadgeStyle(type?: string) {
+  switch (type) {
+    case 'public_holiday':
+      return 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20';
+    case 'office_closure':
+      return 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20';
+    case 'meeting':
+      return 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20';
+    case 'maintenance_window':
+      return 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20';
+    case 'scheduled_notice':
+      return 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20';
+    case 'event':
+    default:
+      return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20';
+  }
+}
+
+function getTypeIcon(type?: string) {
+  switch (type) {
+    case 'public_holiday':
+      return <Flag className="h-3 w-3" />;
+    case 'office_closure':
+      return <Building className="h-3 w-3" />;
+    case 'meeting':
+      return <Users className="h-3 w-3" />;
+    case 'maintenance_window':
+      return <Wrench className="h-3 w-3" />;
+    case 'scheduled_notice':
+      return <Megaphone className="h-3 w-3" />;
+    case 'event':
+    default:
+      return <Sparkles className="h-3 w-3" />;
+  }
+}
 
 export default function CalendarPage({
   events: initialEvents = [],
@@ -79,6 +130,7 @@ export default function CalendarPage({
 }: Props) {
   const { user } = useAuth();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [activeTypeFilter, setActiveTypeFilter] = useState<string>('all');
   const [isFormOpen, setFormOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CommunityEvent | undefined>(undefined);
 
@@ -89,16 +141,26 @@ export default function CalendarPage({
     return initialEvents.map((e) => ({
       ...e,
       id: String(e.id),
+      eventType: e.eventType || 'event',
+      eventTypeLabel: e.eventTypeLabel || 'Community Event',
+      location: e.location || null,
+      isAllDay: !!e.isAllDay,
       startDate: parseISO(e.startDate),
       endDate: e.endDate ? parseISO(e.endDate) : undefined,
       imageUrl: e.imageUrl || undefined,
+      changeSummary: e.changeSummary || null,
     }));
   }, [initialEvents]);
 
+  const filteredEvents = useMemo(() => {
+    if (activeTypeFilter === 'all') return parsedEvents;
+    return parsedEvents.filter((e) => e.eventType === activeTypeFilter);
+  }, [parsedEvents, activeTypeFilter]);
+
   const dateEvents = useMemo(() => {
     if (!selectedDate) return [];
-    return parsedEvents.filter((event) => isSameDay(event.startDate, selectedDate));
-  }, [parsedEvents, selectedDate]);
+    return filteredEvents.filter((event) => isSameDay(event.startDate, selectedDate));
+  }, [filteredEvents, selectedDate]);
 
   const dateVisitors = useMemo(() => {
     if (!selectedDate) return [];
@@ -116,13 +178,8 @@ export default function CalendarPage({
     return sel >= start && sel <= end;
   }, [userStay, selectedDate]);
 
-  const formatEventTime = (event: { startDate: Date; endDate?: Date }) => {
-    const { startDate, endDate } = event;
-    const isAllDay =
-      startDate.getHours() === 0 &&
-      startDate.getMinutes() === 0 &&
-      (!endDate || (endDate.getHours() === 0 && endDate.getMinutes() === 0));
-
+  const formatEventTime = (event: { startDate: Date; endDate?: Date; isAllDay?: boolean }) => {
+    const { startDate, endDate, isAllDay } = event;
     if (isAllDay) return "All-day event";
 
     let timeString = "";
@@ -132,7 +189,7 @@ export default function CalendarPage({
     if (isValid(endDate) && endDate) {
       timeString += ` – ${format(endDate, "h:mm a")}`;
     }
-    return timeString;
+    return timeString || "All day";
   };
 
   const handleRegisterVisitorForDate = () => {
@@ -140,9 +197,14 @@ export default function CalendarPage({
     router.get(`/dashboard/visitors?date=${formatted}`);
   };
 
+  const handleEditEvent = (event: CommunityEvent) => {
+    setSelectedEvent(event);
+    setFormOpen(true);
+  };
+
   return (
     <DashboardLayout>
-      <Head title="Calendar & Entry Slots" />
+      <Head title="Calendar & Community Schedule" />
 
       <div className="space-y-6">
         {/* Header */}
@@ -153,7 +215,7 @@ export default function CalendarPage({
               Community &amp; Entry Calendar
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              View available gate entry slots, community events, and scheduled property visits.
+              Holidays, office closures, meetings, maintenance windows, community events, and entry slots.
             </p>
           </div>
 
@@ -179,24 +241,24 @@ export default function CalendarPage({
                   setFormOpen(true);
                 }}
               >
-                <Sparkles className="h-3.5 w-3.5" />
-                Add Event
+                <PlusCircle className="h-4 w-4" />
+                Add Calendar Entry
               </Button>
             )}
           </div>
         </div>
 
-        {/* Temporary Homeowner Stay Notice */}
+        {/* Temporary Homeowner Stay Alert */}
         {userStay && (
           <div
-            className={`rounded-xl border p-4 flex items-start gap-3 ${
+            className={`p-4 rounded-xl border flex items-start gap-3 transition-colors ${
               isWithinStay
-                ? "border-blue-500/20 bg-blue-500/5 text-foreground"
-                : "border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+                ? "bg-blue-50/50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/50"
+                : "bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50"
             }`}
           >
             <ShieldAlert
-              className={`h-5 w-5 mt-0.5 shrink-0 ${
+              className={`h-5 w-5 shrink-0 mt-0.5 ${
                 isWithinStay ? "text-blue-600 dark:text-blue-400" : "text-amber-600 dark:text-amber-400"
               }`}
             />
@@ -221,6 +283,66 @@ export default function CalendarPage({
           </div>
         )}
 
+        {/* Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'all' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('all')}
+            className="text-xs h-8 px-3"
+          >
+            All Entries
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'event' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('event')}
+            className="text-xs h-8 px-3 gap-1.5"
+          >
+            <Sparkles className="h-3 w-3" /> Events
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'public_holiday' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('public_holiday')}
+            className="text-xs h-8 px-3 gap-1.5"
+          >
+            <Flag className="h-3 w-3 text-purple-500" /> Holidays
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'office_closure' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('office_closure')}
+            className="text-xs h-8 px-3 gap-1.5"
+          >
+            <Building className="h-3 w-3 text-amber-500" /> Office Closures
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'meeting' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('meeting')}
+            className="text-xs h-8 px-3 gap-1.5"
+          >
+            <Users className="h-3 w-3 text-blue-500" /> Meetings
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'maintenance_window' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('maintenance_window')}
+            className="text-xs h-8 px-3 gap-1.5"
+          >
+            <Wrench className="h-3 w-3 text-rose-500" /> Maintenance
+          </Button>
+          <Button
+            size="sm"
+            variant={activeTypeFilter === 'scheduled_notice' ? 'default' : 'outline'}
+            onClick={() => setActiveTypeFilter('scheduled_notice')}
+            className="text-xs h-8 px-3 gap-1.5"
+          >
+            <Megaphone className="h-3 w-3 text-sky-500" /> Notices
+          </Button>
+        </div>
+
         {/* Main Grid: Calendar Picker + Details */}
         <div className="grid lg:grid-cols-12 gap-6">
           {/* Calendar Picker Card */}
@@ -228,7 +350,7 @@ export default function CalendarPage({
             <CardHeader className="pb-3">
               <CardTitle className="text-base font-semibold">Select Date</CardTitle>
               <CardDescription>
-                Choose a date to view gate clearance availability and events.
+                Choose a date to view gate clearance availability, holidays, and events.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex justify-center pb-6">
@@ -243,6 +365,100 @@ export default function CalendarPage({
 
           {/* Right Column: Entry Slots & Day Overview */}
           <div className="lg:col-span-7 space-y-6">
+            {/* Community Events on this Day */}
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-primary" />
+                    Scheduled on {selectedDate ? format(selectedDate, "MMMM d, yyyy") : ""}
+                  </CardTitle>
+                  <CardDescription>
+                    Events, closures, and maintenance windows. Reminders sent 24h in advance.
+                  </CardDescription>
+                </div>
+                {canManage && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs gap-1"
+                    onClick={() => {
+                      setSelectedEvent(undefined);
+                      setFormOpen(true);
+                    }}
+                  >
+                    <PlusCircle className="h-3.5 w-3.5" />
+                    Add
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {dateEvents.length === 0 ? (
+                  <p className="text-xs text-muted-foreground py-4 text-center border rounded-lg border-dashed">
+                    No community events or notices scheduled for this day.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {dateEvents.map((event) => (
+                      <div key={event.id} className="p-3.5 rounded-xl border bg-card space-y-2 shadow-xs hover:border-primary/40 transition-colors">
+                        {event.imageUrl && (
+                          <div className="relative h-28 w-full rounded overflow-hidden mb-2">
+                            <Image
+                              src={event.imageUrl}
+                              alt={event.title}
+                              layout="fill"
+                              objectFit="cover"
+                            />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-semibold text-sm text-foreground">{event.title}</h4>
+                              <Badge variant="outline" className={`text-[10px] flex items-center gap-1 font-medium ${getBadgeStyle(event.eventType)}`}>
+                                {getTypeIcon(event.eventType)}
+                                {event.eventTypeLabel}
+                              </Badge>
+                            </div>
+                            {event.location && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <MapPin className="h-3 w-3 text-muted-foreground" />
+                                {event.location}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+                              <Clock className="h-3 w-3" />
+                              {formatEventTime(event)}
+                            </span>
+                            {canManage && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                onClick={() => handleEditEvent(event as any)}
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground leading-relaxed">{event.description}</p>
+
+                        {event.changeSummary && (
+                          <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-[11px] text-amber-800 dark:text-amber-300">
+                            <strong>Schedule Update:</strong> {event.changeSummary}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Entry Slots Card */}
             <Card className="shadow-sm">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -252,7 +468,7 @@ export default function CalendarPage({
                     Available Entry Clearance Slots
                   </CardTitle>
                   <CardDescription>
-                    {selectedDate ? format(selectedDate, "EEEE, MMMM d, yyyy") : "Select a day"}
+                    Gate clearance availability for {selectedDate ? format(selectedDate, "EEEE, MMMM d, yyyy") : "Select a day"}
                   </CardDescription>
                 </div>
                 {canRegisterVisitors && isWithinStay && (
@@ -332,48 +548,6 @@ export default function CalendarPage({
                 )}
               </CardContent>
             </Card>
-
-            {/* Community Events on this Day */}
-            <Card className="shadow-sm">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Community Events</CardTitle>
-                <CardDescription>
-                  Events hosted in the community on {selectedDate ? format(selectedDate, "MMMM d, yyyy") : ""}.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {dateEvents.length === 0 ? (
-                  <p className="text-xs text-muted-foreground py-3 text-center">
-                    No community events scheduled for this day.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {dateEvents.map((event) => (
-                      <div key={event.id} className="p-3 rounded-lg border bg-card space-y-1.5">
-                        {event.imageUrl && (
-                          <div className="relative h-28 w-full rounded overflow-hidden mb-2">
-                            <Image
-                              src={event.imageUrl}
-                              alt={event.title}
-                              layout="fill"
-                              objectFit="cover"
-                            />
-                          </div>
-                        )}
-                        <div className="flex items-start justify-between">
-                          <h4 className="font-semibold text-sm">{event.title}</h4>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatEventTime(event)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{event.description}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>
@@ -386,6 +560,9 @@ export default function CalendarPage({
             const payload = {
               title: data.title,
               description: data.description,
+              event_type: data.eventType || 'event',
+              location: data.location || null,
+              change_summary: data.changeSummary || null,
               start_date: data.startDate.toISOString(),
               end_date: data.endDate ? data.endDate.toISOString() : null,
               image_url: data.imageUrl ?? null,
