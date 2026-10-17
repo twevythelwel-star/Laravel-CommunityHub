@@ -196,6 +196,7 @@ interface NavSection {
           href: '/dashboard/safety',
           icon: ShieldAlert,
           subItems: [
+            { href: '/dashboard/incidents', label: 'Incident Command & Log', icon: ShieldAlert },
             { href: '/dashboard/safety', label: 'Distress & Incidents', icon: ShieldAlert },
             { href: '/dashboard/silent-assistance', label: 'Silent Assistance', icon: LifeBuoy },
             { href: '/dashboard/warnings', label: 'Safety Advisories', icon: Siren },
@@ -250,6 +251,7 @@ interface NavSection {
           href: '/dashboard/safety',
           icon: LifeBuoy,
           subItems: [
+            { href: '/dashboard/incidents', label: 'Incidents & Advisories', icon: Siren },
             { href: '/dashboard/safety', label: 'Safety Hub', icon: LifeBuoy },
             { href: '/dashboard/safety/credential', label: 'Credential Assistance', icon: LifeBuoy },
             { href: '/dashboard/warnings', label: 'Safety Alerts', icon: Siren },
@@ -311,6 +313,7 @@ interface NavSection {
           href: '/dashboard/safety',
           icon: LifeBuoy,
           subItems: [
+            { href: '/dashboard/incidents', label: 'Incident Command & All-Clear', icon: ShieldAlert },
             { href: '/dashboard/safety', label: 'Emergency Command Hub', icon: LifeBuoy },
             { href: '/dashboard/silent-assistance', label: 'Silent Assistance Triage', icon: ShieldAlert },
             { href: '/dashboard/warnings', label: 'Safety Alerts & Broadcasts', icon: Siren },
@@ -405,6 +408,7 @@ interface NavSection {
         href: '/dashboard/safety',
         icon: LifeBuoy,
         subItems: [
+          { href: '/dashboard/incidents', label: 'Incidents & All-Clear', icon: ShieldAlert },
           { href: '/dashboard/safety', label: 'Safety & Contacts', icon: LifeBuoy },
           { href: '/dashboard/silent-assistance', label: 'Silent Assistance', icon: ShieldAlert },
           { href: '/dashboard/warnings', label: 'Safety Alerts', icon: Siren },

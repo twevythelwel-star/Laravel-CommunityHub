@@ -109,6 +109,7 @@ class AuthServiceProvider extends ServiceProvider
         Gate::policy(BoundaryConfig::class, BoundaryPolicy::class);
         Gate::policy(OwnershipEntity::class, OwnershipEntityPolicy::class);
         Gate::policy(Notification::class, AnnouncementPolicy::class);
+        Gate::policy(\App\Models\CommunityIncident::class, \App\Policies\CommunityIncidentPolicy::class);
 
         // System Admin passes every gate unless a gate explicitly denies.
         Gate::before(function (User $user, string $ability) {

@@ -59,6 +59,7 @@ class SidebarNavigationTest extends TestCase
         '/dashboard/notifications' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'],
         '/dashboard/updates' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'],
         '/dashboard/warnings' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'],
+        '/dashboard/incidents' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security', 'Staff'],
         '/dashboard/block-list' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner', 'Security'],
         '/dashboard/access-log' => ['System Admin', 'Admin', 'Security'],
         '/dashboard/billing' => ['System Admin', 'Admin', 'Homeowner', 'Temporary Homeowner'],

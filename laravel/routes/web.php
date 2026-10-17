@@ -24,6 +24,7 @@ use App\Http\Controllers\Dashboard\GateSensorEventController;
 use App\Http\Controllers\Dashboard\GuidelinesController;
 use App\Http\Controllers\Dashboard\HouseholdController;
 use App\Http\Controllers\Dashboard\InAppNotificationController;
+use App\Http\Controllers\Dashboard\IncidentController;
 use App\Http\Controllers\Dashboard\MaintenanceController;
 use App\Http\Controllers\Dashboard\MapController;
 use App\Http\Controllers\Dashboard\NotificationController;
@@ -440,6 +441,22 @@ Route::middleware(['auth', 'active'])->prefix('dashboard')->name('dashboard.')->
     Route::delete('/warnings/{warning}', [WarningController::class, 'destroy'])
         ->middleware('can:manageSecurity')
         ->name('warnings.destroy');
+
+    // ── Incident and Emergency Communication (Module 4) ──
+    Route::get('/incidents', [IncidentController::class, 'index'])->name('incidents');
+    Route::post('/incidents', [IncidentController::class, 'store'])
+        ->middleware('can:manageSecurity')
+        ->name('incidents.store');
+    Route::get('/incidents/{incident}', [IncidentController::class, 'show'])->name('incidents.show');
+    Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate'])
+        ->middleware('can:manageSecurity')
+        ->name('incidents.updates.store');
+    Route::post('/incidents/{incident}/all-clear', [IncidentController::class, 'issueAllClear'])
+        ->middleware('can:manageSecurity')
+        ->name('incidents.all-clear');
+    Route::post('/incidents/{incident}/close', [IncidentController::class, 'close'])
+        ->middleware('can:manageSecurity')
+        ->name('incidents.close');
 
     // ── Map & boundary ──
     Route::middleware('can:accessEstateInformation')->group(function () {
