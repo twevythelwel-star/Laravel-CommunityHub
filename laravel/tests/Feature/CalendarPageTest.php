@@ -248,4 +248,54 @@ class CalendarPageTest extends TestCase
 
         $this->assertDatabaseCount('community_events', 0);
     }
+
+    public function test_reminders_reach_the_whole_community_as_an_announcement_would(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+        $tenant = User::factory()->role(UserRole::TemporaryHomeowner)->create();
+        $owner = User::factory()->role(UserRole::Homeowner)->create();
+        $leftTheCommunity = User::factory()->role(UserRole::Homeowner)->inactive()->create();
+        CommunityEvent::create([
+            'title' => 'Pool Party', 'description' => 'Bring towels.', 'start_date' => now()->addHours(3), 'created_by' => $admin->id,
+        ]);
+
+        $this->artisan('calendar:send-event-reminders')->assertSuccessful();
+
+        $this->assertSame(1, InAppNotification::where('user_id', $tenant->id)->count(), 'tenants are told too');
+        $this->assertSame(1, InAppNotification::where('user_id', $owner->id)->count());
+        $this->assertSame(0, InAppNotification::where('user_id', $leftTheCommunity->id)->count(), 'deactivated accounts are not');
+    }
+
+    public function test_each_event_is_reminded_within_its_own_window(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+        $make = fn (string $title, int $inHours, ?int $window = null) => CommunityEvent::create(array_filter([
+            'title' => $title, 'description' => 'x', 'start_date' => now()->addHours($inHours),
+            'remind_before_hours' => $window, 'created_by' => $admin->id,
+        ], fn ($v) => $v !== null));
+
+        $make('Default window, 30h away', 30);
+        $longWindow = $make('72h window, 48h away', 48, 72);
+        $shortWindow = $make('2h window, 5h away', 5, 2);
+
+        $this->artisan('calendar:send-event-reminders')->expectsOutputToContain('1 calendar event reminder(s) queued.');
+
+        $this->assertNotNull($longWindow->fresh()->reminded_at);
+        $this->assertNull($shortWindow->fresh()->reminded_at);
+    }
+
+    public function test_a_rescheduled_event_is_reminded_again_before_its_new_time(): void
+    {
+        $admin = User::factory()->role(UserRole::Admin)->create();
+        $event = CommunityEvent::create([
+            'title' => 'AGM', 'description' => 'Annual meeting.', 'start_date' => now()->addHours(10),
+            'reminded_at' => now()->subHour(), 'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)->patch("/dashboard/calendar/{$event->id}", [
+            'start_date' => now()->addDays(4)->toIso8601String(),
+        ])->assertSessionHas('success', 'Event updated.');
+
+        $this->assertNull($event->fresh()->reminded_at, 'the old reminder no longer counts');
+    }
 }

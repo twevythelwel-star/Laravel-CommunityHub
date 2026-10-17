@@ -2,39 +2,41 @@
 
 namespace App\Actions\Calendar;
 
+use App\Models\Community;
 use App\Models\CommunityEvent;
-use App\Models\User;
 use App\Notifications\Calendar\CommunityEventReminder;
-use Illuminate\Database\Eloquent\Builder;
+use App\Services\Communications\AudienceResolutionService;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Notification;
 
 /**
- * Queues automated reminders for upcoming community events and calendar entries
- * taking place within the next 24 hours that have not yet been reminded.
+ * Reminds the community of each upcoming event once, as soon as it falls within the event's
+ * own reminder window (remind_before_hours, 24 by default). Run hourly by the scheduler.
  */
 class QueueEventRemindersAction
 {
+    public function __construct(private readonly AudienceResolutionService $audience) {}
+
     /** @return int how many events were reminded */
     public function execute(): int
     {
-        $eventsReminded = 0;
+        $due = $this->due();
 
-        $this->due()->each(function (CommunityEvent $event) use (&$eventsReminded) {
-            User::whereIn('role', ['Homeowner', 'Renter'])->chunk(100, function ($residents) use ($event) {
-                foreach ($residents as $resident) {
-                    $resident->notify(new CommunityEventReminder($event));
-                }
-            });
+        foreach ($due as $event) {
+            $this->audience->resolveQuery(Community::default(), 'entire_community')
+                ->chunkById(200, fn ($people) => Notification::send($people, new CommunityEventReminder($event)));
 
             $event->update(['reminded_at' => now()]);
-            $eventsReminded++;
-        });
+        }
 
-        return $eventsReminded;
+        return $due->count();
     }
 
-    /** @return Builder<CommunityEvent> */
-    public function due(): Builder
+    /** @return Collection<int, CommunityEvent> */
+    public function due(): Collection
     {
-        return CommunityEvent::query()->dueForReminder();
+        return CommunityEvent::query()->dueForReminder()->get()
+            ->filter(fn (CommunityEvent $event) => $event->isWithinReminderWindow())
+            ->values();
     }
 }

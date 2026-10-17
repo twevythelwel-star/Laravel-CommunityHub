@@ -21,7 +21,7 @@ class UpdateCalendarEventRequest extends FormRequest
             'event_type' => ['sometimes', 'string', Rule::in(array_keys(CommunityEvent::TYPES))],
             'location' => ['nullable', 'string', 'max:255'],
             'is_all_day' => ['sometimes', 'boolean'],
-            'remind_before_hours' => ['sometimes', 'integer', 'min:1', 'max:168'],
+            'remind_before_hours' => ['sometimes', 'integer', 'min:1', 'max:'.CommunityEvent::MAX_REMIND_BEFORE_HOURS],
             'change_summary' => ['nullable', 'string', 'max:500'],
             'start_date' => ['sometimes', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],

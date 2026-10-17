@@ -26,7 +26,7 @@ class SendCalendarEventRemindersCommand extends Command
     public function handle(QueueEventRemindersAction $action): int
     {
         if ($this->option('dry-run')) {
-            $due = $action->due()->get();
+            $due = $action->due();
             $this->table(['Title', 'Type', 'Schedule', 'Location'], $due->map(fn (CommunityEvent $e) => [
                 $e->title,
                 $e->typeLabel(),
