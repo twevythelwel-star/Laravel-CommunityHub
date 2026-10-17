@@ -2,17 +2,19 @@
 
 namespace App\Actions\Incidents;
 
-use App\Actions\Communications\BroadcastEmergencyAction;
 use App\Models\CommunityIncident;
 use App\Models\CommunityIncidentUpdate;
 use App\Models\User;
+use App\Services\Incidents\IncidentBroadcaster;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Security logs an incident with its first timeline entry and, if asked, announces it to the
+ * community. The announcement goes out only once the incident is saved.
+ */
 class ReportCommunityIncidentAction
 {
-    public function __construct(
-        private readonly ?BroadcastEmergencyAction $broadcaster = null
-    ) {}
+    public function __construct(private readonly IncidentBroadcaster $broadcaster) {}
 
     /**
      * @param array{
@@ -28,12 +30,11 @@ class ReportCommunityIncidentAction
      */
     public function execute(User $reporter, array $data): CommunityIncident
     {
-        return DB::transaction(function () use ($reporter, $data) {
-            $incidentNumber = CommunityIncident::generateIncidentNumber();
-            $shouldBroadcast = (bool) ($data['broadcast_urgent_notice'] ?? false);
+        $shouldBroadcast = (bool) ($data['broadcast_urgent_notice'] ?? false);
 
+        $incident = DB::transaction(function () use ($reporter, $data, $shouldBroadcast) {
             $incident = CommunityIncident::create([
-                'incident_number' => $incidentNumber,
+                'incident_number' => CommunityIncident::generateIncidentNumber(),
                 'title' => $data['title'],
                 'category' => $data['category'] ?? CommunityIncident::CATEGORY_GENERAL,
                 'severity' => $data['severity'] ?? CommunityIncident::SEVERITY_MEDIUM,
@@ -45,40 +46,31 @@ class ReportCommunityIncidentAction
                 'broadcast_sent' => $shouldBroadcast,
             ]);
 
-            // Initial timeline update
             CommunityIncidentUpdate::create([
                 'incident_id' => $incident->id,
                 'user_id' => $reporter->id,
-                'message' => 'Incident reported: ' . $data['summary'],
+                'message' => 'Incident reported: '.$data['summary'],
                 'status_after' => CommunityIncident::STATUS_REPORTED,
                 'is_internal' => false,
                 'broadcast_sent' => $shouldBroadcast,
             ]);
 
-            // If urgent notice requested, dispatch broadcast across channels
-            if ($shouldBroadcast && $this->broadcaster !== null) {
-                $severity = in_array($incident->severity, [CommunityIncident::SEVERITY_HIGH, CommunityIncident::SEVERITY_CRITICAL], true)
-                    ? 'emergency'
-                    : 'advisory';
-
-                $channels = $data['broadcast_channels'] ?? ['in_app', 'push', 'sms', 'whatsapp', 'email'];
-
-                $this->broadcaster->execute($reporter, [
-                    'title' => "[{$incident->incident_number}] {$incident->title}",
-                    'content' => "{$incident->summary} Location: {$incident->location}.",
-                    'severity' => $severity,
-                    'audience' => 'all',
-                    'send_in_app' => in_array('in_app', $channels, true),
-                    'send_push' => in_array('push', $channels, true),
-                    'send_sms' => in_array('sms', $channels, true),
-                    'send_whatsapp' => in_array('whatsapp', $channels, true),
-                    'send_email' => in_array('email', $channels, true),
-                ]);
-            }
-
-            $reporter->recordActivity("Reported community incident {$incident->incident_number}: {$incident->title}");
-
             return $incident;
         });
+
+        if ($shouldBroadcast) {
+            $urgent = in_array($incident->severity, [CommunityIncident::SEVERITY_HIGH, CommunityIncident::SEVERITY_CRITICAL], true);
+            $this->broadcaster->send(
+                $reporter,
+                "[{$incident->incident_number}] {$incident->title}",
+                "{$incident->summary} Location: {$incident->location}.",
+                $urgent ? 'emergency' : 'advisory',
+                $data['broadcast_channels'] ?? null,
+            );
+        }
+
+        $reporter->recordActivity("Reported community incident {$incident->incident_number}: {$incident->title}");
+
+        return $incident;
     }
 }

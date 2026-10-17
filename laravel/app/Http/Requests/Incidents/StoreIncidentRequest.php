@@ -10,7 +10,7 @@ class StoreIncidentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('manageSecurity') ?? false;
+        return (bool) $this->user()?->can('create', CommunityIncident::class);
     }
 
     public function rules(): array

@@ -249,4 +249,47 @@ class CommunityIncidentTest extends TestCase
         $response->assertForbidden();
         $this->assertEquals('active', $incident->fresh()->status);
     }
+
+    private function loggedIncident(User $officer): CommunityIncident
+    {
+        $this->actingAs($officer)->post('/dashboard/incidents', [
+            'title' => 'Power outage, Block C', 'category' => 'utility_outage', 'severity' => 'medium',
+            'location' => 'Block C', 'summary' => 'Transformer tripped.', 'sensitive_details' => 'Suspected tampering by a named contractor.',
+        ])->assertRedirect();
+
+        return CommunityIncident::sole();
+    }
+
+    public function test_closing_is_for_security_and_leaves_a_timeline_entry(): void
+    {
+        $officer = $this->securityOfficer();
+        $incident = $this->loggedIncident($officer);
+
+        $this->actingAs($this->resident())->post("/dashboard/incidents/{$incident->id}/close")->assertForbidden();
+        $this->assertSame(CommunityIncident::STATUS_REPORTED, $incident->fresh()->status);
+
+        $this->actingAs($officer)->post("/dashboard/incidents/{$incident->id}/close")->assertRedirect();
+
+        $this->assertSame(CommunityIncident::STATUS_CLOSED, $incident->fresh()->status);
+        $this->assertDatabaseHas('community_incident_updates', [
+            'incident_id' => $incident->id, 'user_id' => $officer->id, 'status_after' => CommunityIncident::STATUS_CLOSED,
+        ]);
+    }
+
+    public function test_one_incident_is_json_with_details_shielded_and_the_browser_goes_to_the_feed(): void
+    {
+        $officer = $this->securityOfficer();
+        $incident = $this->loggedIncident($officer);
+        $resident = $this->resident();
+
+        $this->actingAs($resident)->getJson("/dashboard/incidents/{$incident->id}")
+            ->assertOk()
+            ->assertJsonPath('title', 'Power outage, Block C')
+            ->assertJsonPath('sensitiveDetails', null);
+
+        $this->actingAs($officer)->getJson("/dashboard/incidents/{$incident->id}")
+            ->assertJsonPath('sensitiveDetails', 'Suspected tampering by a named contractor.');
+
+        $this->actingAs($resident)->get("/dashboard/incidents/{$incident->id}")->assertRedirect(route('dashboard.incidents'));
+    }
 }

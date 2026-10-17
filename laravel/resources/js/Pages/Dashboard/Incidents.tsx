@@ -715,7 +715,7 @@ export default function IncidentsPage({ incidents, stats, can, categories, sever
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
-                        <span>Reported <ClientFormattedDate date={incident.createdAt} /></span>
+                        <span>Reported <ClientFormattedDate date={incident.createdAt} formatString="MMM d, yyyy h:mm a" /></span>
                       </span>
                       <span>by {incident.reporter.name}</span>
                     </div>
@@ -739,7 +739,7 @@ export default function IncidentsPage({ incidents, stats, can, categories, sever
                             <span>OFFICIAL ALL-CLEAR DIRECTIVE</span>
                           </span>
                           <span className="text-[11px] font-normal opacity-80">
-                            Issued <ClientFormattedDate date={incident.allClearAt} /> {incident.allClearBy && `by ${incident.allClearBy}`}
+                            Issued <ClientFormattedDate date={incident.allClearAt} formatString="MMM d, yyyy h:mm a" /> {incident.allClearBy && `by ${incident.allClearBy}`}
                           </span>
                         </div>
                         <p className="text-xs font-medium leading-relaxed pl-5">
@@ -802,7 +802,7 @@ export default function IncidentsPage({ incidents, stats, can, categories, sever
                                   )}
                                 </div>
                                 <span className="text-[10px] font-mono">
-                                  <ClientFormattedDate date={update.createdAt} />
+                                  <ClientFormattedDate date={update.createdAt} formatString="MMM d, yyyy h:mm a" />
                                 </span>
                               </div>
                               <p className="text-xs leading-relaxed text-foreground">{update.message}</p>

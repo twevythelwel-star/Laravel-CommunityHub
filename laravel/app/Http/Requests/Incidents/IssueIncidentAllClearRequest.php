@@ -8,7 +8,7 @@ class IssueIncidentAllClearRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('manageSecurity') ?? false;
+        return ($incident = $this->route('incident')) && (bool) $this->user()?->can('issueAllClear', $incident);
     }
 
     public function rules(): array

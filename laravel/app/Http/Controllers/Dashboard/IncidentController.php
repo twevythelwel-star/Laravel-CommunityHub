@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Dashboard;
 
 use App\Actions\Incidents\AddIncidentUpdateAction;
+use App\Actions\Incidents\CloseCommunityIncidentAction;
 use App\Actions\Incidents\IssueIncidentAllClearAction;
 use App\Actions\Incidents\ReportCommunityIncidentAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Incidents\AddIncidentUpdateRequest;
+use App\Http\Requests\Incidents\CloseIncidentRequest;
 use App\Http\Requests\Incidents\IssueIncidentAllClearRequest;
 use App\Http\Requests\Incidents\StoreIncidentRequest;
 use App\Models\CommunityIncident;
@@ -17,6 +19,10 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * Community incidents: security reports, updates, all-clears and closes them; everyone sees the
+ * feed. Who may do what, and who sees sensitive details, is CommunityIncidentPolicy.
+ */
 class IncidentController extends Controller
 {
     public function index(Request $request, IncidentPagePresenter $presenter): Response
@@ -39,22 +45,14 @@ class IncidentController extends Controller
         return redirect()->route('dashboard.incidents')->with('success', "Incident {$incident->incident_number} logged successfully.");
     }
 
-    public function show(Request $request, CommunityIncident $incident, IncidentPagePresenter $presenter): Response|JsonResponse
+    /** One incident as JSON; in the browser, the incidents page (there is no separate detail page). */
+    public function show(Request $request, CommunityIncident $incident, IncidentPagePresenter $presenter): RedirectResponse|JsonResponse
     {
-        $canManage = $request->user()->can('manageSecurity');
-        $data = $presenter->transformIncident($incident, $canManage);
-
-        if ($request->wantsJson()) {
-            return response()->json($data);
+        if (! $request->wantsJson()) {
+            return redirect()->route('dashboard.incidents');
         }
 
-        return Inertia::render('Dashboard/IncidentDetails', [
-            'incident' => $data,
-            'can' => [
-                'manage' => $canManage,
-                'viewSensitiveDetails' => $canManage,
-            ],
-        ]);
+        return response()->json($presenter->transformIncident($incident, $request->user()->can('viewSensitiveDetails', $incident)));
     }
 
     public function addUpdate(AddIncidentUpdateRequest $request, CommunityIncident $incident, AddIncidentUpdateAction $action): RedirectResponse|JsonResponse
@@ -86,12 +84,9 @@ class IncidentController extends Controller
         return back()->with('success', "All-Clear broadcast issued for incident {$incident->incident_number}.");
     }
 
-    public function close(Request $request, CommunityIncident $incident): RedirectResponse|JsonResponse
+    public function close(CloseIncidentRequest $request, CommunityIncident $incident, CloseCommunityIncidentAction $close): RedirectResponse|JsonResponse
     {
-        abort_unless($request->user()->can('manageSecurity'), 403);
-
-        $incident->update(['status' => CommunityIncident::STATUS_CLOSED]);
-        $request->user()->recordActivity("Closed incident {$incident->incident_number}");
+        $close->execute($incident, $request->user());
 
         if ($request->wantsJson()) {
             return response()->json(['success' => true, 'message' => "Incident {$incident->incident_number} closed."]);

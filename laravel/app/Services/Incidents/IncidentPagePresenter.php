@@ -13,12 +13,12 @@ class IncidentPagePresenter
      */
     public function props(User $viewer): array
     {
-        $canManage = $viewer->can('manageSecurity');
+        $canManage = $viewer->can('create', CommunityIncident::class);
 
         $incidents = CommunityIncident::with(['reporter', 'allClearUser', 'updates.author'])
             ->latest()
             ->get()
-            ->map(fn (CommunityIncident $incident) => $this->transformIncident($incident, $canManage));
+            ->map(fn (CommunityIncident $incident) => $this->transformIncident($incident, $viewer->can('viewSensitiveDetails', $incident)));
 
         $activeCount = CommunityIncident::active()->count();
         $criticalCount = CommunityIncident::active()
