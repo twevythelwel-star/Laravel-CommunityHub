@@ -28,6 +28,8 @@ import {
   Share2,
   Loader2,
   X,
+  CreditCard,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,6 +38,8 @@ export interface AmenityItem {
   name: string;
   category?: string;
   maxGuests?: number;
+  feeMinor?: number;
+  feeFormatted?: string;
 }
 
 /** The bookable slots; the keys match FacilityBooking::SLOTS on the server. */
@@ -54,11 +58,30 @@ type MyBooking = {
   slot: string;
   slotLabel: string;
   guests: number;
+  feeMinor?: number;
+  feeFormatted?: string;
+  invoiceReference?: string | null;
+  invoiceStatus?: string | null;
 };
 
-type Availability = { takenSlots: string[]; guestLimit: number; myBookings: MyBooking[] };
+type Availability = {
+  takenSlots: string[];
+  guestLimit: number;
+  feeMinor: number;
+  feeFormatted: string;
+  myBookings: MyBooking[];
+};
 
-type Confirmation = { reference: string; facility: string; date: string; slot: string; guests: number };
+type Confirmation = {
+  reference: string;
+  facility: string;
+  date: string;
+  slot: string;
+  guests: number;
+  fee_minor?: number;
+  fee_formatted?: string;
+  invoice_reference?: string | null;
+};
 
 interface AmenityBookingDialogProps {
   open: boolean;
@@ -83,12 +106,17 @@ export function AmenityBookingDialog({
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [guestCount, setGuestCount] = useState<number>(4);
   const [notes, setNotes] = useState<string>('');
-  const [availability, setAvailability] = useState<Availability>({ takenSlots: [], guestLimit: 50, myBookings: [] });
+  const [availability, setAvailability] = useState<Availability>({
+    takenSlots: [],
+    guestLimit: 50,
+    feeMinor: 0,
+    feeFormatted: 'Free',
+    myBookings: [],
+  });
   const [isSubmitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   // Each time it opens, start on the facility the resident clicked, when there is one.
-  // (Not keyed on availableAmenities: the map rebuilds that list on every render.)
   useEffect(() => {
     if (!open) return;
     const match = availableAmenities.find((a) => a.name.toLowerCase() === initialAmenityName?.toLowerCase());
@@ -128,7 +156,10 @@ export function AmenityBookingDialog({
         notes: notes || null,
       });
       setConfirmation(data);
-      toast({ title: 'Facility booked', description: `${data.facility} on ${format(selectedDate, 'PPP')}. Reference ${data.reference}.` });
+      toast({
+        title: 'Facility booked',
+        description: `${data.facility} on ${format(selectedDate, 'PPP')}. Reference ${data.reference}.`,
+      });
     } catch (error) {
       toast({ variant: 'destructive', title: 'Could not book', description: describeHttpError(error) });
       loadAvailability();
@@ -155,6 +186,8 @@ export function AmenityBookingDialog({
   };
 
   const guestLimit = availability.guestLimit || facility?.maxGuests || 50;
+  const currentFeeFormatted = availability.feeFormatted || facility?.feeFormatted || 'Free';
+  const hasFee = (availability.feeMinor || 0) > 0 || (facility?.feeMinor || 0) > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,7 +200,7 @@ export function AmenityBookingDialog({
                 Reserve Community Amenity
               </DialogTitle>
               <DialogDescription>
-                Book a community facility for a time slot. Bookings are free and confirmed straight away.
+                Reserve a shared community facility. Automatic reminders are sent 24 hours prior to reservation.
               </DialogDescription>
             </DialogHeader>
 
@@ -191,9 +224,9 @@ export function AmenityBookingDialog({
                         <SelectItem key={amenity.id} value={String(amenity.id)}>
                           <div className="flex items-center justify-between w-full gap-2">
                             <span>{amenity.name}</span>
-                            {amenity.category && (
-                              <span className="text-[10px] text-muted-foreground ml-2">({amenity.category})</span>
-                            )}
+                            <span className="text-[10px] text-muted-foreground ml-2">
+                              {amenity.feeFormatted && amenity.feeFormatted !== 'Free' ? `(${amenity.feeFormatted})` : '(Free)'}
+                            </span>
                           </div>
                         </SelectItem>
                       ))}
@@ -201,10 +234,17 @@ export function AmenityBookingDialog({
                   </Select>
                 </div>
 
-                <div className="flex items-center justify-end rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+                {/* Capacity and Fee Badges */}
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-xs">
                   <span className="flex items-center gap-1.5 text-muted-foreground">
                     <Users className="w-3.5 h-3.5 text-blue-600" />
                     Capacity: <strong className="text-foreground">Up to {guestLimit} guests</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Badge variant={hasFee ? 'default' : 'secondary'} className="text-[11px] font-medium">
+                      {hasFee ? <CreditCard className="w-3 h-3 mr-1" /> : null}
+                      Fee: {currentFeeFormatted}
+                    </Badge>
                   </span>
                 </div>
 
@@ -291,6 +331,12 @@ export function AmenityBookingDialog({
                     <span>Assigned Property</span>
                     <span className="font-mono text-foreground">{user?.lot ? `Lot ${user.lot}` : 'Main Residence'}</span>
                   </div>
+                  {hasFee && (
+                    <div className="flex justify-between items-center text-amber-700 dark:text-amber-400 pt-1 border-t border-border/60 font-medium text-[11px]">
+                      <span>Billing Terms</span>
+                      <span>{currentFeeFormatted} invoiced to resident account</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Optional Notes */}
@@ -308,6 +354,12 @@ export function AmenityBookingDialog({
                   />
                 </div>
 
+                {/* Automatic reminder disclosure */}
+                <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 px-3 py-2 text-[11px] text-emerald-800 dark:text-emerald-300">
+                  <Bell className="w-3.5 h-3.5 shrink-0" />
+                  <span>A reminder will be automatically sent to you 24 hours before your reservation slot.</span>
+                </div>
+
                 {/* Your upcoming bookings */}
                 {availability.myBookings.length > 0 && (
                   <div className="space-y-1.5">
@@ -315,10 +367,15 @@ export function AmenityBookingDialog({
                     <ul className="divide-y rounded-xl border text-xs">
                       {availability.myBookings.map((booking) => (
                         <li key={booking.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                          <span>
+                          <div>
                             <span className="font-semibold text-foreground">{booking.facility}</span>
                             <span className="text-muted-foreground"> · {format(new Date(`${booking.date}T00:00:00`), 'EEE d MMM')} · {booking.slotLabel}</span>
-                          </span>
+                            {booking.feeMinor && booking.feeMinor > 0 ? (
+                              <Badge variant="outline" className="ml-2 text-[10px] py-0 px-1.5 font-normal">
+                                {booking.feeFormatted}
+                              </Badge>
+                            ) : null}
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
@@ -363,7 +420,7 @@ export function AmenityBookingDialog({
               </Badge>
               <h3 className="text-xl font-bold text-foreground mt-2">Reservation Confirmed</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                A confirmation is in your notifications. You can cancel from this dialog.
+                A confirmation is in your notifications. An automatic reminder will arrive 24h prior.
               </p>
             </div>
 
@@ -387,6 +444,17 @@ export function AmenityBookingDialog({
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-muted-foreground">Registered Guests</span>
                 <span className="font-medium text-foreground">{confirmation.guests} people</span>
+              </div>
+              <div className="flex justify-between items-center border-b pb-2">
+                <span className="text-muted-foreground">Booking Fee</span>
+                <span className="font-medium text-foreground">
+                  {confirmation.fee_formatted || 'Free'}
+                  {confirmation.invoice_reference && (
+                    <span className="text-[11px] text-muted-foreground font-normal ml-1">
+                      (Invoice #{confirmation.invoice_reference})
+                    </span>
+                  )}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Host Lot</span>

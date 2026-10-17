@@ -8,7 +8,7 @@ use App\Models\User;
 
 /**
  * What the booking dialog shows: which slots of a facility are taken on a day (without
- * saying by whom), the facility's guest limit, and the viewer's own upcoming bookings.
+ * saying by whom), the facility's guest limit, booking fee, and the viewer's own upcoming bookings.
  */
 class FacilityAvailabilityPresenter
 {
@@ -20,7 +20,9 @@ class FacilityAvailabilityPresenter
                 ? $facility->bookings()->confirmed()->whereDate('booked_on', $date)->pluck('slot')->values()
                 : [],
             'guestLimit' => $facility?->guestLimit() ?? FacilityBooking::DEFAULT_CAPACITY,
-            'myBookings' => FacilityBooking::with('landmark:id,name')
+            'feeMinor' => $facility?->fee_minor ?? 0,
+            'feeFormatted' => $facility?->feeFormatted() ?? 'Free',
+            'myBookings' => FacilityBooking::with(['landmark:id,name', 'invoice:id,reference,status'])
                 ->where('user_id', $viewer->id)->confirmed()->upcoming()
                 ->orderBy('booked_on')->limit(10)->get()
                 ->map(fn (FacilityBooking $booking) => [
@@ -31,6 +33,10 @@ class FacilityAvailabilityPresenter
                     'slot' => $booking->slot,
                     'slotLabel' => $booking->slotLabel(),
                     'guests' => $booking->guests,
+                    'feeMinor' => $booking->fee_minor,
+                    'feeFormatted' => $booking->feeFormatted(),
+                    'invoiceReference' => $booking->invoice?->reference,
+                    'invoiceStatus' => $booking->invoice?->status,
                 ]),
         ];
     }

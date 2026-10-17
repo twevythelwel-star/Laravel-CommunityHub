@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Models\Community;
 use App\Models\FacilityBooking;
 use App\Models\InAppNotification;
+use App\Models\Invoice;
 use App\Models\Landmark;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -127,10 +128,150 @@ class FacilityBookingTest extends TestCase
             ->assertOk()
             ->assertJsonPath('takenSlots', ['afternoon'])
             ->assertJsonPath('guestLimit', 20)
+            ->assertJsonPath('feeFormatted', 'Free')
             ->assertJsonPath('myBookings', []);
 
         $this->actingAs($owner)->getJson('/dashboard/facility-bookings')
             ->assertJsonPath('myBookings.0.facility', 'Pool Pavilion')
-            ->assertJsonPath('myBookings.0.slotLabel', '12:00–16:00');
+            ->assertJsonPath('myBookings.0.slotLabel', '12:00–16:00')
+            ->assertJsonPath('myBookings.0.feeFormatted', 'Free');
+    }
+
+    public function test_booking_a_facility_with_a_fee_creates_an_invoice(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $clubhouse = Landmark::create([
+            'community_id' => $this->pool->community_id,
+            'name' => 'Grand Clubhouse',
+            'category' => 'Community Center',
+            'lat' => 18.0,
+            'lng' => -76.8,
+            'bookable' => true,
+            'capacity' => 100,
+            'fee_minor' => 7500, // $75.00
+        ]);
+
+        $response = $this->actingAs($resident)->postJson('/dashboard/facility-bookings', [
+            'landmark_id' => $clubhouse->id,
+            'booked_on' => now()->addDays(5)->toDateString(),
+            'slot' => 'evening',
+            'guests' => 30,
+        ])->assertCreated()
+            ->assertJsonPath('fee_minor', 7500)
+            ->assertJsonPath('fee_formatted', '$75.00');
+
+        $booking = FacilityBooking::where('landmark_id', $clubhouse->id)->sole();
+        $this->assertSame(7500, $booking->fee_minor);
+        $this->assertNotNull($booking->invoice_id);
+
+        $invoice = Invoice::find($booking->invoice_id);
+        $this->assertSame(7500, $invoice->amount_minor);
+        $this->assertSame('Unpaid', $invoice->status);
+        $this->assertSame($response->json('invoice_reference'), $invoice->reference);
+
+        $item = $invoice->items()->sole();
+        $this->assertSame('facility_booking', $item->category);
+        $this->assertSame(7500, $item->amount_minor);
+        $this->assertSame('Unpaid', $item->status);
+    }
+
+    public function test_cancelling_a_booking_cancels_its_unpaid_invoice(): void
+    {
+        $resident = User::factory()->role(UserRole::Homeowner)->create();
+        $clubhouse = Landmark::create([
+            'community_id' => $this->pool->community_id,
+            'name' => 'Grand Clubhouse',
+            'category' => 'Community Center',
+            'lat' => 18.0,
+            'lng' => -76.8,
+            'bookable' => true,
+            'capacity' => 100,
+            'fee_minor' => 5000,
+        ]);
+
+        $this->actingAs($resident)->postJson('/dashboard/facility-bookings', [
+            'landmark_id' => $clubhouse->id,
+            'booked_on' => now()->addDays(5)->toDateString(),
+            'slot' => 'evening',
+            'guests' => 10,
+        ])->assertCreated();
+
+        $booking = FacilityBooking::where('landmark_id', $clubhouse->id)->sole();
+        $invoice = $booking->invoice;
+        $this->assertSame('Unpaid', $invoice->status);
+
+        $this->actingAs($resident)->postJson("/dashboard/facility-bookings/{$booking->id}/cancel")->assertOk();
+
+        $this->assertSame('cancelled', $booking->fresh()->status);
+        $this->assertSame('Cancelled', $invoice->fresh()->status);
+        $this->assertSame('Cancelled', $invoice->items()->sole()->status);
+    }
+
+    public function test_scheduled_command_reminds_residents_24_hours_before_booking(): void
+    {
+        $tomorrowResident = User::factory()->role(UserRole::Homeowner)->create();
+        $laterResident = User::factory()->role(UserRole::Homeowner)->create();
+        $alreadyRemindedResident = User::factory()->role(UserRole::Homeowner)->create();
+
+        // 1. Booking tomorrow - should be reminded
+        $bookingTomorrow = FacilityBooking::create([
+            'reference' => 'BK-TOMORROW',
+            'landmark_id' => $this->pool->id,
+            'user_id' => $tomorrowResident->id,
+            'booked_on' => today()->addDay()->toDateString(),
+            'slot' => 'morning',
+            'guests' => 4,
+            'status' => 'confirmed',
+        ]);
+
+        // 2. Booking in 3 days - should NOT be reminded yet
+        FacilityBooking::create([
+            'reference' => 'BK-LATER',
+            'landmark_id' => $this->pool->id,
+            'user_id' => $laterResident->id,
+            'booked_on' => today()->addDays(3)->toDateString(),
+            'slot' => 'afternoon',
+            'guests' => 4,
+            'status' => 'confirmed',
+        ]);
+
+        // 3. Booking tomorrow but already reminded - should NOT be reminded again
+        FacilityBooking::create([
+            'reference' => 'BK-ALREADY-REMINDED',
+            'landmark_id' => $this->pool->id,
+            'user_id' => $alreadyRemindedResident->id,
+            'booked_on' => today()->addDay()->toDateString(),
+            'slot' => 'evening',
+            'guests' => 4,
+            'status' => 'confirmed',
+            'reminded_at' => now()->subHour(),
+        ]);
+
+        // Run dry-run first
+        $this->artisan('facilities:send-booking-reminders', ['--dry-run' => true])
+            ->expectsOutputToContain('1 reservation reminder(s) would be queued.')
+            ->assertSuccessful();
+
+        $this->assertNull($bookingTomorrow->fresh()->reminded_at);
+
+        // Run real command
+        $this->artisan('facilities:send-booking-reminders')
+            ->expectsOutputToContain('1 facility booking reminder(s) queued.')
+            ->assertSuccessful();
+
+        $this->assertNotNull($bookingTomorrow->fresh()->reminded_at);
+
+        // Notification delivered to tomorrow's resident
+        $this->assertDatabaseHas('notification_deliveries', [
+            'user_id' => $tomorrowResident->id,
+            'subject_type' => $bookingTomorrow->getMorphClass(),
+            'subject_id' => $bookingTomorrow->id,
+            'status' => 'sent',
+        ]);
+
+        // Running again sends 0 reminders
+        $this->artisan('facilities:send-booking-reminders')
+            ->expectsOutputToContain('0 facility booking reminder(s) queued.')
+            ->assertSuccessful();
     }
 }

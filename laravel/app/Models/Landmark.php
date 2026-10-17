@@ -11,11 +11,11 @@ class Landmark extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['community_id', 'name', 'category', 'description', 'lat', 'lng', 'icon', 'created_by', 'bookable', 'capacity'];
+    protected $fillable = ['community_id', 'name', 'category', 'description', 'lat', 'lng', 'icon', 'created_by', 'bookable', 'capacity', 'fee_minor'];
 
     protected function casts(): array
     {
-        return ['lat' => 'float', 'lng' => 'float', 'bookable' => 'boolean', 'capacity' => 'integer'];
+        return ['lat' => 'float', 'lng' => 'float', 'bookable' => 'boolean', 'capacity' => 'integer', 'fee_minor' => 'integer'];
     }
 
     public function bookings(): HasMany
@@ -27,6 +27,12 @@ class Landmark extends Model
     public function guestLimit(): int
     {
         return $this->capacity ?? FacilityBooking::DEFAULT_CAPACITY;
+    }
+
+    /** The booking fee formatted for display, e.g. Free or $50.00. */
+    public function feeFormatted(): string
+    {
+        return $this->fee_minor > 0 ? '$'.number_format($this->fee_minor / 100, 2) : 'Free';
     }
 
     public function community(): BelongsTo

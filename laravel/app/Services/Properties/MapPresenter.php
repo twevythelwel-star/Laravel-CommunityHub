@@ -49,6 +49,8 @@ class MapPresenter
                 'color' => $l->pinColor(),
                 'bookable' => $l->bookable,
                 'guestLimit' => $l->guestLimit(),
+                'feeMinor' => $l->fee_minor,
+                'feeFormatted' => $l->feeFormatted(),
             ]),
             'community' => [
                 'name' => $community->name,

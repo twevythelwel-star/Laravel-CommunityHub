@@ -35,6 +35,8 @@ export type CommunityLandmark = {
     bookable?: boolean;
     /** Most guests one booking may bring. */
     guestLimit?: number;
+    feeMinor?: number;
+    feeFormatted?: string;
 };
 
 /** Pin styling per landmark category. Presentation only. */

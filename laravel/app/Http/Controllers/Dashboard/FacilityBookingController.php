@@ -36,6 +36,9 @@ class FacilityBookingController extends Controller
             'date' => $booking->booked_on->toDateString(),
             'slot' => $booking->slot,
             'guests' => $booking->guests,
+            'fee_minor' => $booking->fee_minor,
+            'fee_formatted' => $booking->feeFormatted(),
+            'invoice_reference' => $booking->invoice?->reference,
         ], 201);
     }
 

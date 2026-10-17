@@ -31,10 +31,13 @@ class FacilityBooking extends Model
         'booked_on',
         'slot',
         'guests',
+        'fee_minor',
+        'invoice_id',
         'notes',
         'status',
         'cancelled_at',
         'cancelled_by_user_id',
+        'reminded_at',
     ];
 
     protected function casts(): array
@@ -42,7 +45,9 @@ class FacilityBooking extends Model
         return [
             'booked_on' => 'date',
             'guests' => 'integer',
+            'fee_minor' => 'integer',
             'cancelled_at' => 'datetime',
+            'reminded_at' => 'datetime',
         ];
     }
 
@@ -56,6 +61,16 @@ class FacilityBooking extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
+    }
+
+    public function feeFormatted(): string
+    {
+        return $this->fee_minor > 0 ? '$'.number_format($this->fee_minor / 100, 2) : 'Free';
+    }
+
     public function scopeConfirmed(Builder $query): Builder
     {
         return $query->where('status', 'confirmed');
@@ -64,6 +79,13 @@ class FacilityBooking extends Model
     public function scopeUpcoming(Builder $query): Builder
     {
         return $query->whereDate('booked_on', '>=', today());
+    }
+
+    public function scopeDueForReminder(Builder $query): Builder
+    {
+        return $query->confirmed()
+            ->whereDate('booked_on', today()->addDay())
+            ->whereNull('reminded_at');
     }
 
     public static function generateReference(): string

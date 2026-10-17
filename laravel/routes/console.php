@@ -104,6 +104,12 @@ Schedule::command('billing:send-payment-reminders')
     ->onOneServer()
     ->name('billing:send-payment-reminders');
 
+Schedule::command('facilities:send-booking-reminders')
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->name('facilities:send-booking-reminders');
+
 /*
  | Local seeding convenience only.
  |

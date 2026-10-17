@@ -887,7 +887,14 @@ function MapPageContent({ landmarks, community, boundaryConfig, can }: MapPagePr
         initialAmenityName={bookingAmenityName}
         availableAmenities={landmarks
           .filter((l) => l.bookable)
-          .map((l) => ({ id: Number(l.id), name: l.name, category: l.category, maxGuests: l.guestLimit }))}
+          .map((l) => ({
+            id: Number(l.id),
+            name: l.name,
+            category: l.category,
+            maxGuests: l.guestLimit,
+            feeMinor: l.feeMinor,
+            feeFormatted: l.feeFormatted,
+          }))}
       />
     </div>
   );

@@ -16,15 +16,21 @@ class FacilityBookingConfirmed extends EngineNotification
     {
         $facility = $this->booking->landmark?->name ?? 'Facility';
         $when = $this->booking->booked_on->format('D j M Y').', '.$this->booking->slotLabel();
+        $feeText = $this->booking->fee_minor > 0 ? " Fee: {$this->booking->feeFormatted()}." : '';
 
         return new NotificationPayload(
             title: $this->cancelled ? "Booking Cancelled: {$facility}" : "Booking Confirmed: {$facility}",
             body: $this->cancelled
                 ? "Your booking {$this->booking->reference} of {$facility} on {$when} has been cancelled."
-                : "{$facility} is booked for you on {$when} for {$this->booking->guests} guest(s). Reference {$this->booking->reference}.",
+                : "{$facility} is booked for you on {$when} for {$this->booking->guests} guest(s).{$feeText} Reference {$this->booking->reference}.",
             user: $notifiable,
             actionUrl: '/dashboard/map',
-            metadata: ['category' => 'facility_booking', 'booking_id' => $this->booking->id, 'reference' => $this->booking->reference],
+            metadata: [
+                'category' => 'facility_booking',
+                'booking_id' => $this->booking->id,
+                'reference' => $this->booking->reference,
+                'fee_minor' => $this->booking->fee_minor,
+            ],
         );
     }
 
